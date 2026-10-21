@@ -28,6 +28,7 @@ var model_asset := ""
 var icon_asset := ""
 var placeholder_color := Color(0.6, 0.6, 0.6)
 var sort_order := 0
+var parse_errors: Array[String] = []
 
 
 static func from_dict(d: Dictionary) -> ClothingItem:
@@ -40,13 +41,13 @@ static func from_dict(d: Dictionary) -> ClothingItem:
 	it.occupied_slots = DataLoader.to_string_array(d.get("occupied_slots", []))
 	it.rarity = str(d.get("rarity", ""))
 	it.style_tags = DataLoader.to_string_array(d.get("style_tags", []))
-	it.attributes = d.get("attributes", {})
+	it.attributes = _dict_field(d, "attributes", it)
 	it.color_tags = DataLoader.to_string_array(d.get("color_tags", []))
 	it.material_tags = DataLoader.to_string_array(d.get("material_tags", []))
 	it.compatible_body_types = DataLoader.to_string_array(d.get("compatible_body_types", []))
 	it.compatible_character_ids = DataLoader.to_string_array(d.get("compatible_character_ids", []))
 	it.excluded_character_ids = DataLoader.to_string_array(d.get("excluded_character_ids", []))
-	it.model_variants = d.get("model_variants", {})
+	it.model_variants = _dict_field(d, "model_variants", it)
 	it.set_id = str(d.get("set_id", ""))
 	it.is_signature_item = bool(d.get("is_signature_item", false))
 	it.is_dyeable = bool(d.get("is_dyeable", false))
@@ -60,6 +61,14 @@ static func from_dict(d: Dictionary) -> ClothingItem:
 		it.placeholder_color = Color.from_string(str(d["placeholder_color"]), it.placeholder_color)
 	it.sort_order = int(d.get("sort_order", 0))
 	return it
+
+
+static func _dict_field(d: Dictionary, key: String, it: ClothingItem) -> Dictionary:
+	var v = d.get(key, {})
+	if typeof(v) != TYPE_DICTIONARY:
+		it.parse_errors.append("поле '%s' должно быть объектом" % key)
+		return {}
+	return v
 
 
 ## Отсутствующая характеристика считается нулевой.

@@ -23,7 +23,7 @@ var shops: ShopService
 var rewards: ChallengeRewardService
 var flags: StoryFlags
 var unlocked_characters: Array[String] = []
-var orphaned_item_ids: Array[String] = []
+var orphaned_items: Dictionary = {}   # item_id -> запись владения; предметы, которых нет в текущем каталоге
 var _starting_state: Dictionary = {}
 
 
@@ -59,6 +59,7 @@ func _load(dir: String) -> void:
 	flags = StoryFlags.new()
 	_starting_state = DataLoader.load_json(dir + "/wardrobe/starting_state.json", errs)
 
+	challenges.validate_rewards(catalog, resources, crafting)
 	for e in errs:
 		errors.append(str(e))
 	for src in [catalog.errors, characters.errors, challenges.errors, crafting.errors, shops.errors]:
@@ -66,9 +67,23 @@ func _load(dir: String) -> void:
 	warnings.append_array(catalog.warnings)
 
 
+## Полный сброс состояния игрока (данные каталогов не трогаются).
+func reset_state() -> void:
+	inventory.reset()
+	resources.reset()
+	equipment.reset()
+	presets.reset()
+	crafting.reset()
+	shops.reset()
+	rewards.reset()
+	flags.reset()
+	unlocked_characters.clear()
+	orphaned_items.clear()
+
+
 ## Состояние новой игры.
 func new_game() -> void:
-	unlocked_characters.clear()
+	reset_state()
 	for c in characters.ids():
 		if characters.get_data(c).get("unlocked_by_default", false):
 			unlocked_characters.append(c)
@@ -98,7 +113,7 @@ func items_for_outfit(outfit: Outfit) -> Array[ClothingItem]:
 func to_save_dict() -> Dictionary:
 	return {
 		"wardrobe": inventory.to_dict(),
-		"orphaned_item_ids": orphaned_item_ids.duplicate(),
+		"orphaned_items": orphaned_items.duplicate(true),
 		"resources": resources.to_dict(),
 		"equipment": equipment.to_dict(),
 		"presets": presets.to_dict(),
@@ -110,21 +125,36 @@ func to_save_dict() -> Dictionary:
 	}
 
 
-## Загрузка уже мигрированных данных. Возвращает список предупреждений.
+## Загрузка уже мигрированных данных. Разделы неверного типа заменяются пустыми. Возвращает предупреждения.
 func load_save_dict(d: Dictionary) -> Array[String]:
+	reset_state()
 	var notes: Array[String] = []
-	orphaned_item_ids = DataLoader.to_string_array(d.get("orphaned_item_ids", []))
-	for id in inventory.load_dict(d.get("wardrobe", {}), catalog):
-		if not orphaned_item_ids.has(id):
-			orphaned_item_ids.append(id)
+	var saved_orphans := _section(d, "orphaned_items")
+	var loaded_orphans := inventory.load_dict(_section(d, "wardrobe"), catalog)
+	for id in loaded_orphans.keys():
 		notes.append("Неизвестный предмет в сохранении сохранён отдельно: %s" % id)
-	resources.load_dict(d.get("resources", {}))
-	unlocked_characters = DataLoader.to_string_array(d.get("unlocked_characters", []))
-	for dropped in equipment.load_dict(d.get("equipment", {})):
+	orphaned_items = loaded_orphans
+	for id in saved_orphans.keys():
+		if catalog.has_item(id) and not inventory.owns(id):
+			# Предмет вернулся в каталог после обновления — возвращаем его владельцу.
+			var rec = saved_orphans[id]
+			inventory.restore(id, rec if typeof(rec) == TYPE_DICTIONARY else {})
+			notes.append("Предмет снова доступен и возвращён в гардероб: %s" % id)
+		elif not catalog.has_item(id):
+			orphaned_items[id] = saved_orphans[id]
+	resources.load_dict(_section(d, "resources"))
+	var chars = d.get("unlocked_characters", [])
+	unlocked_characters = DataLoader.to_string_array(chars).filter(func(c): return characters.has_character(c))
+	for dropped in equipment.load_dict(_section(d, "equipment")):
 		notes.append("Из экипировки убран недоступный предмет: %s" % dropped)
-	presets.load_dict(d.get("presets", {}))
-	crafting.load_dict(d.get("recipes", {}))
-	shops.load_dict(d.get("shops", {}))
-	rewards.load_dict(d.get("challenge_results", {}))
-	flags.load_dict(d.get("flags", {}))
+	presets.load_dict(_section(d, "presets"))
+	crafting.load_dict(_section(d, "recipes"))
+	shops.load_dict(_section(d, "shops"))
+	rewards.load_dict(_section(d, "challenge_results"))
+	flags.load_dict(_section(d, "flags"))
 	return notes
+
+
+static func _section(d: Dictionary, key: String) -> Dictionary:
+	var v = d.get(key, {})
+	return v if typeof(v) == TYPE_DICTIONARY else {}

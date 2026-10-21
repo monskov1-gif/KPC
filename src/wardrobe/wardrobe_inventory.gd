@@ -54,6 +54,19 @@ func set_favorite(item_id: String, value: bool) -> void:
 		changed.emit()
 
 
+func reset() -> void:
+	_owned.clear()
+	_counter = 0
+	changed.emit()
+
+
+## Восстановление записи (например, предмета, вернувшегося в каталог).
+func restore(item_id: String, record: Dictionary) -> void:
+	_owned[item_id] = record.duplicate()
+	_counter = maxi(_counter, int(record.get("order", 0)))
+	changed.emit()
+
+
 func count() -> int:
 	return _owned.size()
 
@@ -62,16 +75,21 @@ func to_dict() -> Dictionary:
 	return {"owned": _owned.duplicate(true), "counter": _counter}
 
 
-## Неизвестные ID не теряются молча: возвращаются вызывающему для журнала/хранения.
-func load_dict(d: Dictionary, catalog: ItemCatalog) -> Array[String]:
+## Неизвестные ID не теряются молча: их записи целиком возвращаются вызывающему для хранения.
+func load_dict(d: Dictionary, catalog: ItemCatalog) -> Dictionary:
 	_owned.clear()
-	var orphaned: Array[String] = []
-	var owned: Dictionary = d.get("owned", {})
+	var orphaned := {}
+	var owned = d.get("owned", {})
+	if typeof(owned) != TYPE_DICTIONARY:
+		owned = {}
 	for id in owned.keys():
+		var rec = owned[id]
+		if typeof(rec) != TYPE_DICTIONARY:
+			rec = {"order": 0, "source": "unknown", "is_new": false, "favorite": false}
 		if catalog.has_item(id):
-			_owned[id] = owned[id]
+			_owned[id] = rec
 		else:
-			orphaned.append(id)
+			orphaned[id] = rec
 	_counter = int(d.get("counter", _owned.size()))
 	changed.emit()
 	return orphaned

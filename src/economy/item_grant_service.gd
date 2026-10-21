@@ -28,7 +28,7 @@ func plan_item(item_id: String) -> Dictionary:
 	var policy := config.duplicate_policy
 	var res_id := str(policy.get("resource_id", ""))
 	var amount := int((policy.get("amount_by_rarity", {}) as Dictionary).get(item.rarity, 0))
-	if policy.get("mode", "") == "convert_to_resource" and resources.is_known(res_id) and amount > 0:
+	if policy.get("mode", "") == "convert_to_resource" and resources.can_receive(res_id, amount) and amount > 0:
 		return {"status": "duplicate_converted", "item_id": item_id, "resource_id": res_id, "amount": amount}
 	return {"status": "duplicate_ignored", "item_id": item_id}
 

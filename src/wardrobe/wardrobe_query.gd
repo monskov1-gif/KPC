@@ -68,7 +68,8 @@ func _sort(items: Array[ClothingItem], session: GameSession, name_resolver: Call
 			items.sort_custom(func(a, b):
 				var na: String = name_resolver.call(a) if name_resolver.is_valid() else a.id
 				var nb: String = name_resolver.call(b) if name_resolver.is_valid() else b.id
-				return na.naturalnocasecmp_to(nb) < 0)
+				var cmp := na.naturalnocasecmp_to(nb)
+				return cmp < 0 if cmp != 0 else a.id < b.id)
 		Sort.RARITY:
 			var order := session.config.rarities
 			items.sort_custom(func(a, b):
@@ -77,7 +78,9 @@ func _sort(items: Array[ClothingItem], session: GameSession, name_resolver: Call
 				return ra > rb if ra != rb else a.id < b.id)
 		Sort.NEWEST:
 			items.sort_custom(func(a, b):
-				return session.inventory.acquired_order(a.id) > session.inventory.acquired_order(b.id))
+				var oa := session.inventory.acquired_order(a.id)
+				var ob := session.inventory.acquired_order(b.id)
+				return oa > ob if oa != ob else a.id < b.id)
 		Sort.ATTRIBUTE:
 			var attr_name := sort_attribute
 			items.sort_custom(func(a, b):

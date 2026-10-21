@@ -106,6 +106,11 @@ func to_dict() -> Dictionary:
 	return {"presets": _presets.duplicate(true), "counter": _counter}
 
 
+func reset() -> void:
+	_presets.clear()
+	_counter = 0
+
+
 func load_dict(d: Dictionary) -> void:
 	_presets.clear()
 	for p in d.get("presets", []):
@@ -113,4 +118,7 @@ func load_dict(d: Dictionary) -> void:
 			if not p.has("slots") or typeof(p.slots) != TYPE_DICTIONARY:
 				p["slots"] = {}
 			_presets.append(p)
-	_counter = int(d.get("counter", _presets.size()))
+	# Счётчик не меньше максимального суффикса существующих ID, чтобы новые ID не совпали со старыми.
+	_counter = int(d.get("counter", 0))
+	for p in _presets:
+		_counter = maxi(_counter, int(str(p.id).get_slice("_", str(p.id).get_slice_count("_") - 1)))

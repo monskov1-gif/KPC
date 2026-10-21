@@ -124,7 +124,7 @@ func test_old_save_with_unknown_items_does_not_break() -> void:
 		"equipment": {"kot": {"upper_body": SHIRT, "footwear": "clothing_ghost_001"}, "unknown_hero": {}},
 	})
 	check(s.inventory.owns(SHIRT), "известный предмет загружен")
-	check(s.orphaned_item_ids.has("clothing_ghost_001"), "неизвестный ID сохранён отдельно")
+	check(s.orphaned_items.has("clothing_ghost_001"), "неизвестный ID сохранён отдельно")
 	eq(s.equipment.get_outfit("kot").item_ids(), [SHIRT] as Array[String])
 	check(notes.size() >= 2, "есть диагностические сообщения")
 

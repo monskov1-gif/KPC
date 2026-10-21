@@ -90,7 +90,16 @@ func to_dict() -> Dictionary:
 	return {"unlocked": _unlocked.keys()}
 
 
+func reset() -> void:
+	_unlocked.clear()
+	for id in _order:
+		if _recipes[id].get("unlocked_by_default", false):
+			_unlocked[id] = true
+	recipes_changed.emit()
+
+
 func load_dict(d: Dictionary) -> void:
+	reset()
 	for id in d.get("unlocked", []):
 		if _recipes.has(id):
 			_unlocked[id] = true

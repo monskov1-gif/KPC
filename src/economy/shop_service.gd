@@ -58,6 +58,8 @@ func check(shop_id: String, item_id: String) -> String:
 		return "shop.already_owned"
 	if not resources.can_afford(e.get("price", {})):
 		return "shop.not_enough_currency"
+	if e.get("resource", false) and not resources.can_receive(item_id, 1):
+		return "resource.cap_reached"
 	return ""
 
 
@@ -87,5 +89,10 @@ func to_dict() -> Dictionary:
 	return {"purchases": _purchases.duplicate()}
 
 
+func reset() -> void:
+	_purchases.clear()
+
+
 func load_dict(d: Dictionary) -> void:
-	_purchases = d.get("purchases", {}).duplicate()
+	var p = d.get("purchases", {})
+	_purchases = p.duplicate() if typeof(p) == TYPE_DICTIONARY else {}

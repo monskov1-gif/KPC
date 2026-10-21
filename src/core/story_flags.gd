@@ -26,5 +26,9 @@ func to_dict() -> Dictionary:
 	return _flags.duplicate(true)
 
 
+func reset() -> void:
+	_flags.clear()
+
+
 func load_dict(d: Dictionary) -> void:
 	_flags = d.duplicate(true)

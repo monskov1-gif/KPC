@@ -64,8 +64,11 @@ func _read(p: String) -> Dictionary:
 	var version := int(payload.get("version", 0))
 	if version > CURRENT_VERSION:
 		return fail.call("save.newer_version")
-	var data: Dictionary = payload.get("data", {})
-	data = SaveMigrations.migrate(data, version, CURRENT_VERSION)
+	# В v0 (прототип без версий) данные лежали в корне файла, без обёртки data.
+	var raw = payload if version == 0 and not payload.has("data") else payload.get("data")
+	if typeof(raw) != TYPE_DICTIONARY:
+		return fail.call("save.corrupted")
+	var data: Dictionary = SaveMigrations.migrate(raw, version, CURRENT_VERSION)
 	return {"ok": true, "data": data, "from_backup": false, "error_key": ""}
 
 

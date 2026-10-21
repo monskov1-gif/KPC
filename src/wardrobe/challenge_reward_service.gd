@@ -33,6 +33,8 @@ func submit(challenge: Dictionary, report: Dictionary) -> Dictionary:
 	var first_clear := false
 
 	var min_clear := config.rank_index(str(challenge.get("min_clear_rank", config.rank_order[0])))
+	if min_clear < 0:
+		min_clear = config.rank_order.size()   # некорректный порог: прохождение не засчитывается
 	var was_cleared: bool = rec.cleared
 	if not was_cleared and rank_i >= min_clear:
 		first_clear = true
@@ -82,6 +84,10 @@ func _grant(reward: Dictionary) -> Dictionary:
 
 func to_dict() -> Dictionary:
 	return _results.duplicate(true)
+
+
+func reset() -> void:
+	_results.clear()
 
 
 func load_dict(d: Dictionary) -> void:

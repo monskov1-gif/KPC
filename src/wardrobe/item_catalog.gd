@@ -32,7 +32,7 @@ func load_from_array(entries: Array) -> void:
 
 
 func validate(item: ClothingItem) -> Array[String]:
-	var out: Array[String] = []
+	var out: Array[String] = item.parse_errors.duplicate()
 	if item.id == "":
 		out.append("пустой id")
 	elif _items.has(item.id):

@@ -95,7 +95,11 @@ func to_dict() -> Dictionary:
 	return d
 
 
-## Безопасная загрузка: неизвестные, не принадлежащие и несовместимые предметы отбрасываются.
+func reset() -> void:
+	_outfits.clear()
+
+
+## Безопасная загрузка: неизвестные, не принадлежащие, несовместимые и конфликтующие предметы отбрасываются.
 func load_dict(d: Dictionary) -> Array[String]:
 	_outfits.clear()
 	var dropped: Array[String] = []
@@ -103,12 +107,19 @@ func load_dict(d: Dictionary) -> Array[String]:
 		if not characters.has_character(c):
 			dropped.append("%s:*" % c)
 			continue
+		if typeof(d[c]) != TYPE_DICTIONARY:
+			dropped.append("%s:*" % c)
+			continue
 		var raw := Outfit.from_dict(d[c])
 		var clean := Outfit.new()
-		for slot in raw.items.keys():
+		var slots := raw.items.keys()
+		slots.sort()
+		for slot in slots:
 			var res := equip_into(clean, c, raw.items[slot])
 			if not res.ok:
 				dropped.append("%s:%s" % [c, raw.items[slot]])
+			for r in res.removed:
+				dropped.append("%s:%s" % [c, r])
 		_outfits[c] = clean
 		outfit_changed.emit(c)
 	return dropped
