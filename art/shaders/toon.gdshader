@@ -2,7 +2,7 @@
 shader_type spatial;
 
 uniform vec4 albedo : source_color = vec4(1.0);
-uniform sampler2D albedo_tex : source_color, hint_default_white;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform bool use_vertex_color = false;
 uniform bool use_alpha_scissor = false;
 uniform vec4 shade_color : source_color = vec4(0.80, 0.66, 0.74, 1.0);

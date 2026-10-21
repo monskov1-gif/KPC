@@ -85,7 +85,7 @@
       ]
     ],
     "patch_side": 1,
-    "patch_dx": 0.0,
+    "patch_dx": -0.08,
     "patch_dz": 0.08
   }
 }

@@ -805,7 +805,7 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
     # Хохолок-спираль «@» (Кот, реф. 16): трубка, закрученная в плоскости лица.
     if hp.get("ahoge_spiral"):
         st = on_scalp(hd, 0.2, 0.12, 1.1)
-        pts = [st + Vector((0.0, 0.0, rz * 0.1 * k / 3)) for k in range(4)]
+        pts = [st + Vector((0.0, 0.0, rz * hp.get("ahoge_h", 0.1) * k / 5)) for k in range(6)]
         r0 = rx * 0.14
         c0 = pts[-1] + Vector((r0, 0, 0))
         for k in range(1, 26):
@@ -832,7 +832,7 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
         for i in range(steps + 1):
             a = 2 * math.pi * turns * i / steps
             pts.append(base + out * (r * (1 - math.cos(a)) * 0.8) + tang * (r * math.sin(a)) + Vector((0, 0, -drop * i / steps)))
-        cards.append(strand(pts, rx * hp.get("ringlet_w", 0.26), rx * 0.1, curve=0.15))
+        cards.append(strand(pts, rx * hp.get("ringlet_w", 0.26), rx * 0.1, curve=0.15, **({"flat": 0.95} if solid else {})))
     # Пучки (Габи): шар-основа + карты вокруг.
     for side in hp.get("buns", []):
         c = on_scalp(hd, side * 1.05, 0.62, 1.2)
@@ -874,7 +874,7 @@ def build_ears(hd, color, inner, ear):
         axis = Vector((side * rx * tx, ry * ty, rz * tz))
         tips.append(base + axis)
         rot = Vector((0, 0, 1)).rotation_difference(axis.normalized()).to_matrix().to_4x4()
-        for m, r, depth, flat, fwd in ((color, ear["r"], 1.0, 0.42, 0.0), (inner, ear["r"] * 0.62, 0.78, 0.22, -0.06)):
+        for m, r, depth, flat, fwd in ((color, ear["r"], 1.0, 0.42, 0.0), (inner, ear["r"] * 0.75, 0.8, 0.22, -0.06)):
             bpy.ops.mesh.primitive_cone_add(vertices=20, radius1=rx * r, radius2=0, depth=axis.length * depth,
                                             location=(0, 0, axis.length * depth / 2))
             o = bpy.context.active_object
@@ -1328,7 +1328,7 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
         if b.startswith("hand"):
             return 0.009 * s if t < 0.1 else None
         return None
-    body = shell("tmp", m, spec, smooth=3, uv=(5, 7))
+    body = shell("tmp", m, spec, smooth=3, uv=(3, 5))
     # Ровный низ-резинка поверх рваного края оболочки.
     hx, hy0, hy1 = section(_BODY, hem_z + 0.02 * s, band=0.02 * s, xmax=0.165 * s)
     hcy = (hy0 + hy1) / 2
@@ -1339,7 +1339,8 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
     # Высокий ворот: широкое основание, подвёрнутый валик, верх у линии челюсти.
     nz = J["neck"].z
     # Широкий высокий ворот-«хомут» (реф. 16): ширина ≈ 2.2 расстояния глаз–подбородок, верх у подбородка.
-    prof = [(nz + dz * s, r * s) for dz, r in ((-0.085, 0.11), (-0.06, 0.104), (-0.03, 0.096), (0.0, 0.09),
+    # Низ ворота утоплен в свитер (иначе по груди виден «гранёный» уступ).
+    prof = [(nz + dz * s, r * s) for dz, r in ((-0.11, 0.07), (-0.08, 0.082), (-0.05, 0.092), (-0.025, 0.094), (0.0, 0.09),
                                                   (0.026, 0.088), (0.046, 0.082), (0.062, 0.072), (0.072, 0.062), (0.076, 0.052))]
     collar = lathe("collar", prof, m, center=(0, J["neck"].y + 0.004 * s), sy=0.9, uv=(7, 7),
                    wobble=lambda a, k: 0.03 * math.sin(a * 7 + k) if k in (2, 3, 4, 5, 6) else 0.0)
@@ -1388,10 +1389,10 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
         hip = J["hip_l"] if sx > 0 else J["hip_r"]
         # Очень широкие штанины (реф. 16, по наложению): у пола полуширина брюк ≈ 3U, между штанинами ~5 см.
         top_c = Vector((sx * 0.085 * s, hip.y, hip.z + 0.02 * s))
-        bot_c = Vector((sx * 0.152 * s, 0.006 * s, 0.022 * s))
+        bot_c = Vector((sx * 0.152 * s, 0.006 * s, 0.085 * s))     # низ над ботинками (реф. 16)
         n = 16
         axis = [top_c.lerp(bot_c, k / (n - 1)) for k in range(n)]
-        key = [(0.0, 0.08), (0.12, 0.088), (0.4, 0.097), (0.6, 0.104), (1.0, 0.13)]
+        key = [(0.0, 0.08), (0.12, 0.088), (0.4, 0.097), (0.6, 0.104), (1.0, 0.124)]
 
         def rad(t):
             for (t0, r0), (t1, r1) in zip(key, key[1:]):
@@ -1401,7 +1402,7 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
         radii = [rad(k / (n - 1)) for k in range(n)]
         ph = 0.7 if sx > 0 else 2.1
         leg = tube_along("leg", axis, radii, m, wobble=lambda a, t, ph=ph: 0.05 * t ** 2 * math.sin(5 * a + ph)
-                         + 0.03 * math.sin(3 * a + ph * 2) * t + 0.06 * gauss((t - 0.88) / 0.07))
+                         + 0.03 * math.sin(3 * a + ph * 2) * t + 0.06 * gauss((t - 0.82) / 0.07))
         parts.append(leg)
         legs_by_side[sx] = leg
         # Карман-карго сбоку бедра с клапаном.
@@ -1489,9 +1490,9 @@ def kot_boots(J, p, m, sole_m):
 
     def spec(b, t, co):
         if b.startswith("foot"):
-            return 0.016 * s
+            return 0.022 * s
         if b.startswith("shin"):
-            return 0.016 * s if t > 0.8 else None
+            return 0.022 * s if t > 0.72 else None
         return None
     parts = [shell("tmp", m, spec, smooth=2, uv=(2, 6))]
     for side in ("l", "r"):
@@ -1500,7 +1501,7 @@ def kot_boots(J, p, m, sole_m):
         x = (an.x + to.x) / 2
         bm = bmesh.new()
         vs = []
-        for yy, ztop, hw in ((heel_y, 0.06, 0.042), (toe_y, 0.026, 0.05)):
+        for yy, ztop, hw in ((heel_y, 0.075, 0.046), (toe_y, 0.04, 0.054)):
             for xx in (-hw, hw):
                 vs.append(bm.verts.new((x + xx * s, yy, -0.028 * s)))
                 vs.append(bm.verts.new((x + xx * s, yy, ztop * s)))
@@ -1643,11 +1644,11 @@ CHARACTERS = {
                  "bang_len": 1.72, "bang_len_head": 1.62, "w_bang": 1.3, "bang_curl": 0.45, "side_len": 2.3, "long": 0.075, "curl": 0.5,
                  "w": 0.95, "cap_low": 0.75, "face_cut": 0.42, "inner_cap_low": 0.75,
                  "eye_bang": {"len": 1.72, "lift0": 1.12, "lift1": 1.07},
-                 "ahoge_spiral": True, "solid": True, "ringlets": 64, "ringlet_phi": 1.3, "ringlet_spread": 0.7, "ringlet_drop": (0.5, 1.3),
+                 "ahoge_spiral": True, "ahoge_h": 0.45, "solid": True, "ringlets": 64, "ringlet_phi": 1.3, "ringlet_spread": 0.7, "ringlet_drop": (0.4, 1.1),
                  "ringlet_r": (0.06, 0.1), "ringlet_w": 0.32,
                  "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
         # Большие уши на «плечах» копны (реф. 16, по наложению).
-        "ear": {"theta": 1.29, "phi": 1.0, "lift": 0.98, "tip": (0.18, 0.04, 1.52), "r": 0.3},   # в единицах объёма копны
+        "ear": {"theta": 1.29, "phi": 1.0, "lift": 0.98, "tip": (0.18, 0.04, 1.2), "r": 0.3},   # в единицах объёма копны
         # Заколки (theta, phi, lift, поворот, масштаб): большая рыбка слева, малая справа, облачко сверху справа.
         "clips": {"fish": [(-1.35, 1.65, 1.2, 1.5, 2.4), (1.32, 1.3, 1.2, 0.0, 1.8)], "cloud": (0.62, 1.05, 1.16, 0.1, 1.6)},
         "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
@@ -1697,7 +1698,7 @@ def build(cid):
     flower_mats = (mat("flower", (0.99, 0.94, 0.94, 1)), mat("flower_mid", (0.95, 0.66, 0.7, 1)), mat("flower_core", (0.97, 0.78, 0.4, 1)))
     leaf_m = mat("leaf", (0.36, 0.56, 0.36, 1))
     stem_m = mat("stem", (0.42, 0.3, 0.26, 1))
-    belt_z = J["pelvis"].lerp(J["spine"], 0.5).z
+    belt_z = J["pelvis"].lerp(J["spine"], 0.38).z
     # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     under = mat("underwear", (0.92, 0.6, 0.7, 1) if c["sex"] == "female" else (0.2, 0.25, 0.4, 1), rough=0.6)
 
@@ -1796,7 +1797,7 @@ def build(cid):
             tree = BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get())
             # Повязка (реф. 16) — скруглённый прямоугольник, повторяет изгиб лица: кусок оболочки головы.
             ex = ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx
-            pa, pb, pcz = rx * 0.5, rz * 0.3, ez + rz * FP.get("patch_dz", 0.06)
+            pa, pb, pcz = rx * 0.55, rz * 0.3, ez + rz * FP.get("patch_dz", 0.06)
             pm = head.data.copy()
             patch = new_obj("patch", pm)
             bm = bmesh.new()
@@ -1805,6 +1806,15 @@ def build(cid):
             kill = [v for v in bm.verts if v.co.y > -ry * 0.2 or
                     (abs(v.co.x - ex) / pa) ** 3 + (abs(v.co.z - pcz) / pb) ** 3 > 1.0]
             bmesh.ops.delete(bm, geom=kill, context="VERTS")
+            for v in bm.verts:   # край — ровно по контуру скруглённого прямоугольника (без «лесенки» сетки)
+                if v.is_boundary:
+                    dx, dz = v.co.x - ex, v.co.z - pcz
+                    f = ((abs(dx) / pa) ** 3 + (abs(dz) / pb) ** 3) ** (1 / 3)
+                    if f > 1e-6:
+                        q = tree.find_nearest(Vector((ex + dx / f, v.co.y, pcz + dz / f)))[0]
+                        if q is not None:
+                            v.co = q
+            bm.normal_update()
             for v in bm.verts:   # купол: в центре повязка отстоит от лица (под ней ресницы), к краям прилегает
                 rr = min(1.0, (abs(v.co.x - ex) / pa) ** 3 + (abs(v.co.z - pcz) / pb) ** 3)
                 v.co += v.normal * (0.0015 + 0.009 * (1 - rr ** 1.5))
@@ -1829,9 +1839,7 @@ def build(cid):
                 hit = tree.ray_cast(q, d)
                 proj.append(hit[0] + hit[1] * 0.0025 if hit[0] else q)
             ring = proj
-            strap = card(ring, rx * 0.016, rx * 0.016, hd, mat("strap", (0.08, 0.07, 0.08, 1), rough=0.4), curve=0.0)
-            strap.modifiers.new("sol", "SOLIDIFY").thickness = 0.002
-            apply_mods(strap)
+            strap = curve_tube(ring, 0.0007, mat("strap", (0.08, 0.07, 0.08, 1), rough=0.4), taper=1.0)   # тонкий шнурок
             o = join([patch, strap], "garment__face_accessory__eyepatch")
         elif g == "neck_necklace":
             beads = []

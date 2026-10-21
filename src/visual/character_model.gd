@@ -146,7 +146,7 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 			# Объёмные пряди-клоки: тун-свет + тонкий контур, чтобы читались завитки.
 			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9))
-			thickness = 0.0012
+			thickness = 0.0008
 		"skin":
 			m.set_shader_parameter("shade_color", Color(0.94, 0.76, 0.76))
 		_:
