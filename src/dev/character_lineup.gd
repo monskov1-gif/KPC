@@ -128,3 +128,44 @@ func _kot_head_turn(yaw: float) -> void:
 	var cam := get_viewport().get_camera_3d()
 	cam.position = get_node("kot").position + Vector3(0, 1.55, 0.62)
 	cam.rotation_degrees = Vector3(-2, 0, 0)
+
+
+## Кадр «как портрет на реф. 16» для наложения: только Кот, поза покоя замерла, поворот головы KPC_YAW
+## (градусы; −3 — подобрано по наложению: так ошибка черт лица минимальна). Экранные координаты ориентиров lm_*
+## пишутся в JSON (путь KPC_LANDMARKS) — их читает tools/art/ref_overlay.py.
+func debug_ref_portrait_kot() -> void:
+	_ref_view("kot", Vector3(0, 1.5, 1.35), -3.0, 21.0)
+
+
+## Кадр «во весь рост, спереди» для наложения на вид спереди реф. 16.
+func debug_ref_front_kot() -> void:
+	_ref_view("kot", Vector3(0, 0.86, 5.2), 0.0, 21.0)
+
+
+func _ref_view(id: String, cam_pos: Vector3, default_yaw: float, fov: float) -> void:
+	for other in IDS:
+		(get_node(other) as Node3D).visible = other == id
+	var m: Node3D = get_node(id)
+	var yaw := float(OS.get_environment("KPC_YAW")) if OS.has_environment("KPC_YAW") else default_yaw
+	m.rotation_degrees.y = yaw
+	var anim := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if anim:
+		anim.seek(0.0, true)
+		anim.pause()
+	var cam := get_viewport().get_camera_3d()
+	cam.fov = fov
+	cam.position = m.position + cam_pos
+	cam.rotation_degrees = Vector3.ZERO
+	await get_tree().process_frame
+	var out := {}
+	# unproject_position даёт координаты в пространстве вьюпорта (с учётом масштаба интерфейса) —
+	# переводим в пиксели окна, т. е. снимка.
+	var k := Vector2(DisplayServer.window_get_size()) / get_viewport().get_visible_rect().size
+	for n in m.find_children("lm_*", "", true, false):
+		var sp := cam.unproject_position((n as Node3D).global_position) * k
+		out[String(n.name).trim_prefix("lm_")] = [sp.x, sp.y]
+	var path := OS.get_environment("KPC_LANDMARKS") if OS.has_environment("KPC_LANDMARKS") else "user://landmarks.json"
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(out, "  "))
+		f.close()

@@ -8,8 +8,9 @@
    `git add -A && git commit && git push origin main`. Сайт: https://monskov1-gif.github.io/KPC/
    (GitHub Pages из ветки `main`, корень; игра — в `play/`). Список версий — `docs/RELEASES.md`.
 2. **Скриншоты на каждом этапе** присылать пользователю (`tools/capture.sh`, папка `docs/screenshots/`).
-3. **Агенты-критики** (`.claude/agents/`: tz-critic, canon-critic, visual-critic, code-critic) запускать
-   после этапов и исправлять найденное.
+3. **Агенты-критики** (`.claude/agents/`: tz-critic, canon-critic, visual-critic, code-critic, ui-critic,
+   model-critic) запускать после этапов и исправлять найденное. Модели персонажей сверять с оригиналом
+   **наложением** (`tools/art/ref_overlay.sh <portrait|front> <id>`) — цель «1 в 1», ошибки в таблице ориентиров.
 4. **Стиль интерфейса** — мягкий, «облачный», светлый, больше иконок, редкость звёздами,
    характеристики по долгому нажатию; подробно в `docs/UI_STYLE.md`.
 5. Не выдумывать сюжет и канон: источник — `docs/source/story_and_chapter1_script.txt`;

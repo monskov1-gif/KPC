@@ -30,8 +30,15 @@ OUT = os.path.join(ROOT, "art", "characters")
 TEX = os.path.join(OUT, "textures")
 
 SKIN = (0.98, 0.88, 0.83, 1)
-# Геометрия глаз в UV лица — та же, что в gen_faces.py.
-EYE_U, EYE_V, EYE_W, EYE_H = 0.18, 0.535, 0.097, 0.071
+import json  # noqa: E402
+_FACE = json.load(open(os.path.join(os.path.dirname(__file__), "face_params.json"), encoding="utf-8"))
+FP = dict(_FACE["default"])   # параметры лица текущего персонажа (face_params.json; задаются в build())
+
+
+def set_face(cid):
+    global FP
+    FP = dict(_FACE["default"])
+    FP.update(_FACE.get(cid, {}))
 
 
 # ------------------------------------------------------------------ утилиты
@@ -183,11 +190,12 @@ def _rs(r, s):
 def body_joints(p):
     """Точки скелета (Z вверх, персонаж смотрит в −Y). Пропорции ~1/7 роста на голову."""
     s, sw, hw = p["s"], p["shoulder"], p["hip"]
+    ao = p.get("arm_out", (0.035, 0.06))       # насколько локоть и запястье отведены от плеча (А-поза)
     J = {
         "pelvis": (0, 0, 0.90), "spine": (0, 0.005, 1.02), "chest": (0, 0, 1.15), "upchest": (0, 0.006, 1.255), "neck": (0, 0.008, 1.335),
         "head": (0, 0.01, 1.39), "throat": (0, 0.014, 1.46),   # шея уходит внутрь головы — без зазора под подбородком
-        "sh_l": (sw, 0.01, 1.295), "el_l": (sw + 0.035, 0.02, 1.05), "wr_l": (sw + 0.06, 0.0, 0.83),
-        "sh_r": (-sw, 0.01, 1.295), "el_r": (-sw - 0.035, 0.02, 1.05), "wr_r": (-sw - 0.06, 0.0, 0.83),
+        "sh_l": (sw, 0.01, 1.295), "el_l": (sw + ao[0], 0.02, 1.05), "wr_l": (sw + ao[1], 0.0, 0.83),
+        "sh_r": (-sw, 0.01, 1.295), "el_r": (-sw - ao[0], 0.02, 1.05), "wr_r": (-sw - ao[1], 0.0, 0.83),
         "hip_l": (hw, 0, 0.86), "kn_l": (hw - 0.005, -0.012, 0.47), "an_l": (hw - 0.004, 0.012, 0.075), "to_l": (hw - 0.002, -0.095, 0.022),
         "hip_r": (-hw, 0, 0.86), "kn_r": (-hw + 0.005, -0.012, 0.47), "an_r": (-hw + 0.004, 0.012, 0.075), "to_r": (-hw + 0.002, -0.095, 0.022),
     }
@@ -222,7 +230,7 @@ def body_edges():
 
 def body_radii(p):
     R = {"pelvis": (p["hip_r"], 0.078), "spine": (p["waist"], 0.066), "chest": (p["chest"], p.get("chest_d", 0.072)),
-         "upchest": (p["chest"] * 0.95, p.get("chest_d", 0.072) * 0.82), "neck": 0.03, "head": 0.027, "throat": 0.022, "sh_l": 0.043, "sh_r": 0.043, "el_l": 0.03, "el_r": 0.03, "wr_l": 0.021, "wr_r": 0.021,
+         "upchest": (p["chest"] * 0.95, p.get("chest_d", 0.072) * 0.82), "neck": p.get("neck", 0.03), "head": p.get("neck", 0.03) * 0.9, "throat": p.get("neck", 0.03) * 0.75, "sh_l": 0.043, "sh_r": 0.043, "el_l": 0.03, "el_r": 0.03, "wr_l": 0.021, "wr_r": 0.021,
          "hip_l": 0.072, "hip_r": 0.072, "kn_l": 0.042, "kn_r": 0.042, "an_l": 0.026, "an_r": 0.026,
          "to_l": (0.028, 0.018), "to_r": (0.028, 0.018)}
     for s in ("l", "r"):
@@ -259,11 +267,9 @@ def _pw(z, pts):
     return pts[-1][1]
 
 
-# Силуэт лица в нормированных координатах головы (z: +1 макушка, −1 низ подбородка).
-JAW_WIDTH = [(0.1, 1.0), (-0.2, 0.96), (-0.42, 0.9), (-0.62, 0.77), (-0.78, 0.56), (-0.9, 0.33), (-0.97, 0.15), (-1.0, 0.05)]   # полуширина спереди
+# Силуэт лица в нормированных координатах головы (z: +1 макушка, −1 низ подбородка); полуширина челюсти — FP["jaw"].
 FACE_DEPTH = [(0.3, 0.954), (0.1, 0.975), (-0.1, 0.985), (-0.4, 0.94), (-0.6, 0.88), (-0.75, 0.83), (-0.88, 0.76),
               (-0.96, 0.55), (-1.0, 0.25)]                                                                  # глубина по средней линии
-NOSE_TIP_Z, MOUTH_Z = -0.4, -0.6   # те же высоты использует gen_faces.py (нос, рот на текстуре)
 
 
 def sculpt_head(x, y, z):
@@ -275,7 +281,7 @@ def sculpt_head(x, y, z):
     fw = min(1.0, max(0.0, (0.3 - y) / 0.6))          # 1 — лицо, 0 — затылок
     if z < 0.1:                                          # челюсть сужается к подбородку
         nat = math.sqrt(max(1e-4, 1 - z * z))
-        f = min(1.0, _pw(z, JAW_WIDTH) / nat)
+        f = min(1.0, _pw(z, [tuple(q) for q in FP["jaw"]]) / nat)
         x *= 1 - (1 - f) * fw
     if y < 0 and z < 0.3:                                # профиль: подбородок вперёд, лицо ровнее
         nat = math.sqrt(max(1e-4, 1 - z * z))
@@ -295,21 +301,26 @@ def sculpt_head(x, y, z):
     # Виски чуть уже, скулы чуть выпуклее.
     x *= 1 - 0.035 * g(-((ax - 0.9) / 0.15) ** 2) * g(-((z - 0.2) / 0.25) ** 2)
     y -= 0.03 * front * g(-((ax - 0.5) / 0.2) ** 2) * g(-((z + 0.28) / 0.15) ** 2)
+    NOSE_TIP_Z, MOUTH_Z = FP["nose_z"], FP["mouth_z"]
+    ex, ez = 2 * FP["eye_u"], 1 - 2 * FP["eye_v"]          # центр глаза в нормированных координатах
+    ew, eh = 2 * FP["eye_w"], 2 * FP["eye_h"]
+    mw = 2 * FP["mouth_w"]
     # Глазницы и надбровья.
-    y += 0.045 * front * g(-((ax - 0.35) / 0.17) ** 2) * g(-((z + 0.07) / 0.12) ** 2)
-    y -= 0.022 * front * g(-((ax - 0.33) / 0.22) ** 2) * g(-((z - 0.14) / 0.07) ** 2)
+    y += 0.045 * front * g(-((ax - ex) / (ew * 0.9)) ** 2) * g(-((z - ez) / (eh * 1.6)) ** 2)
+    y -= 0.022 * front * g(-((ax - ex) / (ew * 1.1)) ** 2) * g(-((z - ez - eh * 2.0) / 0.07) ** 2)
     # Нос: спинка от переносицы к кончику, кончик, крылья.
-    t = min(1.0, max(0.0, (-0.05 - z) / (-0.05 - NOSE_TIP_Z)))
+    top = ez + 0.03
+    t = min(1.0, max(0.0, (top - z) / (top - NOSE_TIP_Z)))
     amt = 0.014 + 0.1 * t ** 1.7
     if z < NOSE_TIP_Z:
         amt *= g(-((z - NOSE_TIP_Z) / 0.045) ** 2)
     y -= front * amt * g(-(x / (0.045 + 0.04 * t)) ** 2)
     y -= 0.022 * front * g(-((ax - 0.075) / 0.035) ** 2) * g(-((z - NOSE_TIP_Z + 0.015) / 0.03) ** 2)
     # Губы: верхняя, линия рта, нижняя, ямка под губой, подбородок.
-    y -= 0.026 * front * g(-(x / 0.15) ** 2) * g(-((z - MOUTH_Z - 0.05) / 0.045) ** 2)
-    y += 0.014 * front * g(-(x / 0.11) ** 2) * g(-((z - MOUTH_Z) / 0.02) ** 2)
-    y -= 0.022 * front * g(-(x / 0.1) ** 2) * g(-((z - MOUTH_Z + 0.045) / 0.032) ** 2)
-    y += 0.01 * front * g(-(x / 0.14) ** 2) * g(-((z - MOUTH_Z + 0.12) / 0.03) ** 2)
+    y -= 0.026 * front * g(-(x / (mw * 2.2)) ** 2) * g(-((z - MOUTH_Z - 0.05) / 0.045) ** 2)
+    y += 0.014 * front * g(-(x / (mw * 1.5)) ** 2) * g(-((z - MOUTH_Z) / 0.02) ** 2)
+    y -= 0.022 * front * g(-(x / (mw * 1.3)) ** 2) * g(-((z - MOUTH_Z + 0.045) / 0.032) ** 2)
+    y += 0.01 * front * g(-(x / (mw * 2.0)) ** 2) * g(-((z - MOUTH_Z + 0.12) / 0.03) ** 2)
     y -= 0.016 * front * g(-(x / 0.16) ** 2) * g(-((z + 0.86) / 0.06) ** 2)
     return x, y, z
 
@@ -370,11 +381,98 @@ def _strip(rows, m, name, thick=0.0002):
     return o
 
 
+MARKS = {}   # ориентиры для наложения на референс (экспортируются как пустые узлы lm_<имя>)
+
+
+def landmarks_head(head_obj, hd, hair):
+    """Ориентиры лица и причёски: подбородок, видимый глаз и его углы, повязка, нос, рот, макушка, края копны.
+    vl / vr — левый / правый край для зрителя (−X / +X)."""
+    rx, ry, rz, cz = hd
+    tree = BVHTree.FromObject(head_obj, bpy.context.evaluated_depsgraph_get())
+
+    def front(x, z):
+        hit = tree.ray_cast(Vector((x, -1, z)), Vector((0, 1, 0)))
+        return hit[0] if hit[0] else Vector((x, -ry, z))
+
+    def tex(px, py):
+        return front((px - 0.5) * 2 * rx, cz - (py - 0.5) * 2 * rz)
+    ps = FP["patch_side"]
+    vis = -ps
+    ez = cz - (FP["eye_v"] - 0.5) * 2 * rz
+    fr = [v.co for v in head_obj.data.vertices if v.co.y < -0.5 * ry]
+    m = {"chin": min(fr, key=lambda c: c.z).copy(),
+         "eye_vis": front(vis * FP["eye_u"] * 2 * rx, ez),
+         "patch": front(ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx, ez + rz * FP.get("patch_dz", 0.06)),
+         "nose": front(0, cz + FP["nose_z"] * rz),
+         "mouth": front(0, cz + FP["mouth_z"] * rz),
+         "mouth_vl": front(-FP["mouth_w"] * 2 * rx, cz + FP["mouth_z"] * rz),
+         "mouth_vr": front(FP["mouth_w"] * 2 * rx, cz + FP["mouth_z"] * rz)}
+    pts = almond(0.5 + vis * FP["eye_u"], FP["eye_v"], FP["eye_w"], FP["eye_h"], lift=-FP["eye_lift"] * vis)
+    a, b = tex(*pts[0]), tex(*pts[40])
+    m["eye_vis_outer"], m["eye_vis_inner"] = (a, b) if abs(a.x) > abs(b.x) else (b, a)
+    # Контур лица (для зрителя слева) на высоте носа и рта — по самой левой вершине передней половины головы.
+    for name, zn in (("cheek_vl", FP["nose_z"]), ("jaw_vl", FP["mouth_z"])):
+        zz = cz + zn * rz
+        band = [v.co for v in head_obj.data.vertices if abs(v.co.z - zz) < rz * 0.02 and v.co.y < 0]
+        m[name] = min(band, key=lambda c: c.x).copy()
+    hv = [o.matrix_world @ v.co for o in hair for v in o.data.vertices]
+    m["crown"] = max((q for q in hv if abs(q.x) < rx * 0.15), key=lambda q: q.z).copy()
+    m["hair_vl"] = min(hv, key=lambda q: q.x).copy()
+    m["hair_vr"] = max(hv, key=lambda q: q.x).copy()
+    MARKS.clear()
+    MARKS.update(m)
+    return MARKS
+
+
+# Уровни силуэта для вида «во весь рост» (в U ниже подбородка; U — глаз–подбородок), см. 16_kot_landmarks.json.
+SIL_LEVELS = {"sil_118": 1.18, "sil_350": 3.5, "sil_584": 5.84, "sil_1020": 10.2, "sil_1410": 14.1}
+
+
+def landmarks_body(body, garments):
+    """Ширина силуэта в образе по умолчанию на заданных уровнях + пол (низ подошвы) + ширина ремня."""
+    names = {g.name: g for g in garments}
+    look = [names.get(n) for n in ("garment__upper_body__turtleneck_flowers", "garment__lower_body__cargo",
+                                   "garment__footwear__boots")]
+    if None in look or "chin" not in MARKS:
+        return
+    chin, eye = MARKS["chin"], MARKS["eye_vis"]
+    u = eye.z - chin.z
+    objs = look + [body]
+
+    def extremes(obs, z, band=None):
+        """Крайние x сечения мешей плоскостью z (по пересечению рёбер — точно даже на редкой сетке)."""
+        xs = []
+        for o in obs:
+            mw = o.matrix_world
+            co = [mw @ v.co for v in o.data.vertices]
+            for e in o.data.edges:
+                a, b = co[e.vertices[0]], co[e.vertices[1]]
+                if (a.z - z) * (b.z - z) <= 0 and a.z != b.z:
+                    t = (z - a.z) / (b.z - a.z)
+                    xs.append(a.x + (b.x - a.x) * t)
+        return min(xs), max(xs)
+    for name, lv in SIL_LEVELS.items():
+        z = chin.z - lv * u
+        a, b = extremes(objs, z)
+        MARKS[name + "_vl"], MARKS[name + "_vr"] = Vector((a, 0, z)), Vector((b, 0, z))
+    belt_z = chin.z - 5.0 * u
+    a, b = extremes([look[1]], belt_z, 0.004)
+    MARKS["belt_vl"], MARKS["belt_vr"] = Vector((a, 0, belt_z)), Vector((b, 0, belt_z))
+    MARKS["floor"] = Vector((0, 0, min((look[2].matrix_world @ v.co).z for v in look[2].data.vertices)))
+
+
+def export_landmarks():
+    for name, co in MARKS.items():
+        e = bpy.data.objects.new("lm_" + name, None)
+        e.location = co
+        bpy.context.collection.objects.link(e)
+
+
 def build_lashes(head_obj, hd, c):
     """Объёмные ресницы, складка века и брови (реф. 16): густая линия верхних ресниц с «крылом»
     у внешнего угла, отдельные ресницы, торчащие вперёд, короткие нижние ресницы."""
     rx, ry, rz, cz = hd
-    k = rx / 0.08                                       # масштаб под размер головы
+    k = rx / 0.08 * (FP["eye_w"] / 0.097) ** 0.7          # масштаб под размер головы и глаза
     tree = BVHTree.FromObject(head_obj, bpy.context.evaluated_depsgraph_get())
     m_lash = mat("lash", c["lash"] + (1,), rough=0.4)
     m_brow = mat("brow", c["brow"] + (1,), rough=0.6)
@@ -389,8 +487,8 @@ def build_lashes(head_obj, hd, c):
 
     out = []
     for side in (-1, 1):
-        cx, cy, w, h = 0.5 + side * EYE_U, EYE_V, EYE_W, EYE_H
-        pts = almond(cx, cy, w, h, lift=-0.16 * side)
+        cx, cy, w, h = 0.5 + side * FP["eye_u"], FP["eye_v"], FP["eye_w"], FP["eye_h"]
+        pts = almond(cx, cy, w, h, lift=-FP["eye_lift"] * side)
         up = pts[:41] if side > 0 else pts[:41][::-1]           # от внутреннего угла к внешнему
         low = pts[41:][::-1] if side > 0 else pts[41:]          # тоже от внутреннего к внешнему
         o_dir = Vector((side, 0, 0))
@@ -468,31 +566,40 @@ def build_lashes(head_obj, hd, c):
 
 
 def build_eyes(cid, head_obj, hd):
-    """Глазные яблоки за прорезями век: смотрят вперёд, можно поворачивать для взгляда."""
+    """Глазные яблоки за прорезями век: плоские эллипсоиды по нормали лица чуть позади прорези (не выпирают
+    из лица); радужка ≈ половина ширины глаза и почти во всю высоту прорези (как на реф. 16)."""
     rx, ry, rz, cz = hd
     deps = bpy.context.evaluated_depsgraph_get()
     tree = BVHTree.FromObject(head_obj, deps)
     eyes = []
     em = mat(f"eye_{cid}", (1, 1, 1, 1), tex=os.path.join(TEX, f"eye_{cid}.png"), rough=0.2)
+    ew, eh = FP["eye_w"], FP["eye_h"]
+    ax = ew * 2 * rx * 1.12                    # полуширина прорези (+запас)
+    az = 1.62 * eh / 2 * 2 * rz * 1.25         # полувысота прорези (+запас)
+    ay = ax * 0.32                             # глубина — плоское яблоко
+    d_iris = 2.08 * ew * rx                    # диаметр радужки ≈ 0.52 ширины глаза
     for side in (-1, 1):
-        ex = side * EYE_U * 2 * rx
-        ez = cz + (0.5 - EYE_V - 0.5) * 2 * rz + rz * 0.0
-        ez = cz - (EYE_V - 0.5) * 2 * rz
+        ex = side * FP["eye_u"] * 2 * rx
+        ez = cz - (FP["eye_v"] - 0.5) * 2 * rz + 0.19 * eh * 2 * rz     # центр прорези (миндаль выше внизу)
         hit = tree.ray_cast(Vector((ex, -1, ez)), Vector((0, 1, 0)))
-        surf_y = hit[0].y if hit[0] else -ry
-        re = EYE_W * 2 * rx * 1.15
-        center = Vector((ex, surf_y + re * 0.82, ez))
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, radius=re, location=center)
+        loc, nrm = (hit[0], hit[1]) if hit[0] else (Vector((ex, -ry, ez)), Vector((0, -1, 0)))
+        nrm = (nrm * 0.6 + Vector((0, -1, 0)) * 0.4).normalized()
+        M = basis_at(loc, nrm)
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=40, ring_count=24, radius=1)
         e = bpy.context.active_object
         e.name = "eye"
-        uv = e.data.uv_layers.active
-        for poly in e.data.polygons:
+        me = e.data
+        me.transform(Matrix.Diagonal((ax, az, ay, 1)))
+        me.transform(Matrix.Translation((0, 0, -ay * 1.08)))
+        uv = me.uv_layers.active
+        for poly in me.polygons:
             for li in poly.loop_indices:
-                co = e.data.vertices[e.data.loops[li].vertex_index].co   # локальные координаты сферы
-                # Радужка во «взгляде» вперёд (−Y); масштаб подобран под размер прорези.
-                uv.data[li].uv = (0.5 + co.x / (2.15 * re), 0.5 + co.z / (1.95 * re)) if co.y < 0 else (0.02, 0.5)
+                co = me.vertices[me.loops[li].vertex_index].co
+                uv.data[li].uv = ((0.5 + co.x * 0.72 / d_iris, 0.5 + co.y * 0.72 / (d_iris * 1.08)) if co.z > -ay * 1.08
+                                  else (0.02, 0.5))
+        me.transform(M)
         shade_smooth(e)
-        e.data.materials.append(em)
+        me.materials.append(em)
         eyes.append(e)
     return eyes
 
@@ -537,7 +644,7 @@ def card(points, w_root, w_tip, hd, mat_hair, curve=0.25):
     return o
 
 
-def clump(points, w_root, w_tip, hd, m, curve=0.0, flat=0.42, seg=8, v_tip=0.0):
+def clump(points, w_root, w_tip, hd, m, curve=0.0, flat=0.6, seg=8, v_tip=0.0):
     """Объёмная прядь-«клок» (аниме-причёска, как у реф. 16): сплюснутая трубка, сужается к кончику.
     UV v идёт от 1 (корень) к v_tip — по нему красится градиент корни → кончики."""
     rx, ry, rz, cz = hd
@@ -622,34 +729,43 @@ def curve_tube(pts, r, m, taper=0.4):
     return o
 
 
-def build_hair(cid, hd, hp, mat_cap, mat_cards):
-    rnd = random.Random(sum(map(ord, cid)))
-    rx, ry, rz, cz = hd
-    parts = []
-    # Непрозрачная «шапка» под картами (чтобы не просвечивала кожа головы).
+def hair_cap(hdc, face_cut, cap_low, scale, mat_cap):
+    """Непрозрачная «шапка» под прядями (чтобы не просвечивала кожа головы); спереди вырез под лицо."""
+    rx, ry, rz, cz = hdc
     bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=32, radius=1)
     cap = bpy.context.active_object
     cap.name = "hair_cap"
     for v in cap.data.vertices:
         x, y, z = v.co
-        v.co = Vector((x * rx * 1.06, y * ry * 1.06, z * rz * 1.05 + cz + rz * 0.02))
+        v.co = Vector((x * rx * scale, y * ry * scale, z * rz * (scale - 0.01) + cz + rz * 0.02))
     bm = bmesh.new()
     bm.from_mesh(cap.data)
-    kill = [v for v in bm.verts if (v.co.z < cz + rz * 0.42 and v.co.y < -ry * 0.25) or v.co.z < cz - rz * hp["cap_low"]]
+    kill = [v for v in bm.verts if (v.co.z < cz + rz * face_cut and v.co.y < -ry * 0.25) or v.co.z < cz - rz * cap_low]
     bmesh.ops.delete(bm, geom=kill, context="VERTS")
     bm.to_mesh(cap.data)
     bm.free()
     shade_smooth(cap)
     cap.data.materials.append(mat_cap)
-    parts.append(cap)
+    return cap
+
+
+def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
+    """hd — «сфера» причёски (у пышной копны больше головы), hd_head — сама голова: на ней внутренняя шапка,
+    чёлка и прядь на глаз (они должны лежать у лица, а не на внешнем объёме)."""
+    rnd = random.Random(sum(map(ord, cid)))
+    rx, ry, rz, cz = hd
+    hh = hd_head or hd
+    parts = [hair_cap(hd, hp.get("face_cut", 0.42), hp["cap_low"], 1.06 if hd_head is None else 1.0, mat_cap)]
+    if hd_head is not None:
+        parts.append(hair_cap(hd_head, 0.42, hp.get("inner_cap_low", 0.6), 1.06, mat_cap))
 
     cards = []
     solid = hp.get("solid", False)
 
-    def strand(pts, w0, w1, curve=0.25, **kw):
+    def strand(pts, w0, w1, curve=0.25, on=None, **kw):
         if solid:
-            return clump(pts, w0 * 0.55, max(w1 * 0.3, rx * 0.04), hd, mat_cards, **kw)
-        return card(pts, w0, w1, hd, mat_cards, curve=curve)
+            return clump(pts, w0 * 0.55, max(w1 * 0.3, rx * 0.04), on or hd, mat_cards, **kw)
+        return card(pts, w0, w1, on or hd, mat_cards, curve=curve)
     # Слои вокруг головы: внутренний — плотнее и короче, внешний — пышнее.
     for layer, (phi0, count, lift) in enumerate(hp["layers"]):
         for i in range(count):
@@ -665,13 +781,22 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards):
                 phi1 = hp["side_len"] * side + rnd.uniform(-0.15, 0.15)
                 drop = hp["long"] * (0.55 + 0.45 * (1 - front)) * rnd.uniform(0.85, 1.1)
                 curl = hp["curl"]
-            pts = flow_path(hd, theta, phi0, phi1, lift, lift + 0.1 + 0.03 * layer, curl=curl, drop=drop, rnd=rnd)
+            lift1 = hp.get("bang_lift_end", lift + 0.1) if front > hp["bang_front"] else lift + 0.1 + 0.03 * layer
+            if hd_head is not None and front > hp["bang_front"]:
+                # Чёлка — по самой голове, до глаз.
+                pts = flow_path(hh, theta, phi0, hp["bang_len_head"] + rnd.uniform(-0.08, 0.1), 1.12, 1.07,
+                                curl=hp.get("bang_curl", curl), rnd=rnd)
+                cards.append(strand(pts, hh[0] * hp["w_bang"] * rnd.uniform(0.85, 1.15), hh[0] * 0.3, on=hh))
+                continue
+            pts = flow_path(hd, theta, phi0, phi1, lift, lift1, curl=curl, drop=drop, rnd=rnd)
             cards.append(strand(pts, rx * hp["w"] * rnd.uniform(0.85, 1.15), rx * 0.32))
     # Крупная прядь на правый глаз (Кот).
     if hp.get("eye_bang"):
-        for th, ph1, w in ((-0.36, 1.68, 0.9), (-0.18, 1.5, 0.75), (-0.55, 1.62, 0.7)):
-            pts = flow_path(hd, th, 0.18, ph1, 1.13, 1.17, curl=-0.2, rnd=rnd)
-            cards.append(strand(pts, rx * w, rx * 0.3))
+        eb = hp["eye_bang"] if isinstance(hp["eye_bang"], dict) else {}
+        for th, ph1, w in ((0.36, 1.68, 0.9), (0.18, 1.5, 0.75), (0.55, 1.62, 0.7)):
+            th *= FP["patch_side"]                       # прядь падает на глаз под повязкой
+            pts = flow_path(hh, th, 0.18, eb.get("len", 1.62) + (ph1 - 1.62), eb.get("lift0", 1.13), eb.get("lift1", 1.17), curl=-0.2, rnd=rnd)
+            cards.append(strand(pts, hh[0] * w, hh[0] * 0.3, on=hh))
     # Хохолок-завиток.
     if hp.get("ahoge"):
         top = on_scalp(hd, 0.3, 0.08, 1.06)
@@ -695,19 +820,19 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards):
     n_r = hp.get("ringlets", 0)
     for k in range(n_r):
         theta = 0.75 + (k + 0.5) / n_r * (2 * math.pi - 1.5) + rnd.uniform(-0.08, 0.08)
-        phi = 1.3 + rnd.uniform(0.0, 0.3) + (0.25 if abs(theta - math.pi) < 1.2 else 0.0)
+        phi = hp.get("ringlet_phi", 1.3) + rnd.uniform(0.0, hp.get("ringlet_spread", 0.3)) + (0.25 if abs(theta - math.pi) < 1.2 else 0.0)
         base = on_scalp(hd, theta, phi, 1.15)
         out = Vector((math.sin(theta), -math.cos(theta), 0))
         tang = Vector((math.cos(theta), math.sin(theta), 0))
-        r = rx * rnd.uniform(0.07, 0.1)
+        r = rx * rnd.uniform(*hp.get("ringlet_r", (0.07, 0.1)))
         turns = rnd.uniform(1.2, 1.8)
-        drop = rz * rnd.uniform(0.32, 0.5)
+        drop = rz * rnd.uniform(*hp.get("ringlet_drop", (0.32, 0.5)))
         steps = int(14 * turns)
         pts = []
         for i in range(steps + 1):
             a = 2 * math.pi * turns * i / steps
             pts.append(base + out * (r * (1 - math.cos(a)) * 0.8) + tang * (r * math.sin(a)) + Vector((0, 0, -drop * i / steps)))
-        cards.append(strand(pts, rx * 0.26, rx * 0.1, curve=0.15))
+        cards.append(strand(pts, rx * hp.get("ringlet_w", 0.26), rx * 0.1, curve=0.15))
     # Пучки (Габи): шар-основа + карты вокруг.
     for side in hp.get("buns", []):
         c = on_scalp(hd, side * 1.05, 0.62, 1.2)
@@ -735,27 +860,33 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards):
     return [cap_obj, cards_obj]
 
 
-def build_ears(hd, color, inner, scale=1.0, lift=1.02):
-    """Кошачьи уши: сплюснутый конус (снаружи — цвет волос) + тёмная внутренняя часть спереди."""
+EAR_DEFAULT = {"theta": 1.1, "phi": 0.62, "lift": 1.02, "tip": (0.36, 0.06, 0.6), "r": 0.27}
+
+
+def build_ears(hd, color, inner, ear):
+    """Кошачьи уши: сплюснутый конус (снаружи — цвет волос) + тёмная внутренняя часть спереди.
+    ear: theta/phi/lift — основание на поверхности hd; tip — смещение кончика (в rx, ry, rz); r — радиус основания (в rx)."""
     rx, ry, rz, cz = hd
-    objs = []
+    objs, tips = [], []
     for side in (-1, 1):
-        base = on_scalp(hd, side * 1.1, 0.62, lift)
-        axis = Vector((side * rx * 0.36, ry * 0.06, rz * 0.6)) * scale
+        base = on_scalp(hd, side * ear["theta"], ear["phi"], ear["lift"])
+        tx, ty, tz = ear["tip"]
+        axis = Vector((side * rx * tx, ry * ty, rz * tz))
+        tips.append(base + axis)
         rot = Vector((0, 0, 1)).rotation_difference(axis.normalized()).to_matrix().to_4x4()
-        for m, r, depth, flat, fwd in ((color, 0.27, 1.0, 0.42, 0.0), (inner, 0.17, 0.78, 0.22, -0.06)):
-            bpy.ops.mesh.primitive_cone_add(vertices=20, radius1=rx * r * scale, radius2=0, depth=axis.length * depth,
+        for m, r, depth, flat, fwd in ((color, ear["r"], 1.0, 0.42, 0.0), (inner, ear["r"] * 0.62, 0.78, 0.22, -0.06)):
+            bpy.ops.mesh.primitive_cone_add(vertices=20, radius1=rx * r, radius2=0, depth=axis.length * depth,
                                             location=(0, 0, axis.length * depth / 2))
             o = bpy.context.active_object
             o.data.transform(Matrix.Diagonal((1, flat, 1, 1)))
-            o.data.transform(Matrix.Translation(base + Vector((0, fwd * ry * scale, 0))) @ rot)
+            o.data.transform(Matrix.Translation(base + Vector((0, fwd * ry * r * 3, 0))) @ rot)
             if m is color:
                 o.modifiers.new("sub", "SUBSURF").levels = 1
                 apply_mods(o)
             shade_smooth(o)
             o.data.materials.append(m)
             objs.append(o)
-    return objs
+    return objs, tips
 
 
 # ------------------------------------------------------------------ одежда
@@ -1179,7 +1310,7 @@ def _petal(M, a, r, m):
 
 def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
     s = p["s"]
-    base = 0.02 * s
+    base = 0.03 * s          # оверсайз: толстая вязка (реф. 16)
 
     def spec(b, t, co):
         if b in ("spine", "chest", "upper_chest"):
@@ -1189,10 +1320,10 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
         if b == "neck":
             return base * 0.5 if co.z <= J["neck"].z - 0.012 * s else None
         if b.startswith("upper_arm"):
-            return base + 0.004 * s + 0.014 * s * t
+            return base * 0.6 + 0.012 * s * t
         if b.startswith("forearm"):
-            if t < 0.82:   # рукав-фонарик
-                return base + 0.014 * s + 0.016 * s * math.sin(math.pi * (0.25 + 0.75 * t / 0.82) * 0.85)
+            if t < 0.85:   # рукав-фонарик: расширяется к запястью (реф. 16), над манжетой — пышнее всего
+                return 0.03 * s + 0.036 * s * (t / 0.85) ** 1.5
             return 0.009 * s   # манжета-резинка
         if b.startswith("hand"):
             return 0.009 * s if t < 0.1 else None
@@ -1207,26 +1338,36 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
                 m, center=(0, hcy), sy=hsy, uv=(5, 7))
     # Высокий ворот: широкое основание, подвёрнутый валик, верх у линии челюсти.
     nz = J["neck"].z
-    prof = [(nz + dz * s, r * s) for dz, r in ((-0.075, 0.075), (-0.055, 0.062), (-0.03, 0.052), (-0.005, 0.054),
-                                                  (0.02, 0.056), (0.042, 0.05), (0.058, 0.04), (0.066, 0.031))]
-    collar = lathe("collar", prof, m, center=(0, J["neck"].y + 0.004 * s), sy=0.94, uv=(5, 7),
-                   wobble=lambda a, k: 0.025 * math.sin(a * 7 + k) if k in (3, 4, 5) else 0.0)
-    # Ветка цветов на правой стороне груди (справа у персонажа = −X): стебель, листья, цветы.
+    # Широкий высокий ворот-«хомут» (реф. 16): ширина ≈ 2.2 расстояния глаз–подбородок, верх у подбородка.
+    prof = [(nz + dz * s, r * s) for dz, r in ((-0.085, 0.11), (-0.06, 0.104), (-0.03, 0.096), (0.0, 0.09),
+                                                  (0.026, 0.088), (0.046, 0.082), (0.062, 0.072), (0.072, 0.062), (0.076, 0.052))]
+    collar = lathe("collar", prof, m, center=(0, J["neck"].y + 0.004 * s), sy=0.9, uv=(7, 7),
+                   wobble=lambda a, k: 0.03 * math.sin(a * 7 + k) if k in (2, 3, 4, 5, 6) else 0.0)
+    MARKS["collar"] = Vector((0, J["neck"].y + 0.004 * s - 0.072 * s * 0.9, nz + 0.072 * s))
+    # Вышивка (реф. 16, вид спереди): крупная ветка на левой стороне груди (для зрителя справа, +X)
+    # и маленькая веточка внизу справа у персонажа (для зрителя слева, −X).
     tree = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
-    path = [(-0.112, 1.285), (-0.1, 1.255), (-0.085, 1.225), (-0.07, 1.195), (-0.055, 1.165), (-0.045, 1.135), (-0.04, 1.1)]
-    stem_pts = [front_hit(tree, x * s, z * s)[0] for x, z in path]
-    parts = [surface_strip(tree, [q for q in stem_pts if q], 0.003 * s, stem_m)]
-    blooms = [(-0.105, 1.268, 0.019, 0.2), (-0.078, 1.236, 0.021, 1.0), (-0.11, 1.215, 0.015, 2.1), (-0.06, 1.2, 0.018, 0.6),
-              (-0.083, 1.172, 0.016, 1.7), (-0.042, 1.158, 0.015, 2.6), (-0.06, 1.128, 0.013, 0.3), (-0.035, 1.105, 0.011, 1.2)]
-    for x, z, r, spin in blooms:
-        loc, nrm = front_hit(tree, x * s, z * s)
-        if loc:
-            parts += blossom(loc + nrm * 0.002, nrm, r * s, flower_mats, spin)
-    for x, z, ang in ((-0.094, 1.25, 2.6), (-0.066, 1.214, -0.4), (-0.098, 1.19, 3.6), (-0.05, 1.18, -0.2), (-0.068, 1.145, 3.4),
-                      (-0.05, 1.12, 2.8)):
-        loc, nrm = front_hit(tree, x * s, z * s)
-        if loc:
-            parts.append(leaf(loc, nrm, ang, 0.024 * s, leaf_m))
+    parts = []
+    sprigs = [
+        {"path": [(0.112, 1.285), (0.1, 1.255), (0.085, 1.225), (0.07, 1.195), (0.055, 1.165), (0.045, 1.135), (0.04, 1.1)],
+         "blooms": [(0.105, 1.268, 0.019, 0.2), (0.078, 1.236, 0.021, 1.0), (0.11, 1.215, 0.015, 2.1), (0.06, 1.2, 0.018, 0.6),
+                    (0.083, 1.172, 0.016, 1.7), (0.042, 1.158, 0.015, 2.6), (0.06, 1.128, 0.013, 0.3), (0.035, 1.105, 0.011, 1.2)],
+         "leaves": [(0.094, 1.25, 0.5), (0.066, 1.214, 3.5), (0.098, 1.19, -0.5), (0.05, 1.18, 3.3), (0.068, 1.145, -0.3), (0.05, 1.12, 0.3)]},
+        {"path": [(-0.06, 1.145), (-0.072, 1.115), (-0.085, 1.085), (-0.098, 1.055), (-0.105, 1.035)],
+         "blooms": [(-0.065, 1.13, 0.016, 0.4), (-0.088, 1.098, 0.018, 1.3), (-0.1, 1.06, 0.014, 2.2), (-0.075, 1.07, 0.012, 0.9)],
+         "leaves": [(-0.078, 1.118, 2.8), (-0.094, 1.08, 3.6), (-0.06, 1.1, -0.4)]},
+    ]
+    for sp in sprigs:
+        stem_pts = [front_hit(tree, x * s, z * s)[0] for x, z in sp["path"]]
+        parts.append(surface_strip(tree, [q for q in stem_pts if q], 0.003 * s, stem_m))
+        for x, z, r, spin in sp["blooms"]:
+            loc, nrm = front_hit(tree, x * s, z * s)
+            if loc:
+                parts += blossom(loc + nrm * 0.002, nrm, r * s, flower_mats, spin)
+        for x, z, ang in sp["leaves"]:
+            loc, nrm = front_hit(tree, x * s, z * s)
+            if loc:
+                parts.append(leaf(loc, nrm, ang, 0.024 * s, leaf_m))
     return join([body, hem, collar] + parts, "garment__upper_body__turtleneck_flowers")
 
 
@@ -1237,19 +1378,20 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
 
     def spec(b, t, co):
         if b in ("hips", "spine", "chest"):
-            return 0.012 * s if co.z <= waist_top else None
+            return 0.028 * s if co.z <= waist_top else None     # мешковатый пояс
         if b.startswith("thigh"):
-            return 0.012 * s if t < 0.3 else None
+            return 0.028 * s if t < 0.3 else None
         return None
     parts = [shell("tmp", m, spec, smooth=1)]
     legs_by_side = {}
     for sx in (1, -1):
         hip = J["hip_l"] if sx > 0 else J["hip_r"]
-        top_c = Vector((hip.x * 0.92, hip.y, hip.z + 0.02 * s))
-        bot_c = Vector((sx * (abs(hip.x) + 0.024 * s), 0.006 * s, 0.022 * s))
+        # Очень широкие штанины (реф. 16, по наложению): у пола полуширина брюк ≈ 3U, между штанинами ~5 см.
+        top_c = Vector((sx * 0.085 * s, hip.y, hip.z + 0.02 * s))
+        bot_c = Vector((sx * 0.152 * s, 0.006 * s, 0.022 * s))
         n = 16
         axis = [top_c.lerp(bot_c, k / (n - 1)) for k in range(n)]
-        key = [(0.0, 0.074), (0.12, 0.086), (0.4, 0.083), (0.75, 0.082), (1.0, 0.09)]
+        key = [(0.0, 0.08), (0.12, 0.088), (0.4, 0.097), (0.6, 0.104), (1.0, 0.13)]
 
         def rad(t):
             for (t0, r0), (t1, r1) in zip(key, key[1:]):
@@ -1289,8 +1431,8 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
     # Ремень по сечению тела + серебряная пряжка-рамка.
     body_x, y0, y1 = section(_BODY, belt_z, xmax=0.165 * s)
     cy = (y0 + y1) / 2
-    rx_b = body_x + 0.02 * s
-    ry_b = (y1 - y0) / 2 + 0.02 * s
+    rx_b = body_x + 0.042 * s
+    ry_b = (y1 - y0) / 2 + 0.036 * s
     parts.append(lathe("belt", [(belt_z - 0.014 * s, rx_b), (belt_z + 0.014 * s, rx_b)], leather, center=(0, cy),
                        sy=ry_b / rx_b, thick=0.003))
     fy = cy - ry_b - 0.004 * s
@@ -1494,12 +1636,22 @@ CHARACTERS = {
     # кошачьи уши, хохолок. Свитер с высоким воротом и цветами — оверсайз, рукава до костяшек.
     "kot": {
         "sex": "male",
-        "body": {"s": 1.0, "shoulder": 0.15, "hip": 0.078, "head": 1.12, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
-        "hair": {"layers": [(0.12, 18, 1.08), (0.38, 26, 1.13), (0.7, 30, 1.17), (1.0, 26, 1.2)], "bang_front": 0.5, "bang_len": 1.42,
-                 "side_len": 1.62, "long": 0.0, "curl": 0.38, "w": 1.0, "cap_low": 0.55, "eye_bang": True, "ahoge_spiral": True, "solid": True,
-                 "ringlets": 24, "c_root": (0.42, 0.8, 0.66), "c_tip": (0.3, 0.46, 0.86)},
+        "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1), "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+        # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
+        "hair": {"volume": (1.5, 1.4, 0.7, 0.45),
+                 "layers": [(0.12, 22, 1.0), (0.4, 30, 1.02), (0.75, 34, 1.04), (1.05, 30, 1.06)], "bang_front": 0.5,
+                 "bang_len": 1.72, "bang_len_head": 1.62, "w_bang": 1.3, "bang_curl": 0.45, "side_len": 2.3, "long": 0.075, "curl": 0.5,
+                 "w": 0.95, "cap_low": 0.75, "face_cut": 0.42, "inner_cap_low": 0.75,
+                 "eye_bang": {"len": 1.72, "lift0": 1.12, "lift1": 1.07},
+                 "ahoge_spiral": True, "solid": True, "ringlets": 64, "ringlet_phi": 1.3, "ringlet_spread": 0.7, "ringlet_drop": (0.5, 1.3),
+                 "ringlet_r": (0.06, 0.1), "ringlet_w": 0.32,
+                 "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
+        # Большие уши на «плечах» копны (реф. 16, по наложению).
+        "ear": {"theta": 1.29, "phi": 1.0, "lift": 0.98, "tip": (0.18, 0.04, 1.52), "r": 0.3},   # в единицах объёма копны
+        # Заколки (theta, phi, lift, поворот, масштаб): большая рыбка слева, малая справа, облачко сверху справа.
+        "clips": {"fish": [(-1.35, 1.65, 1.2, 1.5, 2.4), (1.32, 1.3, 1.2, 0.0, 1.8)], "cloud": (0.62, 1.05, 1.16, 0.1, 1.6)},
         "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
-        "ears": (0.38, 0.72, 0.64), "ear_inner": (0.4, 0.34, 0.36), "ear_scale": 1.55, "ear_lift": 1.12,
+        "ears": (0.56, 0.72, 0.64), "ear_inner": (0.3, 0.25, 0.25),
         "garments": ["kot_sweater", "kot_cargo", "kot_boots", "top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress",
                      "socks", "shoes", "gloves", "head_clips", "face_eyepatch", "neck_necklace"],
     },
@@ -1530,6 +1682,7 @@ CHARACTERS = {
 
 def build(cid):
     reset()
+    set_face(cid)
     c = CHARACTERS[cid]
     p = c["body"]
     s = p["s"]
@@ -1544,7 +1697,7 @@ def build(cid):
     flower_mats = (mat("flower", (0.99, 0.94, 0.94, 1)), mat("flower_mid", (0.95, 0.66, 0.7, 1)), mat("flower_core", (0.97, 0.78, 0.4, 1)))
     leaf_m = mat("leaf", (0.36, 0.56, 0.36, 1))
     stem_m = mat("stem", (0.42, 0.3, 0.26, 1))
-    belt_z = J["pelvis"].lerp(J["spine"], 0.2).z
+    belt_z = J["pelvis"].lerp(J["spine"], 0.5).z
     # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     under = mat("underwear", (0.92, 0.6, 0.7, 1) if c["sex"] == "female" else (0.2, 0.25, 0.4, 1), rough=0.6)
 
@@ -1559,10 +1712,19 @@ def build(cid):
         eyes += build_lashes(head, hd, c["geo_lashes"])
     hair_mat = (mat("hair_solid", (1, 1, 1, 1), vcol=True, rough=0.5) if c["hair"].get("solid") else
                 mat("hair", (1, 1, 1, 1), tex=os.path.join(TEX, "hair_strands.png"), vcol=True, clip=True, double=True))
-    hair = build_hair(cid, hd, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat)
+    # Объём причёски: волосы строятся на увеличенной «сфере» hd_h (у Кота по реф. 16 — пышная копна шире головы).
+    hv = c["hair"].get("volume")
+    hd_h = (hd[0] * hv[0], hd[1] * hv[1], hd[2] * hv[2], hd[3] + hd[2] * hv[3]) if hv else hd
+    hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
+                      hd_head=hd if hv else None)
     head_parts = [head] + eyes + hair
+    marks = landmarks_head(head, hd, hair)
     if c.get("ears"):
-        head_parts += build_ears(hd, mat("ear", c["ears"] + (1,)), mat("ear_inner", c["ear_inner"] + (1,)), c.get("ear_scale", 1.0), c.get("ear_lift", 1.02))
+        ear = dict(EAR_DEFAULT)
+        ear.update(c.get("ear", {}))
+        ear_objs, tips = build_ears(hd_h, mat("ear", c["ears"] + (1,)), mat("ear_inner", c["ear_inner"] + (1,)), ear)
+        head_parts += ear_objs
+        marks["ear_tip_vl"], marks["ear_tip_vr"] = tips
     body_layers = underwear(J, p, c["sex"], under)
 
     garments = []
@@ -1617,32 +1779,50 @@ def build(cid):
             red_belly = mat("clip_belly", (0.98, 0.66, 0.66, 1))
             eye_m = mat("clip_eye", (0.08, 0.06, 0.08, 1), rough=0.2)
             objs = []
-            for th, ph, ang in ((-0.98, 0.78, 2.6), (1.32, 1.0, 0.5)):
-                q = on_scalp(hd, th, ph, 1.3)
-                objs += fish_clip(q, (q - Vector((0, 0, cz))).normalized(), ang, rx, plain, red_belly, eye_m)
-            q = on_scalp(hd, 0.66, 0.8, 1.3)
-            objs += cloud_clip(q, (q - Vector((0, 0, cz))).normalized(), 0.15, rx,
+            cl = c.get("clips", {"fish": [(-0.98, 0.78, 1.3, 2.6, 1.0), (1.32, 1.0, 1.3, 0.5, 1.0)], "cloud": (0.66, 0.8, 1.3, 0.15, 1.0)})
+            hcz = hd_h[3]
+            for th, ph, lf, ang, sc in cl["fish"]:
+                q = on_scalp(hd_h, th, ph, lf)
+                objs += fish_clip(q, (q - Vector((0, 0, hcz))).normalized(), ang, rx * sc, plain, red_belly, eye_m)
+            th, ph, lf, ang, sc = cl["cloud"]
+            q = on_scalp(hd_h, th, ph, lf)
+            objs += cloud_clip(q, (q - Vector((0, 0, hcz))).normalized(), ang, rx * sc,
                                mat("cloud", (0.99, 0.95, 0.95, 1)), mat("cloud_edge", (0.95, 0.56, 0.62, 1)))
             o = join(objs, "garment__headwear__clips")
         elif g == "face_eyepatch":
             rx, ry, rz, cz = hd
-            ex, ez = -EYE_U * 2 * rx, cz - (EYE_V - 0.5) * 2 * rz
+            ps = FP["patch_side"]
+            ex, ez = ps * FP["eye_u"] * 2 * rx, cz - (FP["eye_v"] - 0.5) * 2 * rz
             tree = BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get())
-            hit = tree.ray_cast(Vector((ex, -1, ez)), Vector((0, 1, 0)))
-            py = (hit[0].y if hit[0] else -ry) - 0.004
-            bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=1, location=(ex, py, ez))
-            patch = bpy.context.active_object
-            patch.scale = (rx * 0.32, ry * 0.06, rz * 0.25)
-            bpy.ops.object.transform_apply(scale=True)
+            # Повязка (реф. 16) — скруглённый прямоугольник, повторяет изгиб лица: кусок оболочки головы.
+            ex = ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx
+            pa, pb, pcz = rx * 0.5, rz * 0.3, ez + rz * FP.get("patch_dz", 0.06)
+            pm = head.data.copy()
+            patch = new_obj("patch", pm)
+            bm = bmesh.new()
+            bm.from_mesh(pm)
+            bm.normal_update()
+            kill = [v for v in bm.verts if v.co.y > -ry * 0.2 or
+                    (abs(v.co.x - ex) / pa) ** 3 + (abs(v.co.z - pcz) / pb) ** 3 > 1.0]
+            bmesh.ops.delete(bm, geom=kill, context="VERTS")
+            for v in bm.verts:   # купол: в центре повязка отстоит от лица (под ней ресницы), к краям прилегает
+                rr = min(1.0, (abs(v.co.x - ex) / pa) ** 3 + (abs(v.co.z - pcz) / pb) ** 3)
+                v.co += v.normal * (0.0015 + 0.009 * (1 - rr ** 1.5))
+            bm.to_mesh(pm)
+            bm.free()
+            pm.materials.clear()
+            pm.materials.append(plain)
+            patch.modifiers.new("sol", "SOLIDIFY").thickness = 0.003
+            apply_mods(patch)
             shade_smooth(patch)
-            patch.data.materials.append(plain)
             ring = []
             for k in range(65):
                 a = 2 * math.pi * k / 64
                 xn, yn = math.sin(a), -math.cos(a)
                 # Шнурок в наклонной плоскости (реф. 16): от повязки через переносицу вниз под другой глаз,
                 # ниже уха, вокруг затылка и над правым ухом обратно к повязке.
-                ring.append(Vector((xn * rx * 1.07, yn * ry * 1.07, cz + rz * (-0.3 * xn + 0.13 * yn - 0.15))))
+                ezn = 1 - 2 * FP["eye_v"]
+                ring.append(Vector((xn * rx * 1.07, yn * ry * 1.07, cz + rz * (0.35 * ps * xn + 0.195 * yn + ezn + 0.155))))
             proj = []
             for q in ring:   # проекция по радиусу к оси головы — шнурок ложится ровно, без изломов на носу
                 d = (Vector((0, 0, q.z)) - q).normalized()
@@ -1679,6 +1859,8 @@ def build(cid):
         if o is not None:
             garments.append(o)
 
+    landmarks_body(body, garments)
+    export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))
     on_head = ("garment__headwear", "garment__face")
     bind(rig, [body] + body_layers + [g for g in garments if not g.name.startswith(on_head)])

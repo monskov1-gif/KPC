@@ -21,11 +21,15 @@ N = 2048
 SS = 2
 SKIN = (250, 230, 220)
 
-# Геометрия глаз в UV лица (общая с build_characters.py: EYE_U, EYE_V, EYE_W, EYE_H).
-EYE_U, EYE_V, EYE_W, EYE_H = 0.18, 0.535, 0.097, 0.071
-# Высоты носа и рта на текстуре — под вылепленную голову (NOSE_TIP_Z, MOUTH_Z в build_characters.py):
-# y = 0.5 − z / 2.
-NOSE_Y, MOUTH_Y = 0.5 + 0.4 / 2, 0.5 + 0.6 / 2
+# Геометрия лица (глаза, нос, рот) — общая с build_characters.py: tools/art/face_params.json.
+import json  # noqa: E402
+_FACE = json.load(open(os.path.join(os.path.dirname(__file__), "face_params.json"), encoding="utf-8"))
+
+
+def face_params(cid):
+    fp = dict(_FACE["default"])
+    fp.update(_FACE.get(cid, {}))
+    return fp
 
 CHARS = {
     # Кот (реф. 04): светло-голубые глаза, спокойное лицо, лёгкий румянец.
@@ -68,6 +72,13 @@ def almond(cx, cy, w, h, steps=40, lift=0.18):
 
 
 def face(cid, c):
+    fp = face_params(cid)
+    EYE_U, EYE_V, EYE_W, EYE_H = fp["eye_u"], fp["eye_v"], fp["eye_w"], fp["eye_h"]
+    NOSE_Y, MOUTH_Y = 0.5 - fp["nose_z"] / 2, 0.5 - fp["mouth_z"] / 2      # y текстуры = 0.5 − z / 2
+    mk = fp["mouth_w"] / 0.032                                           # ширина рта относительно базовой
+
+    def mx(u):
+        return 0.5 + (u - 0.5) * mk
     S = N * SS
     img = Image.new("RGBA", (S, S), SKIN + (255,))
     # Лёгкая объёмная тень по краям лица и под подбородком.
@@ -80,7 +91,7 @@ def face(cid, c):
         cx, cy = S * (0.5 + side * EYE_U), S * EYE_V
         w, h = S * EYE_W, S * EYE_H
         # Внешний угол — к краю лица: для правого глаза зеркалим наклон.
-        pts = almond(cx, cy, w, h, lift=-0.16 * side)
+        pts = almond(cx, cy, w, h, lift=-fp["eye_lift"] * side)
         hd.polygon(pts, fill=0)
         d = ImageDraw.Draw(img)
         # Тень под верхним веком на коже (вокруг прорези) — глубина глазницы.
@@ -136,13 +147,13 @@ def face(cid, c):
     if c["mouth"] == "lips":
         # Спокойные губы (реф. 16): тонкая линия рта, мягкая розовая нижняя губа, лёгкая тень под ней.
         img.alpha_composite(soft((S, S), (236, 160, 160), 0.75, S * 0.005,
-                                 lambda dd: dd.ellipse((S * 0.478, S * (my + 0.004), S * 0.522, S * (my + 0.02)), fill=255)))
+                                 lambda dd: dd.ellipse((S * mx(0.478), S * (my + 0.004), S * mx(0.522), S * (my + 0.02)), fill=255)))
         img.alpha_composite(soft((S, S), (232, 172, 170), 0.5, S * 0.004,
-                                 lambda dd: dd.ellipse((S * 0.474, S * (my - 0.016), S * 0.526, S * (my - 0.002)), fill=255)))
+                                 lambda dd: dd.ellipse((S * mx(0.474), S * (my - 0.016), S * mx(0.526), S * (my - 0.002)), fill=255)))
         img.alpha_composite(soft((S, S), (214, 170, 166), 0.35, S * 0.006,
-                                 lambda dd: dd.ellipse((S * 0.485, S * (my + 0.03), S * 0.515, S * (my + 0.042)), fill=255)))
+                                 lambda dd: dd.ellipse((S * mx(0.485), S * (my + 0.03), S * mx(0.515), S * (my + 0.042)), fill=255)))
         d = ImageDraw.Draw(img)
-        d.line([(S * 0.468, S * (my + 0.002)), (S * 0.485, S * my), (S * 0.5, S * (my + 0.0015)), (S * 0.515, S * my), (S * 0.532, S * (my + 0.002))],
+        d.line([(S * mx(0.468), S * (my + 0.002)), (S * mx(0.485), S * my), (S * 0.5, S * (my + 0.0015)), (S * mx(0.515), S * my), (S * mx(0.532), S * (my + 0.002))],
                fill=(168, 96, 104, 255), width=int(S * 0.0032), joint="curve")
     elif c["mouth"] == "neutral":
         d.arc((S * 0.47, S * (my - 0.012), S * 0.53, S * (my + 0.013)), 25, 155, fill=mc, width=mw)
