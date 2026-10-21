@@ -122,6 +122,8 @@ func _build_top_bar() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_top.add_child(spacer)
+	# Номер версии сборки (растёт на 0.01 с каждой правкой) — видно, какая версия открыта на сайте.
+	_top.add_child(UiTheme.tag("v" + str(ProjectSettings.get_setting("application/config/version", "?")), 14, UiTheme.TEXT_DIM))
 	var coins := PanelContainer.new()
 	coins.add_theme_stylebox_override("panel", UiTheme.pill(UiTheme.PANEL_SOLID, 10))
 	coins.size_flags_vertical = Control.SIZE_SHRINK_CENTER

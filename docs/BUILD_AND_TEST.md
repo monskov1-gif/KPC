@@ -24,6 +24,16 @@ GODOT=/путь/к/godot ./tools/capture.sh res://scenes/ui/wardrobe.tscn docs/s
 (`debug_try_on`, `debug_long_press`, `debug_result`, `debug_challenge_tab`, `debug_presets`).
 Снимки берут отдельное сохранение и каждый раз начинают новую игру.
 
+## Публикация на сайт (каждая правка = новая версия)
+```bash
+GODOT=/путь/к/godot ./tools/release_web.sh "что изменилось"
+git add -A && git commit -m "..." && git push origin main
+```
+Скрипт поднимает версию на 0.01 (`project.godot` → `application/config/version`, файл `VERSION`),
+пишет строку в `docs/RELEASES.md` и экспортирует пресет «Web» (без потоков — GitHub Pages не отдаёт
+заголовки COOP/COEP) в `play/`. Корневой `index.html` ведёт на `play/`. Веб-версия рисуется рендерером
+Compatibility (WebGL 2). Нужны шаблоны экспорта Godot 4.4.1.
+
 ## Агенты-критики
 В `.claude/agents/` лежат роли: `tz-critic` (соответствие ТЗ), `canon-critic` (канон и сюжет),
 `visual-critic` (скриншоты и стиль), `code-critic` (баги и тесты). Их запускают после каждого этапа.
