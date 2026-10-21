@@ -32,6 +32,7 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 		_root = null
 	_garments.clear()
 	_underwear.clear()
+	_materials.clear()   # ключи материалов — по имени: у другого персонажа те же имена, но другие цвета
 	var path := MODEL_DIR + character_id + ".glb"
 	if not ResourceLoader.exists(path):
 		push_warning("Нет 3D-модели %s — используется заглушка" % path)
@@ -73,21 +74,21 @@ func apply_items(items: Array[ClothingItem]) -> void:
 		return
 	for g in _garments.values():
 		g.visible = false
+	# Слоты считаем только по реально показанным мешам: вещь без шаблона не должна «снимать» бельё.
 	var slots := {}
-	for it in items:
-		slots[it.slot] = true
-	for part in _underwear:
-		var covered := false
-		for slot in UNDERWEAR_COVERED_BY.get(part, []):
-			covered = covered or slots.has(slot)
-		(_underwear[part] as MeshInstance3D).visible = not covered
 	for it in items:
 		var key := _template_for(it)
 		if key == "" or not _garments.has(key):
 			continue
 		var mi: MeshInstance3D = _garments[key]
 		mi.visible = true
+		slots[it.slot] = true
 		_tint(mi, it.placeholder_color)
+	for part in _underwear:
+		var covered := false
+		for slot in UNDERWEAR_COVERED_BY.get(part, []):
+			covered = covered or slots.has(slot)
+		(_underwear[part] as MeshInstance3D).visible = not covered
 
 
 func _template_for(it: ClothingItem) -> String:
@@ -120,8 +121,9 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 	if _materials.has(key):
 		return _materials[key]
 	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
-	# glTF хранит цвет в линейном пространстве, импорт переводит его в sRGB; тун-шейдер берёт цвет как есть,
-	# поэтому возвращаем исходное значение из Blender — иначе тёмные цвета (ремень, бельё) выходят блёклыми.
+	# Цвета в build_characters.py задуманы как экранные (sRGB), как и цвета вещей в items.json.
+	# glTF хранит их как линейные, импорт переводит в sRGB (0.1 → 0.35, блёкло) — возвращаем исходное число;
+	# uniform albedo (source_color) затем выводится на экран ровно этим цветом.
 	var color: Color = (src as BaseMaterial3D).albedo_color.srgb_to_linear() if src is BaseMaterial3D else Color.WHITE
 	var m := ShaderMaterial.new()
 	if src_name == "hair":

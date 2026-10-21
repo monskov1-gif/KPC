@@ -1538,7 +1538,6 @@ def build(cid):
     knit = mat("garment_knit", (1, 1, 1, 1), tex=os.path.join(TEX, "knit.png"))
     cloth = mat("garment_cloth", (1, 1, 1, 1), tex=os.path.join(TEX, "cloth.png"))
     plain = mat("garment_plain", (1, 1, 1, 1))
-    # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     rib = mat("garment_rib", (1, 1, 1, 1), tex=os.path.join(TEX, "rib.png"))
     metal = mat("metal", (0.78, 0.78, 0.8, 1), rough=0.2)
     leather = mat("leather", (0.1, 0.09, 0.1, 1), rough=0.4)
@@ -1546,6 +1545,7 @@ def build(cid):
     leaf_m = mat("leaf", (0.36, 0.56, 0.36, 1))
     stem_m = mat("stem", (0.42, 0.3, 0.26, 1))
     belt_z = J["pelvis"].lerp(J["spine"], 0.2).z
+    # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     under = mat("underwear", (0.92, 0.6, 0.7, 1) if c["sex"] == "female" else (0.2, 0.25, 0.4, 1), rough=0.6)
 
     R = body_radii(p)
@@ -1592,12 +1592,12 @@ def build(cid):
             belt = bpy.context.active_object
             belt.scale = ((p["waist"] + 0.016) * s, (0.074) * s, 0.06 * s * 0.18)
             bpy.ops.object.transform_apply(scale=True)
-            belt.data.materials.append(mat("leather", (0.12, 0.1, 0.11, 1), rough=0.4))
+            belt.data.materials.append(leather)
             bpy.ops.mesh.primitive_cube_add(size=0.018 * s, location=(0, -0.07 * s, bz))
             buckle = bpy.context.active_object
             buckle.scale = (1, 0.4, 0.8)
             bpy.ops.object.transform_apply(scale=True)
-            buckle.data.materials.append(mat("metal", (0.75, 0.72, 0.68, 1), rough=0.25))
+            buckle.data.materials.append(metal)
             o = join([o, belt, buckle], "garment__lower_body__trousers")
         elif g == "legs_skirt":
             o = skirt(J, p, "garment__lower_body__skirt", cloth, 0.98, 0.66, p["waist"] + 0.02, 0.19)

@@ -148,7 +148,7 @@
    "icon_asset": "",
    "is_signature_item": true,
    "placeholder_color": "#e0574f",
-   "sort_order": 12,
+   "sort_order": 13,
    "model_template": "headwear__clips"
   },
   {
@@ -182,7 +182,7 @@
    "icon_asset": "",
    "is_signature_item": true,
    "placeholder_color": "#111111",
-   "sort_order": 13,
+   "sort_order": 14,
    "model_template": "face_accessory__eyepatch"
   },
   {

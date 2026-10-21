@@ -621,3 +621,8 @@ func debug_result() -> void:
 
 func debug_presets() -> void:
 	PresetsPanel.fill(_sheet, self)
+
+
+## Проверка смены персонажа: Кот → Габи (материалы не должны переноситься от предыдущей модели).
+func debug_switch_to_gabi() -> void:
+	_set_character("gabi")
