@@ -1,0 +1,18 @@
+{
+  "_comment": "Магазины. Состав и цены — PLACEHOLDER.",
+  "shops": [
+    {
+      "id": "shop_test_boutique",
+      "name_key": "shop.test_boutique.name",
+      "entries": [
+        { "item_id": "clothing_oxford_shoes_001", "price": { "coins": 300 }, "purchase_limit": 1 },
+        { "item_id": "clothing_pearl_necklace_001", "price": { "coins": 350 }, "purchase_limit": 1 },
+        { "item_id": "clothing_tailored_trousers_001", "price": { "coins": 280 }, "purchase_limit": 1 },
+        { "item_id": "clothing_silk_blouse_001", "price": { "coins": 320 }, "purchase_limit": 1 },
+        { "item_id": "clothing_gabi_red_patterned_sweater_001", "price": { "coins": 220 }, "purchase_limit": 1 },
+        { "item_id": "thread_silk", "resource": true, "price": { "coins": 40 }, "purchase_limit": 0 },
+        { "item_id": "fabric_velvet", "resource": true, "price": { "coins": 80 }, "purchase_limit": 0 }
+      ]
+    }
+  ]
+}

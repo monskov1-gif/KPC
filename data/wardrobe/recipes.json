@@ -1,0 +1,13 @@
+{
+  "_comment": "Выкройки. Стоимость — PLACEHOLDER.",
+  "recipes": [
+    {
+      "id": "recipe_velvet_blazer_001",
+      "name_key": "recipe.velvet_blazer.name",
+      "output_item_id": "clothing_velvet_blazer_001",
+      "output_count": 1,
+      "costs": { "fabric_velvet": 3, "thread_silk": 2, "coins": 100 },
+      "unlocked_by_default": false
+    }
+  ]
+}

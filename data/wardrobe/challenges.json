@@ -1,0 +1,53 @@
+{
+  "_comment": "Модные испытания. Тестовое испытание [TEST] для вертикального среза: тема и числа — PLACEHOLDER, не сюжетный канон.",
+  "challenges": [
+    {
+      "id": "fashion_challenge_evening_ball_test_001",
+      "title_key": "challenge.evening_ball_test.title",
+      "description_key": "challenge.evening_ball_test.description",
+      "theme_tags": ["evening", "formal", "elegant"],
+      "attribute_weights": {
+        "elegance": 1.5,
+        "luxury": 1.3,
+        "formality": 1.2,
+        "romance": 0.6,
+        "sportiness": 0.3,
+        "casualness": 0.2
+      },
+      "theme_rules": [
+        { "id": "socks_not_scored", "when": { "slots": ["socks"] }, "level": "not_scored" },
+        { "id": "sporty_contradicts", "when": { "tags_any": ["sporty"] }, "level": "contradicts" },
+        { "id": "evening_perfect", "when": { "tags_all": ["evening", "elegant"] }, "level": "perfect" },
+        { "id": "elegant_good", "when": { "tags_any": ["elegant", "formal", "luxurious"] }, "level": "good" },
+        { "id": "cozy_weak", "when": { "tags_any": ["cozy", "casual"] }, "level": "weak" }
+      ],
+      "default_theme_level": "neutral",
+      "item_multipliers": {},
+      "requirements": [
+        { "id": "req_footwear", "type": "required_slot", "params": { "slot": "footwear" }, "severity": "critical", "text_key": "req.footwear" },
+        { "id": "req_elegant_tag", "type": "tag_any", "params": { "tag": "elegant", "min_count": 1 }, "severity": "major", "text_key": "req.elegant_tag" },
+        { "id": "req_no_sporty", "type": "forbidden_tag", "params": { "tag": "sporty" }, "severity": "minor", "text_key": "req.no_sporty" },
+        { "id": "hint_jewelry", "type": "required_category", "params": { "category": "jewelry" }, "severity": "informational", "text_key": "req.hint_jewelry" }
+      ],
+      "optional_requirements": [
+        { "id": "opt_high_elegance", "type": "attribute_min", "params": { "attribute": "elegance", "min": 80 }, "bonus": 120, "text_key": "req.opt_high_elegance" }
+      ],
+      "synergy_rules": [
+        { "id": "syn_evening_classic_set", "type": "set_pieces", "params": { "set_id": "set_evening_classic", "min_count": 3 }, "bonus": 200, "max_triggers": 1, "text_key": "syn.evening_classic_set" },
+        { "id": "syn_monochrome_black", "type": "color_count", "params": { "color": "black", "min_count": 3 }, "bonus": 80, "max_triggers": 1, "text_key": "syn.monochrome_black" }
+      ],
+      "rank_thresholds": { "D": 0, "C": 400, "B": 750, "A": 1050, "S": 1550 },
+      "min_clear_rank": "C",
+      "repeatable": true,
+      "reward_table": {
+        "first_clear": [ { "type": "resource", "id": "fabric_velvet", "amount": 2 } ],
+        "rank_rewards": {
+          "B": [ { "type": "resource", "id": "coins", "amount": 150 } ],
+          "A": [ { "type": "recipe", "id": "recipe_velvet_blazer_001" } ],
+          "S": [ { "type": "item", "id": "clothing_evening_dress_001" } ]
+        },
+        "repeat": [ { "type": "resource", "id": "coins", "amount": 20 } ]
+      }
+    }
+  ]
+}

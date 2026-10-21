@@ -1,0 +1,11 @@
+{
+  "_comment": "Стартовое состояние новой игры для вертикального среза. PLACEHOLDER.",
+  "items": [
+    "clothing_kot_flower_turtleneck_001", "clothing_kot_black_trousers_001", "clothing_kot_fish_cloud_clips_001",
+    "clothing_kot_eyepatch_001", "clothing_gabi_brown_patterned_top_001", "clothing_gabi_suspender_skirt_001",
+    "clothing_white_knee_socks_001", "clothing_dark_mary_janes_001", "clothing_gabi_paw_gloves_001",
+    "clothing_plain_shirt_001", "clothing_sport_sneakers_001", "clothing_track_jacket_001"
+  ],
+  "resources": { "coins": 1500, "fabric_velvet": 1, "thread_silk": 0 },
+  "equip_signature_outfits": true
+}

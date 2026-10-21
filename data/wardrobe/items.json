@@ -1,0 +1,704 @@
+{
+ "_comment": "Каталог одежды. Характеристики и цены — тестовые значения (PLACEHOLDER), баланс подбирается тестированием.",
+ "items": [
+  {
+   "id": "clothing_kot_flower_turtleneck_001",
+   "name_key": "item.kot_flower_turtleneck.name",
+   "description_key": "item.kot_flower_turtleneck.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "rare",
+   "style_tags": [
+    "cozy",
+    "warm",
+    "floral",
+    "casual"
+   ],
+   "attributes": {
+    "simplicity": 40,
+    "casualness": 55,
+    "romance": 25,
+    "cuteness": 30,
+    "elegance": 20
+   },
+   "color_tags": [
+    "grey",
+    "white"
+   ],
+   "material_tags": [
+    "knit",
+    "wool"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "kot"
+   ],
+   "placeholder_color": "#9a9a9e",
+   "sort_order": 10
+  },
+  {
+   "id": "clothing_kot_black_trousers_001",
+   "name_key": "item.kot_black_trousers.name",
+   "description_key": "item.kot_black_trousers.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "common",
+   "style_tags": [
+    "casual"
+   ],
+   "attributes": {
+    "simplicity": 45,
+    "casualness": 40,
+    "formality": 25,
+    "elegance": 20,
+    "coolness": 25
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#1c1c22",
+   "sort_order": 11
+  },
+  {
+   "id": "clothing_kot_fish_cloud_clips_001",
+   "name_key": "item.kot_fish_cloud_clips.name",
+   "description_key": "item.kot_fish_cloud_clips.description",
+   "category": "hair_accessory",
+   "slot": "headwear",
+   "rarity": "uncommon",
+   "style_tags": [
+    "cute",
+    "marine"
+   ],
+   "attributes": {
+    "cuteness": 45,
+    "fantasy": 30
+   },
+   "color_tags": [
+    "red",
+    "white"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#e0574f",
+   "sort_order": 12
+  },
+  {
+   "id": "clothing_kot_eyepatch_001",
+   "name_key": "item.kot_eyepatch.name",
+   "description_key": "item.kot_eyepatch.description",
+   "category": "face_accessory",
+   "slot": "face_accessory",
+   "rarity": "common",
+   "style_tags": [
+    "mysterious"
+   ],
+   "attributes": {
+    "mystery": 50,
+    "coolness": 40
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#111111",
+   "sort_order": 13
+  },
+  {
+   "id": "clothing_gabi_brown_patterned_top_001",
+   "name_key": "item.gabi_brown_patterned_top.name",
+   "description_key": "item.gabi_brown_patterned_top.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "uncommon",
+   "style_tags": [
+    "cute",
+    "casual"
+   ],
+   "attributes": {
+    "cuteness": 50,
+    "casualness": 45,
+    "vintage": 20
+   },
+   "color_tags": [
+    "brown",
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#7a4a3a",
+   "sort_order": 20
+  },
+  {
+   "id": "clothing_gabi_suspender_skirt_001",
+   "name_key": "item.gabi_suspender_skirt.name",
+   "description_key": "item.gabi_suspender_skirt.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "uncommon",
+   "style_tags": [
+    "cute",
+    "casual"
+   ],
+   "attributes": {
+    "cuteness": 55,
+    "romance": 30,
+    "casualness": 35
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#f1ece6",
+   "sort_order": 21
+  },
+  {
+   "id": "clothing_white_knee_socks_001",
+   "name_key": "item.white_knee_socks.name",
+   "description_key": "item.white_knee_socks.description",
+   "category": "socks",
+   "slot": "socks",
+   "rarity": "common",
+   "style_tags": [
+    "cute",
+    "casual"
+   ],
+   "attributes": {
+    "practicality": 3,
+    "casualness": 2,
+    "cuteness": 10
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter",
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 40,
+   "placeholder_color": "#ffffff",
+   "sort_order": 22
+  },
+  {
+   "id": "clothing_dark_mary_janes_001",
+   "name_key": "item.dark_mary_janes.name",
+   "description_key": "item.dark_mary_janes.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "uncommon",
+   "style_tags": [
+    "cute",
+    "vintage"
+   ],
+   "attributes": {
+    "cuteness": 30,
+    "elegance": 25,
+    "vintage": 30,
+    "formality": 20
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "leather"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "placeholder_color": "#2a1f1f",
+   "sort_order": 23
+  },
+  {
+   "id": "clothing_gabi_paw_gloves_001",
+   "name_key": "item.gabi_paw_gloves.name",
+   "description_key": "item.gabi_paw_gloves.description",
+   "category": "gloves",
+   "slot": "gloves",
+   "rarity": "rare",
+   "style_tags": [
+    "cute"
+   ],
+   "attributes": {
+    "cuteness": 60,
+    "fantasy": 25
+   },
+   "color_tags": [
+    "pink",
+    "white"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "gabi"
+   ],
+   "placeholder_color": "#e98aa0",
+   "sort_order": 24
+  },
+  {
+   "id": "clothing_gabi_red_patterned_sweater_001",
+   "name_key": "item.gabi_red_patterned_sweater.name",
+   "description_key": "item.gabi_red_patterned_sweater.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "uncommon",
+   "style_tags": [
+    "cozy",
+    "warm",
+    "casual"
+   ],
+   "attributes": {
+    "casualness": 50,
+    "cuteness": 35,
+    "simplicity": 25
+   },
+   "color_tags": [
+    "red",
+    "white",
+    "black"
+   ],
+   "material_tags": [
+    "knit"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 220,
+   "placeholder_color": "#a8262c",
+   "sort_order": 25
+  },
+  {
+   "id": "clothing_velvet_blazer_001",
+   "name_key": "item.velvet_blazer.name",
+   "description_key": "item.velvet_blazer.description",
+   "category": "outerwear",
+   "slot": "outerwear",
+   "rarity": "rare",
+   "style_tags": [
+    "elegant",
+    "formal",
+    "evening",
+    "theatrical"
+   ],
+   "attributes": {
+    "elegance": 80,
+    "luxury": 60,
+    "formality": 40
+   },
+   "color_tags": [
+    "burgundy",
+    "dark"
+   ],
+   "material_tags": [
+    "velvet"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "shop",
+    "craft"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 900,
+   "recipe_id": "recipe_velvet_blazer_001",
+   "is_dyeable": true,
+   "dye_options": [
+    "burgundy",
+    "black"
+   ],
+   "model_variants": {
+    "sora": "res://art/characters/placeholder/velvet_blazer_tall.PLACEHOLDER"
+   },
+   "placeholder_color": "#6b1a2a",
+   "sort_order": 30
+  },
+  {
+   "id": "clothing_evening_dress_001",
+   "name_key": "item.evening_dress.name",
+   "description_key": "item.evening_dress.description",
+   "category": "dress",
+   "slot": "full_body",
+   "rarity": "epic",
+   "style_tags": [
+    "elegant",
+    "evening",
+    "luxurious",
+    "formal"
+   ],
+   "attributes": {
+    "elegance": 90,
+    "luxury": 85,
+    "formality": 80
+   },
+   "color_tags": [
+    "black",
+    "silver"
+   ],
+   "material_tags": [
+    "satin"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "challenge_reward"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "occupied_slots": [
+    "upper_body",
+    "lower_body"
+   ],
+   "placeholder_color": "#202030",
+   "sort_order": 31
+  },
+  {
+   "id": "clothing_plain_shirt_001",
+   "name_key": "item.plain_shirt.name",
+   "description_key": "item.plain_shirt.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "common",
+   "style_tags": [
+    "casual"
+   ],
+   "attributes": {
+    "elegance": 10,
+    "simplicity": 30,
+    "casualness": 40
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter",
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 60,
+   "placeholder_color": "#f4f4f0",
+   "sort_order": 40
+  },
+  {
+   "id": "clothing_sport_sneakers_001",
+   "name_key": "item.sport_sneakers.name",
+   "description_key": "item.sport_sneakers.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "common",
+   "style_tags": [
+    "sporty",
+    "casual"
+   ],
+   "attributes": {
+    "sportiness": 75,
+    "practicality": 45,
+    "formality": 0
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter",
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 120,
+   "placeholder_color": "#e8e8e8",
+   "sort_order": 41
+  },
+  {
+   "id": "clothing_oxford_shoes_001",
+   "name_key": "item.oxford_shoes.name",
+   "description_key": "item.oxford_shoes.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "uncommon",
+   "style_tags": [
+    "elegant",
+    "formal"
+   ],
+   "attributes": {
+    "elegance": 60,
+    "formality": 65,
+    "luxury": 25
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "leather"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 300,
+   "set_id": "set_evening_classic",
+   "placeholder_color": "#121212",
+   "sort_order": 42
+  },
+  {
+   "id": "clothing_pearl_necklace_001",
+   "name_key": "item.pearl_necklace.name",
+   "description_key": "item.pearl_necklace.description",
+   "category": "jewelry",
+   "slot": "neck_accessory",
+   "rarity": "uncommon",
+   "style_tags": [
+    "elegant",
+    "evening",
+    "luxurious"
+   ],
+   "attributes": {
+    "elegance": 45,
+    "luxury": 40,
+    "romance": 20
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "pearl"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 350,
+   "set_id": "set_evening_classic",
+   "placeholder_color": "#f2efe4",
+   "sort_order": 43
+  },
+  {
+   "id": "clothing_track_jacket_001",
+   "name_key": "item.track_jacket.name",
+   "description_key": "item.track_jacket.description",
+   "category": "outerwear",
+   "slot": "outerwear",
+   "rarity": "common",
+   "style_tags": [
+    "sporty",
+    "casual"
+   ],
+   "attributes": {
+    "sportiness": 70,
+    "practicality": 50,
+    "casualness": 50
+   },
+   "color_tags": [
+    "blue"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter",
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 150,
+   "placeholder_color": "#2c5cc5",
+   "sort_order": 44
+  },
+  {
+   "id": "clothing_tailored_trousers_001",
+   "name_key": "item.tailored_trousers.name",
+   "description_key": "item.tailored_trousers.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "uncommon",
+   "style_tags": [
+    "elegant",
+    "formal"
+   ],
+   "attributes": {
+    "elegance": 55,
+    "formality": 60,
+    "simplicity": 20
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "wool"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 280,
+   "set_id": "set_evening_classic",
+   "placeholder_color": "#18181c",
+   "sort_order": 45
+  },
+  {
+   "id": "clothing_silk_blouse_001",
+   "name_key": "item.silk_blouse.name",
+   "description_key": "item.silk_blouse.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "uncommon",
+   "style_tags": [
+    "elegant",
+    "evening",
+    "romantic"
+   ],
+   "attributes": {
+    "elegance": 55,
+    "romance": 35,
+    "luxury": 30,
+    "formality": 35
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "silk"
+   ],
+   "compatible_body_types": [
+    "compact",
+    "tall"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "shop_price": 320,
+   "set_id": "set_evening_classic",
+   "placeholder_color": "#fbf7ee",
+   "sort_order": 46
+  }
+ ]
+}

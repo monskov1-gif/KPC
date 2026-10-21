@@ -1,0 +1,70 @@
+{
+  "_comment": "Справочники и стартовые коэффициенты системы одежды. Значения коэффициентов — стартовые ориентиры из ТЗ, не окончательный баланс.",
+  "attribute_scale": { "min": 0, "max": 100 },
+  "attributes": [
+    "elegance", "luxury", "simplicity", "romance", "drama", "practicality",
+    "mystery", "sportiness", "theatricality", "futurism", "cuteness", "coolness",
+    "formality", "casualness", "fantasy", "vintage"
+  ],
+  "slots": [
+    "hair", "headwear", "face_accessory", "neck_accessory", "earrings",
+    "upper_body", "lower_body", "full_body", "outerwear", "gloves", "socks",
+    "footwear", "bag", "wrist_accessory", "back_accessory"
+  ],
+  "categories": {
+    "hair_accessory": ["headwear"],
+    "headwear": ["headwear"],
+    "face_accessory": ["face_accessory"],
+    "jewelry": ["neck_accessory", "earrings", "wrist_accessory"],
+    "top": ["upper_body"],
+    "bottom": ["lower_body"],
+    "dress": ["full_body"],
+    "outerwear": ["outerwear"],
+    "gloves": ["gloves"],
+    "socks": ["socks"],
+    "shoes": ["footwear"],
+    "bag": ["bag"],
+    "back_accessory": ["back_accessory"]
+  },
+  "rarities": ["common", "uncommon", "rare", "epic", "legendary"],
+  "style_tags": [
+    "elegant", "luxurious", "casual", "sporty", "evening", "formal", "theatrical",
+    "vintage", "romantic", "mysterious", "futuristic", "warm", "cold_weather",
+    "masquerade", "royal", "beach", "underwater", "festival", "cozy", "cute", "floral", "marine"
+  ],
+  "color_tags": ["black", "white", "grey", "red", "burgundy", "pink", "orange", "brown", "beige", "gold", "silver", "blue", "teal", "green", "purple", "dark", "light"],
+  "material_tags": ["wool", "knit", "cotton", "denim", "velvet", "silk", "satin", "leather", "metal", "pearl", "synthetic", "lace"],
+  "body_types": ["compact", "tall"],
+  "theme_levels": {
+    "perfect": 1.5,
+    "good": 1.2,
+    "neutral": 1.0,
+    "weak": 0.5,
+    "contradicts": 0.1,
+    "not_scored": 0.0
+  },
+  "requirement_severity_q": {
+    "informational": 1.0,
+    "minor": 0.8,
+    "major": 0.5,
+    "critical": 0.25
+  },
+  "requirement_combination": {
+    "_comment": "strictest — берётся самый строгий штраф; bounded_product — штрафы перемножаются, но не ниже floor.",
+    "method": "strictest",
+    "floor": 0.1
+  },
+  "theme_ignored": {
+    "_comment": "Если ни один учитываемый предмет не имеет уровня good/perfect, образ считается проигнорировавшим тему.",
+    "q": 0.1,
+    "matching_levels": ["perfect", "good"]
+  },
+  "default_rank_thresholds": { "D": 0, "C": 500, "B": 900, "A": 1400, "S": 2000 },
+  "rank_order": ["D", "C", "B", "A", "S"],
+  "duplicate_policy": {
+    "_comment": "Повторная выдача уже имеющегося предмета конвертируется в валюту. Единое правило для всех источников.",
+    "mode": "convert_to_resource",
+    "resource_id": "coins",
+    "amount_by_rarity": { "common": 10, "uncommon": 25, "rare": 60, "epic": 150, "legendary": 400 }
+  }
+}
