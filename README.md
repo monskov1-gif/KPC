@@ -1,4 +1,4 @@
-# Kot's photo collection
+# KPC — Kot's photo collection
 
 Коллекция фотографий Кота.
 
