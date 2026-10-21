@@ -39,7 +39,11 @@ func _update_ui_scale() -> void:
 	var sz := Vector2(win.size)
 	if sz.x <= 0 or sz.y <= 0:
 		return
-	win.content_scale_factor = minf(sz.x, sz.y) / UI_REFERENCE_SHORT_SIDE * ui_scale
+	var factor := minf(sz.x, sz.y) / UI_REFERENCE_SHORT_SIDE
+	# Телефон в портрете: экран узкий и близко к глазам — текст крупнее.
+	if sz.y > sz.x:
+		factor *= 1.25
+	win.content_scale_factor = factor * ui_scale
 
 
 func load_or_new() -> void:

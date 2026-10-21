@@ -27,6 +27,11 @@ static func load_all(dir_path: String) -> void:
 	TranslationServer.set_locale("ru")
 
 
+## Перевод ключа из статического кода (где tr() недоступен).
+static func t(key: String) -> String:
+	return TranslationServer.translate(key)
+
+
 ## tr() с подстановкой параметров {name}.
 static func text(key: String, params: Dictionary = {}) -> String:
 	var s := TranslationServer.translate(key)

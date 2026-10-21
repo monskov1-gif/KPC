@@ -140,3 +140,24 @@ func test_balance_progression_path() -> void:
 	eq(s.scoring.score(ch, _items(classic)).rank, "A", "набор из магазина")
 	eq(s.scoring.score(ch, _items(classic + ["clothing_velvet_blazer_001"])).rank, "S", "с блейзером из крафта")
 	eq(s.scoring.score(ch, s.outfit_items("kot")).rank, "D", "повседневный фирменный образ не подходит балу")
+
+
+func test_advisor_suggests_owned_items_for_missing_requirement() -> void:
+	s.grants.grant_item("clothing_oxford_shoes_001", "test")
+	var outfit := Outfit.from_dict({"upper_body": "clothing_plain_shirt_001"})
+	var advice := FashionAdvisor.suggest(s, ch, "kot", outfit)
+	var shoes: Array = advice.filter(func(a): return a.target == "req_footwear")
+	check(not shoes.is_empty(), "есть совет по обуви")
+	eq(shoes[0].item_ids[0], "clothing_oxford_shoes_001", "лучший вариант — оксфорды, а не кроссовки")
+	check(shoes[0].gains[0] > 0, "прирост очков положительный")
+	for a in advice:
+		for id in a.item_ids:
+			check(s.inventory.owns(id), "советуются только свои вещи")
+
+
+func test_advisor_suggests_replacement_for_weak_item() -> void:
+	s.grants.grant_item("clothing_silk_blouse_001", "test")
+	var outfit := Outfit.from_dict({"upper_body": "clothing_kot_flower_turtleneck_001", "footwear": "clothing_dark_mary_janes_001"})
+	var advice := FashionAdvisor.suggest(s, ch, "kot", outfit)
+	var rep: Array = advice.filter(func(a): return a.kind == "replace" and a.target == "clothing_kot_flower_turtleneck_001")
+	check(not rep.is_empty() and rep[0].item_ids.has("clothing_silk_blouse_001"), "предложена шёлковая блузка: %s" % str(advice))

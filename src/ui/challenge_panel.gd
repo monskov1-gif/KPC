@@ -1,99 +1,146 @@
 class_name ChallengePanel
-extends ScrollContainer
-## Вкладка модного испытания: условия, живая предварительная оценка, подтверждение и отчёт.
-## Очки берутся только из FashionScoringService.
+extends VBoxContainer
+## Условия модного испытания и живая предварительная оценка.
+## На больших экранах стоит в левой части, на телефоне открывается кнопкой-кубком в отдельном окне.
+## Очки берутся только из FashionScoringService — то же, что будет в результате.
+
+signal submitted
 
 var screen: WardrobeScreen
 var challenge_id := ""
-var _box: VBoxContainer
-var _result: ResultPopup
+var show_header := true
+var show_submit := true
 
 
 func _ready() -> void:
-	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_box = VBoxContainer.new()
-	_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(_box)
-	_result = ResultPopup.new()
-	_result.screen = screen
-	screen.add_child.call_deferred(_result)
-	refresh()
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_theme_constant_override("separation", 10)
+
+
+func challenge() -> Dictionary:
+	var s := screen.session
+	if challenge_id == "" and not s.challenges.ids().is_empty():
+		challenge_id = s.challenges.ids()[0]
+	return s.challenges.get_challenge(challenge_id)
 
 
 func refresh() -> void:
-	if _box == null or screen == null or screen.draft == null:
+	if screen == null or screen.draft == null or not is_inside_tree():
 		return
 	var s := screen.session
-	if challenge_id == "" and not s.challenges.ids().is_empty():
-		challenge_id = s.challenges.ids()[0]
-	WardrobeScreen._clear(_box)
-	var ch := s.challenges.get_challenge(challenge_id)
+	for c in get_children():
+		remove_child(c)
+		c.queue_free()
+	var ch := challenge()
 	if ch.is_empty():
-		_box.add_child(UiTheme.label("Нет доступных испытаний.", UiTheme.FONT_SIZE, UiTheme.TEXT_DIM))
+		add_child(UiTheme.label(tr("ui.no_challenges"), UiTheme.FONT_SIZE, UiTheme.TEXT_DIM))
 		return
-	_box.add_child(UiTheme.label(tr(ch.title_key), 22))
-	_box.add_child(UiTheme.label(tr(ch.description_key), UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
+	if show_header:
+		var head := HBoxContainer.new()
+		head.add_child(UiTheme.icon("trophy", 30, UiTheme.GOLD))
+		head.add_child(UiTheme.label(tr(ch.title_key), 21))
+		add_child(head)
+	add_child(UiTheme.label(tr(ch.description_key), UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
 
+	# Важные характеристики: чипы, вес показан искрами.
 	var weights: Dictionary = ch.get("attribute_weights", {})
 	var important := weights.keys().filter(func(a): return float(weights[a]) >= 1.0)
 	important.sort_custom(func(a, b): return float(weights[a]) > float(weights[b]))
-	_box.add_child(UiTheme.label("Важно: " + ", ".join(important.map(func(a): return tr("attr." + a))),
-		UiTheme.FONT_SIZE_SMALL, UiTheme.ACCENT))
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 6)
+	for a in important:
+		var p := PanelContainer.new()
+		p.add_theme_stylebox_override("panel", UiTheme.pill(Color("fdeef1"), 8))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 2)
+		row.add_child(UiTheme.tag(tr("attr." + a), UiTheme.FONT_SIZE_SMALL))
+		var sparks := 3 if float(weights[a]) >= 1.5 else (2 if float(weights[a]) >= 1.2 else 1)
+		for i in sparks:
+			row.add_child(UiTheme.icon("sparkle", 14, UiTheme.GOLD))
+		p.add_child(row)
+		flow.add_child(p)
+	add_child(flow)
 
 	var report := s.scoring.score(ch, s.items_for_outfit(screen.draft))
-	var preview := PanelContainer.new()
-	preview.add_theme_stylebox_override("panel", UiTheme.box(UiTheme.PANEL_LIGHT, 12, 14))
-	var pv := VBoxContainer.new()
-	preview.add_child(pv)
-	pv.add_child(UiTheme.label(Localization.text("ui.preview_score", {"score": report.final_score, "rank": report.rank}),
-		20, UiTheme.ACCENT))
-	var best := s.rewards.result(challenge_id)
-	if not best.is_empty():
-		pv.add_child(UiTheme.label("Лучший результат: %d (%s)" % [best.best_score, best.best_rank],
-			UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
-	_box.add_child(preview)
+	add_child(_preview(report, s.rewards.result(challenge_id)))
 
-	_box.add_child(UiTheme.label(tr("ui.requirements"), UiTheme.FONT_SIZE, UiTheme.ACCENT))
 	for r in report.requirements:
-		_box.add_child(_check_row(r.met, tr(r.text_key), tr("severity." + r.severity)))
+		var soft: bool = r.severity == "informational"
+		var note := "" if r.met else (Localization.text("ui.penalty", {"q": "%.2f" % r.q}) if r.q < 1.0 else "")
+		add_child(condition_row(r.met, soft, _req_icon(ch, r.id), tr(r.text_key), note,
+			UiTheme.BAD if r.severity == "critical" else UiTheme.TEXT_DIM))
+	for p in report.penalties:
+		if p.source == "theme_ignored":
+			add_child(condition_row(false, false, "sparkle", tr("ui.theme_ignored"),
+				Localization.text("ui.penalty", {"q": "%.2f" % p.q}), UiTheme.BAD))
 	for o in report.optional:
-		_box.add_child(_check_row(o.met, tr(o.text_key), "бонус +%d" % int(o.bonus if o.met else 0)))
-	_box.add_child(UiTheme.label(tr("ui.synergies"), UiTheme.FONT_SIZE, UiTheme.ACCENT))
+		add_child(condition_row(o.met, true, "star", tr(o.text_key),
+			"+%d" % int(_optional_bonus(ch, o.id)), UiTheme.OK if o.met else UiTheme.TEXT_DIM))
 	for syn in report.synergies:
-		_box.add_child(_check_row(syn.triggered, tr(syn.text_key), "%d/%d" % [syn.count, syn.needed]))
+		add_child(condition_row(syn.triggered, true, "hanger", tr(syn.text_key), "%d/%d" % [syn.count, syn.needed], UiTheme.TEXT_DIM))
 
-	var submit_btn := UiTheme.button(tr("ui.submit"), submit)
-	submit_btn.custom_minimum_size.y = 56
-	_box.add_child(submit_btn)
+	if show_submit:
+		var submit_btn := UiTheme.primary(UiTheme.button(tr("ui.submit"), func(): submitted.emit()))
+		submit_btn.custom_minimum_size.y = 56
+		add_child(submit_btn)
 
 
-func _check_row(met: bool, text: String, note: String) -> Control:
+func _preview(report: Dictionary, best: Dictionary) -> Control:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UiTheme.cloud(Color.WHITE, 20, 14))
 	var row := HBoxContainer.new()
-	var mark := UiTheme.label("✓" if met else "✕", UiTheme.FONT_SIZE, UiTheme.OK if met else UiTheme.BAD)
-	mark.custom_minimum_size.x = 24
-	row.add_child(mark)
-	var l := UiTheme.label(text, UiTheme.FONT_SIZE_SMALL)
-	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(l)
-	var n := UiTheme.label(note, UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM)
-	n.autowrap_mode = TextServer.AUTOWRAP_OFF
-	n.size_flags_horizontal = Control.SIZE_FILL
-	row.add_child(n)
+	row.add_theme_constant_override("separation", 14)
+	p.add_child(row)
+	row.add_child(RankBadge.make(report.rank, 64))
+	var v := VBoxContainer.new()
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	var score_row := HBoxContainer.new()
+	score_row.add_child(UiTheme.icon("sparkle", 22, UiTheme.GOLD))
+	score_row.add_child(UiTheme.tag(str(report.final_score), 28))
+	score_row.add_child(UiTheme.tag(tr("rank." + report.rank), UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
+	v.add_child(score_row)
+	if not best.is_empty():
+		var b := HBoxContainer.new()
+		b.add_child(UiTheme.icon("trophy", 16, UiTheme.TEXT_DIM))
+		b.add_child(UiTheme.tag("%d · %s" % [best.best_score, best.best_rank], UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
+		v.add_child(b)
+	row.add_child(v)
+	return p
+
+
+func _req_icon(ch: Dictionary, req_id: String) -> String:
+	for r in ch.get("requirements", []):
+		if r.id == req_id:
+			match str(r.type):
+				"required_slot": return str(r.params.slot)
+				"required_category":
+					var slots: Array = screen.session.config.categories.get(str(r.params.category), [])
+					return slots[0] if not slots.is_empty() else "all"
+				"forbidden_tag": return "close"
+	return "sparkle"
+
+
+func _optional_bonus(ch: Dictionary, id: String) -> float:
+	for o in ch.get("optional_requirements", []):
+		if o.id == id:
+			return float(o.get("bonus", 0))
+	return 0.0
+
+
+## Строка условия: иконка условия, текст, заметка и маркер состояния (✓ выполнено / ✕ провал / ○ подсказка).
+static func condition_row(met: bool, soft: bool, icon: String, text: String, note: String, note_color: Color) -> Control:
+	var row := HBoxContainer.new()
+	var state_col := UiTheme.OK if met else (UiTheme.CARD_EDGE.darkened(0.15) if soft else UiTheme.BAD)
+	var bubble := PanelContainer.new()
+	bubble.add_theme_stylebox_override("panel", UiTheme.pill(Color(state_col, 0.22), 4))
+	bubble.custom_minimum_size = Vector2(38, 34)
+	bubble.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bubble.add_child(UiTheme.icon(icon, 20, state_col.darkened(0.2)))
+	row.add_child(bubble)
+	row.add_child(UiTheme.label(text, UiTheme.FONT_SIZE_SMALL))
+	if note != "":
+		row.add_child(UiTheme.tag(note, UiTheme.FONT_SIZE_SMALL, note_color))
+	row.add_child(UiTheme.icon("check" if met else ("minus" if soft else "close"), 16, state_col))
 	return row
-
-
-## Подтверждает черновик образа, считает результат и выдаёт награды.
-func submit() -> void:
-	var s := screen.session
-	if challenge_id == "" and not s.challenges.ids().is_empty():
-		challenge_id = s.challenges.ids()[0]
-	var ch := s.challenges.get_challenge(challenge_id)
-	if ch.is_empty():
-		return
-	if screen.is_dirty():
-		screen.commit_draft()
-	var report := s.scoring.score(ch, s.outfit_items(screen.character_id))
-	var outcome := s.rewards.submit(ch, report)
-	Game.save_game()
-	_result.show_result(ch, report, outcome)
-	screen._refresh_all()
