@@ -163,9 +163,29 @@ def cylinder_uv(o, scale_u=3.0, scale_v=5.0):
             uv.data[li].uv = (u + scale_u if wrap and u < scale_u / 2 else u, v)
 
 
-def paint_gradient(o, top_z, bottom_z, c_top, c_bottom, by_uv=False):
-    """Цвет в вершинах: корни → кончики (по высоте или по UV-v карты пряди)."""
+def paint_gradient(o, top_z, bottom_z, c_top, c_bottom, by_uv=False, strand_jitter=0.0):
+    """Цвет в вершинах: корни → кончики (по высоте или по UV-v карты пряди).
+    strand_jitter — у каждой отдельной пряди (связного куска меша) свой оттенок ± доля: пряди читаются по отдельности."""
     me = o.data
+    tint = {}
+    if strand_jitter:
+        parent = list(range(len(me.vertices)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+        for e in me.edges:
+            a, b = find(e.vertices[0]), find(e.vertices[1])
+            if a != b:
+                parent[a] = b
+        rnd = random.Random(5)
+        for poly in me.polygons:
+            r = find(poly.vertices[0])
+            if r not in tint:
+                tint[r] = 1 + rnd.uniform(-strand_jitter, strand_jitter)
+            tint[poly.index] = tint[r]
     if not me.color_attributes.get("Col"):
         me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
     col = me.color_attributes["Col"]
@@ -178,7 +198,8 @@ def paint_gradient(o, top_z, bottom_z, c_top, c_bottom, by_uv=False):
                 z = me.vertices[me.loops[li].vertex_index].co.z
                 t = 0.0 if top_z == bottom_z else min(1, max(0, (top_z - z) / (top_z - bottom_z)))
             t = t ** 1.4
-            col.data[li].color = tuple(c_top[i] * (1 - t) + c_bottom[i] * t for i in range(3)) + (1,)
+            k = tint.get(poly.index, 1.0) if tint else 1.0
+            col.data[li].color = tuple(min(1.0, (c_top[i] * (1 - t) + c_bottom[i] * t) * k) for i in range(3)) + (1,)
 
 
 def _rs(r, s):
@@ -297,6 +318,22 @@ def sculpt_head(x, y, z):
     if y > 0:                                            # объёмный затылок
         y *= 1.06
         z += 0.04 * y
+    # Черепная коробка (шаблон аниме-головы): виски и затылок шире и длиннее лица, макушка выше —
+    # лицо лежит на передней части головы, а не шире её.
+    sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
+
+    def sstep(a, b, v):
+        t_ = min(1.0, max(0.0, (v - a) / (b - a)))
+        return t_ * t_ * (3 - 2 * t_)
+    side_w = sstep(-0.65, 0.05, y)
+    vert_w = sstep(-0.6, 0.05, z)
+    top_w = sstep(0.0, 0.55, z)
+    w_cr = max(side_w * vert_w, top_w)
+    x *= 1 + (sx - 1) * w_cr
+    if y > 0:
+        y *= 1 + (sy - 1) * vert_w
+    if z > 0:
+        z *= 1 + (sz - 1) * sstep(0.0, 0.6, z)
     ax = abs(x)
     # Виски чуть уже, скулы чуть выпуклее.
     x *= 1 - 0.035 * g(-((ax - 0.9) / 0.15) ** 2) * g(-((z - 0.2) / 0.25) ** 2)
@@ -674,7 +711,12 @@ def clump(points, w_root, w_tip, hd, m, curve=0.0, flat=0.6, seg=8, v_tip=0.0):
         f = bm.faces.new((rings[-1][0][k], rings[-1][0][(k + 1) % seg], tip))
         for loop in f.loops:
             loop[uv_layer].uv = (0.5, v_tip)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    # Нормали наружу от оси пряди (recalc на открытой трубке иногда выворачивает прядь — видна изнанка контура).
+    bm.normal_update()
+    mid = len(points) // 2
+    f0 = next(f for f in bm.faces if all(v in rings[mid][0] or v in rings[mid + 1][0] for v in f.verts))
+    if f0.normal.dot(f0.calc_center_median() - points[mid]) < 0:
+        bmesh.ops.reverse_faces(bm, faces=bm.faces)
     me = bpy.data.meshes.new("hair_clump")
     bm.to_mesh(me)
     bm.free()
@@ -682,6 +724,26 @@ def clump(points, w_root, w_tip, hd, m, curve=0.0, flat=0.6, seg=8, v_tip=0.0):
     o.data.materials.append(m)
     shade_smooth(o)
     return o
+
+
+CONFORM = None   # (BVH головы, центр, rx, cz, rz): пряди «рисуются поверх» настоящего черепа, а не сферы
+
+
+def conform(p, lift):
+    """Прижать точку к поверхности головы по лучу из центра: отступ (lift − 1)·rx (не меньше 2 мм).
+    Ниже челюсти (висящие концы прядей) — плавно без прижатия."""
+    if CONFORM is None:
+        return p
+    tree, c, rx, cz, rz = CONFORM
+    d = p - Vector((0, 0, c.z))
+    if d.length < 1e-6:
+        return p
+    hit = tree.ray_cast(Vector((0, 0, c.z)), d.normalized())
+    if hit[0] is None:
+        return p
+    q = hit[0] + d.normalized() * max(0.002, (lift - 1.0) * rx)
+    w = min(1.0, max(0.0, (p.z - (cz - 0.75 * rz)) / (0.35 * rz)))
+    return p.lerp(q, w)
 
 
 def flow_path(hd, theta, phi0, phi1, lift0, lift1, steps=9, curl=0.0, drop=0.0, rnd=None):
@@ -692,7 +754,7 @@ def flow_path(hd, theta, phi0, phi1, lift0, lift1, steps=9, curl=0.0, drop=0.0, 
         t = i / (steps - 1)
         phi = phi0 + (phi1 - phi0) * t
         lift = lift0 + (lift1 - lift0) * t
-        p = on_scalp(hd, theta + (rnd.uniform(-0.04, 0.04) if rnd else 0), min(phi, 2.5), lift)
+        p = conform(on_scalp(hd, theta + (rnd.uniform(-0.04, 0.04) if rnd else 0), min(phi, 2.5), lift), lift)
         if phi > 2.5:
             p.z -= (phi - 2.5) * rz
         p.z -= drop * t ** 2
@@ -749,13 +811,41 @@ def hair_cap(hdc, face_cut, cap_low, scale, mat_cap):
     return cap
 
 
+def head_shell_cap(cf, hp, mat_cap):
+    """Основа причёски — копия поверхности головы на 2.5 мм выше кожи (лоб открыт под чёлку, лицо — вырезано)."""
+    tree, c, rx, cz, rz = cf
+    head = bpy.data.objects["head"]
+    me = head.data.copy()
+    cap = new_obj("hair_cap", me)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.normal_update()
+    ry = max(abs(v.co.y) for v in bm.verts if v.co.y < 0)
+    kill = [v for v in bm.verts if (v.co.z < cz + rz * hp.get("face_cut", 0.42) and v.co.y < -ry * 0.3)
+            or v.co.z < cz - rz * hp["cap_low"]]
+    bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    for v in bm.verts:
+        v.co += v.normal * 0.0025
+    bm.to_mesh(me)
+    bm.free()
+    me.materials.clear()
+    me.materials.append(mat_cap)
+    if me.uv_layers:
+        me.uv_layers.remove(me.uv_layers[0])
+    shade_smooth(cap)
+    return cap
+
+
 def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
     """hd — «сфера» причёски (у пышной копны больше головы), hd_head — сама голова: на ней внутренняя шапка,
     чёлка и прядь на глаз (они должны лежать у лица, а не на внешнем объёме)."""
     rnd = random.Random(sum(map(ord, cid)))
     rx, ry, rz, cz = hd
     hh = hd_head or hd
-    parts = [hair_cap(hd, hp.get("face_cut", 0.42), hp["cap_low"], 1.06 if hd_head is None else 1.0, mat_cap)]
+    if CONFORM is not None:
+        parts = [head_shell_cap(CONFORM, hp, mat_cap)]
+    else:
+        parts = [hair_cap(hd, hp.get("face_cut", 0.42), hp["cap_low"], 1.06 if hd_head is None else 1.0, mat_cap)]
     if hd_head is not None:
         parts.append(hair_cap(hd_head, 0.42, hp.get("inner_cap_low", 0.6), 1.06, mat_cap))
 
@@ -788,8 +878,18 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
                                 curl=hp.get("bang_curl", curl), rnd=rnd)
                 cards.append(strand(pts, hh[0] * hp["w_bang"] * rnd.uniform(0.85, 1.15), hh[0] * 0.3, on=hh))
                 continue
-            pts = flow_path(hd, theta, phi0, phi1, lift, lift1, curl=curl, drop=drop, rnd=rnd)
+            # Поверх черепа: корень у кожи, к кончику прядь отходит — объём без «полки» на макушке.
+            lift0 = 1.03 + (lift - 1) * 0.35 if CONFORM is not None else lift
+            pts = flow_path(hd, theta, phi0, phi1, lift0, lift1, curl=curl, drop=drop, rnd=rnd)
             cards.append(strand(pts, rx * hp["w"] * rnd.uniform(0.85, 1.15), rx * 0.32))
+    # Плотный ряд чёлки (без просветов между прядями).
+    bx = hp.get("bang_row")
+    if bx:
+        for i in range(bx["count"]):
+            theta = -bx["spread"] + 2 * bx["spread"] * i / (bx["count"] - 1) + rnd.uniform(-0.03, 0.03)
+            pts = flow_path(hd, theta, bx["phi0"], hp["bang_len"] + rnd.uniform(-0.08, 0.1), bx["lift"], hp["bang_lift_end"],
+                            curl=-0.05, rnd=rnd)
+            cards.append(strand(pts, rx * bx["w"] * rnd.uniform(0.85, 1.15), rx * 0.3))
     # Крупная прядь на правый глаз (Кот).
     if hp.get("eye_bang"):
         eb = hp["eye_bang"] if isinstance(hp["eye_bang"], dict) else {}
@@ -804,7 +904,7 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
         cards.append(card(pts, rx * 0.22, rx * 0.04, hd, mat_cards, curve=0.0))
     # Хохолок-спираль «@» (Кот, реф. 16): трубка, закрученная в плоскости лица.
     if hp.get("ahoge_spiral"):
-        st = on_scalp(hd, 0.2, 0.12, 1.1)
+        st = conform(on_scalp(hd, 0.2, 0.12, 1.1), 1.1)
         pts = [st + Vector((0.0, 0.0, rz * hp.get("ahoge_h", 0.1) * k / 5)) for k in range(6)]
         r0 = rx * 0.14
         c0 = pts[-1] + Vector((r0, 0, 0))
@@ -854,7 +954,7 @@ def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
             pts = [base + off + Vector((0, 0.015 * i + 0.002 * i * i, -0.04 * i)) * (rx / 0.08) for i in range(8)]
             cards.append(card(pts, rx * 0.3, rx * 0.06, hd, mat_cards, curve=0.1))
     cards_obj = join(cards, "hair_cards")
-    paint_gradient(cards_obj, 0, 0, hp["c_root"], hp["c_tip"], by_uv=True)
+    paint_gradient(cards_obj, 0, 0, hp["c_root"], hp["c_tip"], by_uv=True, strand_jitter=hp.get("strand_jitter", 0.0))
     cap_obj = join(parts, "hair_cap")
     paint_gradient(cap_obj, cz + rz, cz - rz * 0.3, hp["c_root"], hp["c_tip"])
     return [cap_obj, cards_obj]
@@ -869,7 +969,7 @@ def build_ears(hd, color, inner, ear):
     rx, ry, rz, cz = hd
     objs, tips = [], []
     for side in (-1, 1):
-        base = on_scalp(hd, side * ear["theta"], ear["phi"], ear["lift"])
+        base = conform(on_scalp(hd, side * ear["theta"], ear["phi"], ear["lift"]), ear["lift"])
         tx, ty, tz = ear["tip"]
         axis = Vector((side * rx * tx, ry * ty, rz * tz))
         tips.append(base + axis)
@@ -1639,18 +1739,21 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1), "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
-        "hair": {"volume": (1.5, 1.4, 0.7, 0.45),
-                 "layers": [(0.12, 22, 1.0), (0.4, 30, 1.02), (0.75, 34, 1.04), (1.05, 30, 1.06)], "bang_front": 0.5,
-                 "bang_len": 1.72, "bang_len_head": 1.62, "w_bang": 1.3, "bang_curl": 0.45, "side_len": 2.3, "long": 0.075, "curl": 0.5,
-                 "w": 0.95, "cap_low": 0.75, "face_cut": 0.42, "inner_cap_low": 0.75,
-                 "eye_bang": {"len": 1.72, "lift0": 1.12, "lift1": 1.07},
-                 "ahoge_spiral": True, "ahoge_h": 0.45, "solid": True, "ringlets": 64, "ringlet_phi": 1.3, "ringlet_spread": 0.7, "ringlet_drop": (0.4, 1.1),
-                 "ringlet_r": (0.06, 0.1), "ringlet_w": 0.32,
+        # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
+        # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
+        "hair": {"conform": True,
+                 # Объём (реф. 16): слои прядей стоят от кожи всё дальше — внешний ~5 см, концы расходятся.
+                 "layers": [(0.1, 18, 1.12), (0.3, 24, 1.25), (0.55, 28, 1.38), (0.8, 30, 1.5), (1.05, 28, 1.6)],
+                 "bang_front": 0.5,
+                 "bang_len": 1.66, "bang_lift_end": 1.06,
+                 "bang_row": {"count": 15, "spread": 1.0, "phi0": 0.45, "lift": 1.2, "w": 1.1}, "side_len": 2.1, "long": 0.0, "curl": 0.15, "w": 1.3,
+                 "cap_low": 0.62, "face_cut": 0.42, "eye_bang": {"len": 1.7, "lift0": 1.1, "lift1": 1.05},
+                 "ahoge_spiral": True, "ahoge_h": 0.45, "solid": True, "ringlets": 0, "strand_jitter": 0.07,
                  "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
-        # Большие уши на «плечах» копны (реф. 16, по наложению).
-        "ear": {"theta": 1.29, "phi": 1.0, "lift": 0.98, "tip": (0.18, 0.04, 1.2), "r": 0.3},   # в единицах объёма копны
-        # Заколки (theta, phi, lift, поворот, масштаб): большая рыбка слева, малая справа, облачко сверху справа.
-        "clips": {"fish": [(-1.35, 1.65, 1.2, 1.5, 2.4), (1.32, 1.3, 1.2, 0.0, 1.8)], "cloud": (0.62, 1.05, 1.16, 0.1, 1.6)},
+        # Уши на черепе (реф. 16): крупные, с тёмной серединой.
+        "ear": {"theta": 1.38, "phi": 0.86, "lift": 1.1, "tip": (0.5, 0.02, 0.92), "r": 0.5},
+        # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
+        "clips": {"fish": [(-1.3, 1.45, 1.5, 1.5, 2.0), (1.3, 1.2, 1.5, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.45, 0.1, 1.4)},
         "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
         "ears": (0.56, 0.72, 0.64), "ear_inner": (0.3, 0.25, 0.25),
         "garments": ["kot_sweater", "kot_cargo", "kot_boots", "top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress",
@@ -1714,8 +1817,14 @@ def build(cid):
     hair_mat = (mat("hair_solid", (1, 1, 1, 1), vcol=True, rough=0.5) if c["hair"].get("solid") else
                 mat("hair", (1, 1, 1, 1), tex=os.path.join(TEX, "hair_strands.png"), vcol=True, clip=True, double=True))
     # Объём причёски: волосы строятся на увеличенной «сфере» hd_h (у Кота по реф. 16 — пышная копна шире головы).
+    global CONFORM
     hv = c["hair"].get("volume")
     hd_h = (hd[0] * hv[0], hd[1] * hv[1], hd[2] * hv[2], hd[3] + hd[2] * hv[3]) if hv else hd
+    if c["hair"].get("conform"):
+        # Волосы «рисуются поверх» вылепленной головы: направления — по сфере черепа, расстояние — от кожи.
+        sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
+        hd_h = (hd[0] * sx, hd[1] * sy, hd[2] * sz, hd[3])
+        CONFORM = (BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get()), Vector((0, 0, hd[3])), hd[0], hd[3], hd[2])
     hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
                       hd_head=hd if hv else None)
     head_parts = [head] + eyes + hair
@@ -1783,11 +1892,12 @@ def build(cid):
             cl = c.get("clips", {"fish": [(-0.98, 0.78, 1.3, 2.6, 1.0), (1.32, 1.0, 1.3, 0.5, 1.0)], "cloud": (0.66, 0.8, 1.3, 0.15, 1.0)})
             hcz = hd_h[3]
             for th, ph, lf, ang, sc in cl["fish"]:
-                q = on_scalp(hd_h, th, ph, lf)
-                objs += fish_clip(q, (q - Vector((0, 0, hcz))).normalized(), ang, rx * sc, plain, red_belly, eye_m)
+                q = conform(on_scalp(hd_h, th, ph, lf), lf)
+                fn = ((q - Vector((0, 0, hcz))).normalized() * 0.45 + Vector((0, -1, 0)) * 0.55).normalized()   # к зрителю
+                objs += fish_clip(q, fn, ang, rx * sc, plain, red_belly, eye_m)
             th, ph, lf, ang, sc = cl["cloud"]
-            q = on_scalp(hd_h, th, ph, lf)
-            objs += cloud_clip(q, (q - Vector((0, 0, hcz))).normalized(), ang, rx * sc,
+            q = conform(on_scalp(hd_h, th, ph, lf), lf)
+            objs += cloud_clip(q, ((q - Vector((0, 0, hcz))).normalized() * 0.5 + Vector((0, -1, 0)) * 0.5).normalized(), ang, rx * sc,
                                mat("cloud", (0.99, 0.95, 0.95, 1)), mat("cloud_edge", (0.95, 0.56, 0.62, 1)))
             o = join(objs, "garment__headwear__clips")
         elif g == "face_eyepatch":
@@ -1803,7 +1913,7 @@ def build(cid):
             bm = bmesh.new()
             bm.from_mesh(pm)
             bm.normal_update()
-            kill = [v for v in bm.verts if v.co.y > -ry * 0.2 or
+            kill = [v for v in bm.verts if v.co.y > -ry * 0.55 or
                     (abs(v.co.x - ex) / pa) ** 3 + (abs(v.co.z - pcz) / pb) ** 3 > 1.0]
             bmesh.ops.delete(bm, geom=kill, context="VERTS")
             for v in bm.verts:   # край — ровно по контуру скруглённого прямоугольника (без «лесенки» сетки)
@@ -1867,6 +1977,7 @@ def build(cid):
         if o is not None:
             garments.append(o)
 
+    CONFORM = None
     landmarks_body(body, garments)
     export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))

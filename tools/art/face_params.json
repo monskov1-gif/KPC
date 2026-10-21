@@ -43,7 +43,12 @@
         0.05
       ]
     ],
-    "patch_side": -1
+    "patch_side": -1,
+    "cranium": [
+      1.1,
+      1.08,
+      1.05
+    ]
   },
   "kot": {
     "eye_u": 0.2985,
@@ -86,6 +91,11 @@
     ],
     "patch_side": 1,
     "patch_dx": -0.08,
-    "patch_dz": 0.08
+    "patch_dz": 0.08,
+    "cranium": [
+      1.22,
+      1.18,
+      1.1
+    ]
   }
 }
