@@ -1,7 +1,7 @@
 {
  "_comment": "Русская локализация. Ключи стабильны; тексты можно править без изменения кода.",
  "item.kot_flower_turtleneck.name": "Серый свитер с цветами",
- "item.kot_flower_turtleneck.description": "Объёмный вязаный свитер с высоким воротом и белыми цветами. Фирменная вещь Кота.",
+ "item.kot_flower_turtleneck.description": "Объёмный вязаный свитер с высоким воротом и белыми цветами. Как на референсе Кота.",
  "item.kot_black_trousers.name": "Чёрные брюки",
  "item.kot_black_trousers.description": "Простые тёмные брюки с ремнём.",
  "item.kot_fish_cloud_clips.name": "Заколки «рыбки и облачко»",
@@ -17,7 +17,7 @@
  "item.dark_mary_janes.name": "Тёмные туфли",
  "item.dark_mary_janes.description": "Тёмные туфли с ремешком.",
  "item.gabi_paw_gloves.name": "Перчатки-лапки",
- "item.gabi_paw_gloves.description": "Мягкие перчатки в форме лап. Фирменная вещь Габи.",
+ "item.gabi_paw_gloves.description": "Мягкие перчатки в форме лап. Как на референсе Габи.",
  "item.gabi_red_patterned_sweater.name": "Красный свитер с узором",
  "item.gabi_red_patterned_sweater.description": "Тёплый красный свитер с белым узором.",
  "item.velvet_blazer.name": "Бархатный блейзер",
@@ -219,7 +219,7 @@
  "ui.unsaved_marker": "● Есть неподтверждённые изменения",
  "ui.select_item_hint": "Выберите вещь в списке.",
  "ui.theme_ignored": "Тема проигнорирована",
- "ui.penalty": "штраф ×{q}",
+ "ui.penalty": "×{q}",
  "ui.bonus_if": "+{n}, если выполнено",
  "ui.bonus_got": "+{n}",
  "ui.important": "Важно: {attrs}",
@@ -246,5 +246,6 @@
  "sort.newest": "Новые",
  "sort.rarity": "Редкость",
  "sort.name": "Название",
- "ui.jewelry": "Украшения"
+ "ui.jewelry": "Украшения",
+ "ui.compatible_for": "Подходит: {name}"
 }

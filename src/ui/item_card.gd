@@ -92,9 +92,10 @@ func _draw() -> void:
 	Icons.draw(self, item.slot, thumb, col, col.darkened(0.35).lerp(UiTheme.TEXT_DIM, 0.3))
 
 	# Звёзды редкости — в правом верхнем углу.
-	var s := 12.0
+	var s := 15.0
 	for i in stars:
-		var p := Vector2(r.end.x - 10 - (i + 1) * (s + 1), r.position.y + 8)
+		var p := Vector2(r.end.x - 8 - (i + 1) * (s + 1), r.position.y + 7)
+		Icons.draw(self, "star", Rect2(p - Vector2(1, 1), Vector2(s + 2, s + 2)), Color("b8862e"))
 		Icons.draw(self, "star", Rect2(p, Vector2(s, s)), UiTheme.STAR)
 
 	if worn:

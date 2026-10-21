@@ -78,6 +78,9 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 		"hanger":
 			ci.draw_arc(_p(r, 0.5, 0.22), w * 0.1, PI * 0.9, PI * 2.4, 16, c, lw * 0.7, true)
 			ci.draw_polyline(_poly([[0.5, 0.34], [0.10, 0.74], [0.90, 0.74], [0.5, 0.34]], r), c, lw * 0.8, true)
+		"forbid":
+			ci.draw_arc(_p(r, 0.5, 0.5), w * 0.36, 0, TAU, 32, c, lw * 0.8, true)
+			ci.draw_line(_p(r, 0.25, 0.75), _p(r, 0.75, 0.25), c, lw * 0.8, true)
 		"lock":
 			ci.draw_arc(_p(r, 0.5, 0.40), w * 0.18, PI, TAU, 16, c, lw * 0.8, true)
 			ci.draw_rect(Rect2(_p(r, 0.24, 0.42), Vector2(w * 0.52, w * 0.42)), c)

@@ -12,7 +12,7 @@ const PANEL_SOLID := Color("fffaf6")
 const CARD := Color("fbf3ee")
 const CARD_EDGE := Color("ead8d0")
 const TEXT := Color("6e5660")                    # мягкий сливово-коричневый вместо чёрного
-const TEXT_DIM := Color("a8929a")
+const TEXT_DIM := Color("8f7882")
 const GOLD := Color("d8b36e")
 const GOLD_LIGHT := Color("f0d9a4")
 const MINT := Color("86cfc0")
@@ -157,10 +157,22 @@ static func primary(b: Button) -> Button:
 	b.add_theme_stylebox_override("pressed", gp)
 	var gd := g.duplicate(); gd.bg_color = Color(GOLD, 0.45)
 	b.add_theme_stylebox_override("disabled", gd)
+	# Тёмный текст на золоте: белый давал контраст ниже 2:1.
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		b.add_theme_color_override(k, Color.WHITE)
-	b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.8))
+		b.add_theme_color_override(k, Color("4f3a42"))
+	b.add_theme_color_override("font_disabled_color", Color("4f3a42", 0.55))
 	b.add_theme_font_size_override("font_size", 22)
+	return b
+
+
+## Вторая по важности «таблетка» (мятная), чтобы на экране была одна золотая.
+static func secondary(b: Button) -> Button:
+	primary(b)
+	for st_name in ["normal", "hover", "pressed", "disabled"]:
+		var st: StyleBoxFlat = b.get_theme_stylebox(st_name).duplicate()
+		st.bg_color = MINT if st_name == "normal" else (MINT.lightened(0.1) if st_name == "hover" else
+			(MINT.darkened(0.08) if st_name == "pressed" else Color(MINT, 0.45)))
+		b.add_theme_stylebox_override(st_name, st)
 	return b
 
 

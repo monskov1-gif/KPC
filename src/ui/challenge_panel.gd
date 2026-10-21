@@ -68,8 +68,7 @@ func refresh() -> void:
 	for r in report.requirements:
 		var soft: bool = r.severity == "informational"
 		var note := "" if r.met else (Localization.text("ui.penalty", {"q": "%.2f" % r.q}) if r.q < 1.0 else "")
-		add_child(condition_row(r.met, soft, _req_icon(ch, r.id), tr(r.text_key), note,
-			UiTheme.BAD if r.severity == "critical" else UiTheme.TEXT_DIM))
+		add_child(condition_row(r.met, soft, _req_icon(ch, r.id), tr(r.text_key), note, UiTheme.BAD))
 	for p in report.penalties:
 		if p.source == "theme_ignored":
 			add_child(condition_row(false, false, "sparkle", tr("ui.theme_ignored"),
@@ -81,7 +80,7 @@ func refresh() -> void:
 		add_child(condition_row(syn.triggered, true, "hanger", tr(syn.text_key), "%d/%d" % [syn.count, syn.needed], UiTheme.TEXT_DIM))
 
 	if show_submit:
-		var submit_btn := UiTheme.primary(UiTheme.button(tr("ui.submit"), func(): submitted.emit()))
+		var submit_btn := UiTheme.secondary(UiTheme.button(tr("ui.submit"), func(): submitted.emit()))
 		submit_btn.custom_minimum_size.y = 56
 		add_child(submit_btn)
 
@@ -118,7 +117,7 @@ func _req_icon(ch: Dictionary, req_id: String) -> String:
 				"required_category":
 					var slots: Array = screen.session.config.categories.get(str(r.params.category), [])
 					return slots[0] if not slots.is_empty() else "all"
-				"forbidden_tag": return "close"
+				"forbidden_tag": return "forbid"
 	return "sparkle"
 
 

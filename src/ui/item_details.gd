@@ -37,7 +37,8 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, item_id: String) -> void:
 	var ok: bool = compat.status != Compatibility.Status.INCOMPATIBLE
 	crow.add_child(UiTheme.icon("check" if ok else "lock", 20, UiTheme.OK if compat.status == Compatibility.Status.COMPATIBLE
 		else (UiTheme.WARN if ok else UiTheme.BAD)))
-	var ctext := Localization.t("compat.compatible") if compat.status == Compatibility.Status.COMPATIBLE else \
+	var ctext := Localization.text("ui.compatible_for", {"name": Localization.t(s.characters.get_data(screen.character_id).name_key)}) \
+		if compat.status == Compatibility.Status.COMPATIBLE else \
 		(Localization.t("compat.adapted") if ok else Localization.t(compat.reason_key))
 	crow.add_child(UiTheme.label(ctext, UiTheme.FONT_SIZE_SMALL))
 	hv.add_child(crow)

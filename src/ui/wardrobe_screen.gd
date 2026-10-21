@@ -57,6 +57,7 @@ var _actions: HBoxContainer
 var _save_btn: Button
 var _undo_btn: Button
 var _trophy_btn: Button
+var _trophy_rank: RankBadge
 var _toast: PanelContainer
 var _sheet: Sheet
 var _pending_character := ""
@@ -202,7 +203,7 @@ func _build_challenge() -> void:
 	_challenge.show_submit = false
 	pad.add_child(_challenge)
 	# Кнопка всегда видна внизу панели, не уезжает при прокрутке условий.
-	var submit := UiTheme.primary(UiTheme.button(tr("ui.submit"), submit_challenge))
+	var submit := UiTheme.secondary(UiTheme.button(tr("ui.submit"), submit_challenge))
 	submit.custom_minimum_size.y = 56
 	v.add_child(submit)
 
@@ -291,6 +292,11 @@ func _build_actions() -> void:
 	_actions.add_child(hanger)
 	_trophy_btn = UiTheme.icon_button("trophy", open_challenge_sheet, 52, Color.WHITE, UiTheme.GOLD)
 	_trophy_btn.tooltip_text = tr("ui.challenge")
+	# Бейдж текущего ранга на кубке: на телефоне видно оценку без открытия окна.
+	_trophy_rank = RankBadge.make("D", 24)
+	_trophy_rank.position = Vector2(34, -6)
+	_trophy_rank.size = Vector2(24, 24)
+	_trophy_btn.add_child(_trophy_rank)
 	_actions.add_child(_trophy_btn)
 
 
@@ -528,6 +534,10 @@ func _refresh_all() -> void:
 	_refresh_strip()
 	_refresh_grid()
 	_challenge.refresh()
+	var ch := _challenge.challenge()
+	if not ch.is_empty():
+		_trophy_rank.rank = session.scoring.score(ch, session.items_for_outfit(draft)).rank
+		_trophy_rank.queue_redraw()
 
 
 func _refresh_strip() -> void:

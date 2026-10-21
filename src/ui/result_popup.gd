@@ -17,8 +17,6 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, ch: Dictionary, report: D
 	sr.add_child(UiTheme.tag(str(report.final_score), 36))
 	sr.add_child(UiTheme.tag(Localization.t("rank." + report.rank), 20, UiTheme.TEXT_DIM))
 	hv.add_child(sr)
-	hv.add_child(UiTheme.label(Localization.text("ui.formula", {"raw": "%.0f" % report.raw_score, "q": "%.2f" % report.q}),
-		UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM))
 	if outcome.get("new_best", false):
 		var nb := HBoxContainer.new()
 		nb.add_child(UiTheme.icon("trophy", 20, UiTheme.OK))
@@ -41,7 +39,8 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, ch: Dictionary, report: D
 	var lines := _advice_lines(screen, report, advice)
 	if not lines.is_empty():
 		_section(sheet, Localization.t("ui.recommendations"), "sparkle")
-		for line in lines:
+		# Не больше трёх советов: самое полезное, без стены текста.
+		for line in lines.slice(0, 3):
 			sheet.content.add_child(UiTheme.label("• " + line, UiTheme.FONT_SIZE_SMALL))
 
 	_section(sheet, Localization.t("ui.items_contribution"), "hanger")
@@ -65,14 +64,11 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, ch: Dictionary, report: D
 	for r in report.requirements:
 		var note := "" if r.met else (Localization.text("ui.penalty", {"q": "%.2f" % r.q}) if r.q < 1.0 else "")
 		sheet.content.add_child(ChallengePanel.condition_row(r.met, r.severity == "informational", "sparkle",
-			Localization.t(r.text_key), note, UiTheme.BAD if r.severity == "critical" else UiTheme.TEXT_DIM))
+			Localization.t(r.text_key), note, UiTheme.BAD))
 	for p in report.penalties:
 		if p.source == "theme_ignored":
 			sheet.content.add_child(ChallengePanel.condition_row(false, false, "sparkle", Localization.t("ui.theme_ignored"),
 				Localization.text("ui.penalty", {"q": "%.2f" % p.q}), UiTheme.BAD))
-	var close_btn := UiTheme.primary(UiTheme.button(Localization.t("ui.close"), sheet.close))
-	close_btn.custom_minimum_size = Vector2(220, 54)
-	sheet.add_footer(close_btn)
 	sheet.open(Localization.t(ch.title_key), "trophy")
 
 
