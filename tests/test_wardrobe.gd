@@ -45,9 +45,10 @@ func test_cannot_equip_incompatible_but_item_stays_owned() -> void:
 
 func test_adapted_version_status() -> void:
 	var s := fresh_session()
-	var st := Compatibility.check(s.catalog.get_item(BLAZER), "sora", s.characters)
-	eq(st.status, Compatibility.Status.ADAPTED)
-	eq(Compatibility.check(s.catalog.get_item(BLAZER), "kot", s.characters).status, Compatibility.Status.COMPATIBLE)
+	var it := ClothingItem.from_dict({"id": "x", "name_key": "k", "category": "top", "slot": "upper_body", "rarity": "common",
+		"compatible_body_types": ["compact"], "model_variants": {"sora": ""}})
+	eq(Compatibility.check(it, "sora", s.characters).status, Compatibility.Status.ADAPTED)
+	eq(Compatibility.check(it, "kot", s.characters).status, Compatibility.Status.COMPATIBLE)
 
 
 func test_full_body_replaces_top_and_bottom_and_back() -> void:

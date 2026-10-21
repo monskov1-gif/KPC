@@ -1,43 +1,49 @@
 {
-  "_comment": "Технические данные персонажей. Рост — из материалов пользователя (рост Габи неизвестен). Группы body_type, доступность Соры в гардеробе и состав signature_outfit — предварительные (по референсам 04 и 07), см. docs/OPEN_QUESTIONS.md.",
-  "characters": [
-    {
-      "id": "kot",
-      "name_key": "character.kot.name",
-      "body_type": "compact",
-      "height_cm": 163,
-      "unlocked_by_default": true,
-      "signature_outfit": {
-        "upper_body": "clothing_kot_flower_turtleneck_001",
-        "lower_body": "clothing_kot_black_trousers_001",
-        "headwear": "clothing_kot_fish_cloud_clips_001",
-        "face_accessory": "clothing_kot_eyepatch_001"
-      },
-      "placeholder_color": "#3fbfae"
-    },
-    {
-      "id": "gabi",
-      "name_key": "character.gabi.name",
-      "body_type": "compact",
-      "height_cm": null,
-      "unlocked_by_default": true,
-      "signature_outfit": {
-        "upper_body": "clothing_gabi_brown_patterned_top_001",
-        "lower_body": "clothing_gabi_suspender_skirt_001",
-        "socks": "clothing_white_knee_socks_001",
-        "footwear": "clothing_dark_mary_janes_001",
-        "gloves": "clothing_gabi_paw_gloves_001"
-      },
-      "placeholder_color": "#d9617a"
-    },
-    {
-      "id": "sora",
-      "name_key": "character.sora.name",
-      "body_type": "tall",
-      "height_cm": 206,
-      "unlocked_by_default": true,
-      "signature_outfit": {},
-      "placeholder_color": "#4a5a8c"
-    }
-  ]
+ "_comment": "Технические данные персонажей. Рост — из материалов пользователя (рост Габи неизвестен). Группы body_type, доступность Соры в гардеробе и состав signature_outfit — предварительные (по референсам 04 и 07), см. docs/OPEN_QUESTIONS.md.",
+ "characters": [
+  {
+   "id": "kot",
+   "name_key": "character.kot.name",
+   "body_type": "compact",
+   "height_cm": 163,
+   "unlocked_by_default": true,
+   "signature_outfit": {
+    "upper_body": "clothing_kot_flower_turtleneck_001",
+    "lower_body": "clothing_kot_black_trousers_001",
+    "headwear": "clothing_kot_fish_cloud_clips_001",
+    "face_accessory": "clothing_kot_eyepatch_001"
+   },
+   "placeholder_color": "#3fbfae"
+  },
+  {
+   "id": "gabi",
+   "name_key": "character.gabi.name",
+   "body_type": "compact",
+   "height_cm": null,
+   "unlocked_by_default": true,
+   "signature_outfit": {
+    "upper_body": "clothing_gabi_brown_patterned_top_001",
+    "lower_body": "clothing_gabi_suspender_skirt_001",
+    "socks": "clothing_white_knee_socks_001",
+    "footwear": "clothing_dark_mary_janes_001",
+    "gloves": "clothing_gabi_paw_gloves_001"
+   },
+   "placeholder_color": "#d9617a"
+  },
+  {
+   "id": "sora",
+   "name_key": "character.sora.name",
+   "body_type": "tall",
+   "height_cm": 206,
+   "unlocked_by_default": true,
+   "signature_outfit": {
+    "upper_body": "clothing_sora_white_shirt_001",
+    "outerwear": "clothing_sora_dark_vest_001",
+    "neck_accessory": "clothing_sora_tie_001",
+    "lower_body": "clothing_sora_dark_trousers_001",
+    "footwear": "clothing_sora_dark_shoes_001"
+   },
+   "placeholder_color": "#4a5a8c"
+  }
+ ]
 }

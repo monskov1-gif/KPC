@@ -39,7 +39,7 @@ var _top: HBoxContainer
 var _avatars := {}
 var _coins_label: Label
 var _stage: SubViewportContainer
-var _appearance: PlaceholderAppearance
+var _appearance: CharacterModel
 var _preview_cam: Camera3D
 var _placeholder_note: Label
 var _challenge_cloud: PanelContainer
@@ -155,14 +155,8 @@ func _build_stage() -> void:
 	key.rotation_degrees = Vector3(-40, 25, 0)
 	key.light_energy = 0.7
 	key.light_color = Color("fff1e6")
-	key.shadow_enabled = true
 	vp.add_child(key)
-	var rim := OmniLight3D.new()
-	rim.position = Vector3(0.7, 2.0, -1.3)
-	rim.light_color = Color("ffd9e4")
-	rim.light_energy = 0.9
-	rim.omni_range = 4
-	vp.add_child(rim)
+	# Контровой свет даёт сам шейдер персонажа (rim); отдельная лампа сзади пересвечивала модель.
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -181,8 +175,8 @@ func _build_stage() -> void:
 		m.roughness = 0.9
 		disk.material_override = m
 		vp.add_child(disk)
-	_appearance = PlaceholderAppearance.new()
-	_appearance.rotation_degrees.y = -18
+	_appearance = CharacterModel.new()
+	_appearance.rotation_degrees.y = -14
 	vp.add_child(_appearance)
 	_placeholder_note = UiTheme.tag(tr("ui.placeholder_model"), 13, UiTheme.TEXT_DIM)
 	add_child(_placeholder_note)
@@ -419,9 +413,11 @@ func _set_character(c: String) -> void:
 
 ## Кадрирование под рост персонажа, чтобы фигура одинаково заполняла сцену.
 func _frame_camera() -> void:
-	var hgt := 1.6 * _appearance.scale.y
-	_preview_cam.position = Vector3(0, hgt * 0.62, hgt * 3.1)
-	_preview_cam.rotation_degrees = Vector3(-5, 0, 0)
+	# Рост из данных персонажа: модели построены в реальном масштабе (Кот 163 см, Сора 206 см).
+	var h_cm = session.characters.get_data(character_id).get("height_cm")
+	var hgt := (float(h_cm) if h_cm != null else 160.0) / 100.0
+	_preview_cam.position = Vector3(0, hgt * 0.56, hgt * 2.45)
+	_preview_cam.rotation_degrees = Vector3(-4, 0, 0)
 
 
 func _set_category(id: String) -> void:

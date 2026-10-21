@@ -25,6 +25,8 @@ var acquisition_sources: Array[String] = []
 var shop_price := 0
 var recipe_id := ""
 var model_asset := ""
+## Шаблон 3D-меша одежды у моделей персонажей: «слот__шаблон» (garment__… в .glb).
+var model_template := ""
 var icon_asset := ""
 var placeholder_color := Color(0.6, 0.6, 0.6)
 var sort_order := 0
@@ -56,6 +58,7 @@ static func from_dict(d: Dictionary) -> ClothingItem:
 	it.shop_price = int(d.get("shop_price", 0))
 	it.recipe_id = str(d.get("recipe_id", ""))
 	it.model_asset = str(d.get("model_asset", ""))
+	it.model_template = str(d.get("model_template", ""))
 	it.icon_asset = str(d.get("icon_asset", ""))
 	if d.has("placeholder_color"):
 		it.placeholder_color = Color.from_string(str(d["placeholder_color"]), it.placeholder_color)

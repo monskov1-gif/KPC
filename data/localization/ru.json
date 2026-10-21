@@ -132,7 +132,7 @@
  "ui.saved": "Сохранено",
  "ui.quit": "Выйти",
  "ui.paused": "Пауза",
- "ui.placeholder_model": "PLACEHOLDER: фигура из примитивов, модели персонажей ещё нет",
+ "ui.placeholder_model": "Прототип 3D-модели — не финальная графика",
  "ui.cost": "Стоимость: {cost}",
  "ui.reward_item": "Предмет: {name}",
  "ui.reward_resource": "{name} ×{n}",
@@ -247,5 +247,15 @@
  "sort.rarity": "Редкость",
  "sort.name": "Название",
  "ui.jewelry": "Украшения",
- "ui.compatible_for": "Подходит: {name}"
+ "ui.compatible_for": "Подходит: {name}",
+ "item.sora_white_shirt.name": "Белая рубашка",
+ "item.sora_white_shirt.description": "Рубашка с закатанными рукавами. Как на референсе Соры.",
+ "item.sora_dark_vest.name": "Тёмный жилет",
+ "item.sora_dark_vest.description": "Строгий тёмный жилет. Как на референсе Соры.",
+ "item.sora_tie.name": "Галстук",
+ "item.sora_tie.description": "Тёмно-синий галстук. Как на референсе Соры.",
+ "item.sora_dark_trousers.name": "Тёмные брюки",
+ "item.sora_dark_trousers.description": "Простые тёмные брюки.",
+ "item.sora_dark_shoes.name": "Тёмные туфли Соры",
+ "item.sora_dark_shoes.description": "Строгие тёмные туфли."
 }
