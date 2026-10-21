@@ -72,42 +72,42 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
-	var r := Rect2(Vector2(3, 3), size - Vector2(6, 6))
-	var bg := UiTheme.CARD
-	if worn:
-		bg = Color("fdf6e6")
-	elif _hover:
-		bg = Color.WHITE
-	var sb := UiTheme.cloud(bg, 16, 0)
-	sb.shadow_size = 6
-	sb.shadow_offset = Vector2(0, 2)
+	# Подложка — текстура карточки по редкости (art/ui/card_rN.png); надетая — со свечением.
+	var r := Rect2(Vector2.ZERO, size)
 	if worn or selected:
-		sb.border_color = UiTheme.GOLD if worn else UiTheme.MINT
-		sb.set_border_width_all(3)
-	draw_style_box(sb, r)
+		var pad := size.x * 12.0 / 128.0
+		draw_texture_rect(UiTheme.tex("card_r%d_sel.png" % stars), Rect2(-Vector2(pad, pad), size + Vector2(pad, pad) * 2), false)
+	else:
+		draw_texture_rect(UiTheme.tex("card_r%d.png" % stars), r, false,
+			Color(1.06, 1.06, 1.06) if _hover else Color.WHITE)
 
 	# Миниатюра: силуэт слота в цвете вещи (PLACEHOLDER до рендеров вещей).
-	var thumb := Rect2(r.position + Vector2(r.size.x * 0.17, r.size.y * 0.2), Vector2(r.size.x * 0.66, r.size.x * 0.66))
+	var side := r.size.x * 0.62
+	var thumb := Rect2(Vector2((r.size.x - side) / 2.0, r.size.y * 0.2), Vector2(side, side))
 	var col := item.placeholder_color
-	Icons.draw(self, item.slot, thumb, col, col.darkened(0.35).lerp(UiTheme.TEXT_DIM, 0.3))
+	Icons.draw(self, item.slot, thumb.grow(1.5), Color(0.35, 0.2, 0.25, 0.18))
+	Icons.draw(self, item.slot, thumb, col, col.darkened(0.4).lerp(UiTheme.TEXT_DIM, 0.25))
 
-	# Звёзды редкости — в правом верхнем углу.
-	var s := 15.0
+	# Звёзды редкости — золотые с тёмным контуром, в правом верхнем углу.
+	var s := r.size.x * 0.12
 	for i in stars:
-		var p := Vector2(r.end.x - 8 - (i + 1) * (s + 1), r.position.y + 7)
-		Icons.draw(self, "star", Rect2(p - Vector2(1, 1), Vector2(s + 2, s + 2)), Color("b8862e"))
+		var p := Vector2(r.end.x - r.size.x * 0.07 - (i + 1) * (s + 1), r.position.y + r.size.y * 0.05)
+		Icons.draw(self, "star", Rect2(p - Vector2(1.2, 1.2), Vector2(s + 2.4, s + 2.4)), Color("a4732c"))
 		Icons.draw(self, "star", Rect2(p, Vector2(s, s)), UiTheme.STAR)
 
 	if worn:
-		var c := r.position + Vector2(18, 18)
-		draw_circle(c, 12, UiTheme.GOLD)
-		Icons.draw(self, "check", Rect2(c - Vector2(8, 8), Vector2(16, 16)), Color.WHITE)
+		var c := Vector2(r.size.x * 0.16, r.size.y * 0.13)
+		draw_circle(c, r.size.x * 0.1 + 2, Color("a4732c"))
+		draw_circle(c, r.size.x * 0.1, UiTheme.GOLD)
+		var ic := r.size.x * 0.13
+		Icons.draw(self, "check", Rect2(c - Vector2(ic, ic) / 2.0, Vector2(ic, ic)), Color.WHITE)
 	elif is_new:
-		draw_circle(r.position + Vector2(14, 14), 6, UiTheme.PINK.darkened(0.1))
+		var c2 := Vector2(r.size.x * 0.13, r.size.y * 0.1)
+		Icons.draw(self, "sparkle", Rect2(c2 - Vector2(9, 9), Vector2(18, 18)), Color("e88aa6"))
 	if locked:
-		draw_style_box(UiTheme.cloud(Color(1, 1, 1, 0.55), 16, 0), r)
-		var lc := r.get_center() + Vector2(0, 6)
-		draw_circle(lc, 18, Color(UiTheme.TEXT_DIM, 0.85))
+		draw_rect(r.grow(-4), Color(1, 1, 1, 0.45))
+		var lc := r.get_center() + Vector2(0, 4)
+		draw_circle(lc, 18, Color(UiTheme.TEXT_DIM, 0.9))
 		Icons.draw(self, "lock", Rect2(lc - Vector2(11, 12), Vector2(22, 22)), Color.WHITE)
 	if _press_time >= 0.0:
-		draw_style_box(UiTheme.cloud(Color(UiTheme.GOLD_LIGHT, 0.35), 16, 0), r)
+		draw_rect(r.grow(-4), Color(UiTheme.GOLD_LIGHT, 0.3))

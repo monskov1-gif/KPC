@@ -34,6 +34,7 @@ var query := WardrobeQuery.new()
 var category := "all"
 
 var _narrow := false
+var _bg: TextureRect
 var _top: HBoxContainer
 var _avatars := {}
 var _coins_label: Label
@@ -78,16 +79,20 @@ func _ready() -> void:
 # ---------- построение ----------
 
 func _build() -> void:
-	var bg := SoftBackground.new()
-	add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Фон — нарисованный зал с арками и небом (art/ui/bg_wardrobe_*.jpg), под ориентацию экрана.
+	_bg = TextureRect.new()
+	_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bg)
+	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_stage()
 	_build_top_bar()
 	_build_challenge()
 	_build_grid()
 	_build_actions()
 	_toast = PanelContainer.new()
-	_toast.add_theme_stylebox_override("panel", UiTheme.cloud(UiTheme.PANEL_SOLID, 999, 12))
+	_toast.add_theme_stylebox_override("panel", UiTheme.chip())
 	_toast.visible = false
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_toast)
@@ -100,9 +105,7 @@ func _build_top_bar() -> void:
 	_top.add_theme_constant_override("separation", 12)
 	add_child(_top)
 	_top.add_child(UiTheme.icon_button("back", _on_close, 52))
-	var title := PanelContainer.new()
-	title.add_theme_stylebox_override("panel", UiTheme.pill(Color("fff6e3"), 14))
-	title.add_child(UiTheme.tag(tr("ui.wardrobe"), 22, UiTheme.GOLD.darkened(0.3)))
+	var title := UiTheme.ribbon_title(tr("ui.wardrobe"), 26)
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_top.add_child(title)
 	for c in session.characters.ids():
@@ -125,7 +128,7 @@ func _build_top_bar() -> void:
 	# Номер версии сборки (растёт на 0.01 с каждой правкой) — видно, какая версия открыта на сайте.
 	_top.add_child(UiTheme.tag("v" + str(ProjectSettings.get_setting("application/config/version", "?")), 14, UiTheme.TEXT_DIM))
 	var coins := PanelContainer.new()
-	coins.add_theme_stylebox_override("panel", UiTheme.pill(UiTheme.PANEL_SOLID, 10))
+	coins.add_theme_stylebox_override("panel", UiTheme.chip())
 	coins.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var ch := HBoxContainer.new()
 	ch.add_child(UiTheme.icon("coin", 28))
@@ -167,7 +170,7 @@ func _build_stage() -> void:
 	env.environment.ambient_light_energy = 0.55
 	env.environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	vp.add_child(env)
-	for ring in [[0.62, 0.03, "f1dcd7"], [0.5, 0.05, "f9ebe6"]]:
+	for ring in [[0.66, 0.02, "d8b36e"], [0.63, 0.04, "efdcd4"], [0.5, 0.06, "fbf1ec"]]:
 		var disk := MeshInstance3D.new()
 		var cyl := CylinderMesh.new()
 		cyl.top_radius = ring[0]; cyl.bottom_radius = ring[0]; cyl.height = ring[1]
@@ -187,7 +190,7 @@ func _build_stage() -> void:
 
 func _build_challenge() -> void:
 	_challenge_cloud = PanelContainer.new()
-	_challenge_cloud.add_theme_stylebox_override("panel", UiTheme.cloud())
+	_challenge_cloud.add_theme_stylebox_override("panel", UiTheme.panel_light())
 	add_child(_challenge_cloud)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
@@ -212,7 +215,7 @@ func _build_challenge() -> void:
 
 func _build_grid() -> void:
 	_grid_cloud = PanelContainer.new()
-	_grid_cloud.add_theme_stylebox_override("panel", UiTheme.cloud())
+	_grid_cloud.add_theme_stylebox_override("panel", UiTheme.panel_glass())
 	add_child(_grid_cloud)
 	_grid_box = BoxContainer.new()
 	_grid_box.add_theme_constant_override("separation", 12)
@@ -225,7 +228,7 @@ func _build_grid() -> void:
 	_strip.add_theme_constant_override("separation", 8)
 	_strip_scroll.add_child(_strip)
 	for g in CATEGORY_GROUPS:
-		var b := UiTheme.icon_button(g.icon, _set_category.bind(g.id), 50)
+		var b := UiTheme.medallion(g.icon, _set_category.bind(g.id), 62)
 		b.tooltip_text = tr("ui.all_slots") if g.id == "all" else (tr("slot." + g.slot) if g.has("slot") else tr("ui.jewelry"))
 		_strip_buttons[g.id] = b
 		_strip.add_child(b)
@@ -308,6 +311,7 @@ func _layout() -> void:
 	var w := size.x
 	var h := size.y
 	_narrow = w < NARROW_WIDTH
+	_bg.texture = UiTheme.tex("bg_wardrobe_tall.jpg" if h > w else "bg_wardrobe_wide.jpg")
 	_top.position = Vector2(MARGIN, 10)
 	_top.size = Vector2(w - MARGIN * 2, TOP_BAR - 10)
 	var body_top := TOP_BAR + 8
@@ -329,7 +333,7 @@ func _layout() -> void:
 		_strip.vertical = true
 		_strip_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		_strip_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-		_strip_scroll.custom_minimum_size = Vector2(54, 0)
+		_strip_scroll.custom_minimum_size = Vector2(66, 0)
 		_grid.columns = 3
 		_placeholder_note.position = Vector2(stage_x + 24, body_top + 4)
 	else:
@@ -346,7 +350,7 @@ func _layout() -> void:
 		_strip.vertical = false
 		_strip_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 		_strip_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		_strip_scroll.custom_minimum_size = Vector2(0, 54)
+		_strip_scroll.custom_minimum_size = Vector2(0, 66)
 		_grid.columns = maxi(3, int((w - MARGIN * 2) / 130.0))
 		_placeholder_note.position = Vector2(MARGIN, body_top + 4)
 	_actions.size = _actions.get_combined_minimum_size()
@@ -553,11 +557,8 @@ func _refresh_strip() -> void:
 		var b: Button = _strip_buttons[g.id]
 		b.visible = g.id == "all" or present.has(g.id)
 		var active: bool = g.id == category
-		var st := UiTheme.pill(UiTheme.GOLD_LIGHT if active else UiTheme.PANEL_SOLID, 0)
-		st.shadow_color = UiTheme.SHADOW
-		st.shadow_size = 6
-		b.add_theme_stylebox_override("normal", st)
-		(b.get_child(0) as IconView).color = UiTheme.GOLD.darkened(0.25) if active else UiTheme.TEXT_DIM
+		b.set_pressed_no_signal(active)
+		(b.get_child(0) as IconView).color = UiTheme.GOLD_DEEP if active else UiTheme.TEXT_LIGHT
 
 
 func _refresh_grid() -> void:
@@ -575,6 +576,7 @@ func _refresh_grid() -> void:
 	var cols := _grid.columns
 	var avail := _grid_scroll.size.x - 8.0 * (cols - 1) - 12.0
 	var cw := clampf(avail / cols, 96, 150) if avail > 0 else 120.0
+	cw = floorf(cw)
 	for it in items:
 		var card := ItemCard.new()
 		card.item = it
@@ -582,7 +584,7 @@ func _refresh_grid() -> void:
 		card.worn = draft.has_item(it.id)
 		card.is_new = session.inventory.is_new(it.id)
 		card.locked = not Compatibility.can_wear(it, character_id, session.characters)
-		card.custom_minimum_size = Vector2(cw, cw * 1.12)
+		card.custom_minimum_size = Vector2(cw, cw * 150.0 / 128.0)
 		card.tapped.connect(toggle_item)
 		card.long_pressed.connect(show_long_press)
 		_grid.add_child(card)

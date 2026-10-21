@@ -25,7 +25,7 @@ func _ready() -> void:
 			close())
 	add_child(dim)
 	_panel = PanelContainer.new()
-	_panel.add_theme_stylebox_override("panel", UiTheme.cloud(UiTheme.PANEL_SOLID, 28, 22))
+	_panel.add_theme_stylebox_override("panel", UiTheme.nine("panel_light.png", 44, 30))
 	add_child(_panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
