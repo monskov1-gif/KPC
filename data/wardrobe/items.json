@@ -79,7 +79,41 @@
    "is_signature_item": true,
    "placeholder_color": "#1c1c22",
    "sort_order": 11,
-   "model_template": "lower_body__trousers"
+   "model_template": "lower_body__cargo"
+  },
+  {
+   "id": "clothing_kot_platform_boots_001",
+   "name_key": "item.kot_platform_boots.name",
+   "description_key": "item.kot_platform_boots.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "common",
+   "style_tags": [
+    "casual"
+   ],
+   "attributes": {
+    "casualness": 45,
+    "coolness": 45,
+    "simplicity": 30
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "leather"
+   ],
+   "compatible_body_types": [
+    "compact"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "placeholder_color": "#151518",
+   "sort_order": 12,
+   "model_template": "footwear__boots"
   },
   {
    "id": "clothing_kot_fish_cloud_clips_001",

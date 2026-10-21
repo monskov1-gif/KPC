@@ -1,116 +1,276 @@
-"""Текстуры лиц персонажей (аниме-стиль, рисуются кодом по референсам пользователя).
+"""Текстуры лиц, глаз, волос и тканей персонажей (рисуются кодом по референсам пользователя).
 
-Запуск: python3 tools/art/gen_faces.py → art/characters/textures/face_<id>.png
-Проекция на голову: u = 0.5 + x / (2·rx), v = 0.5 − (z − cz) / (2·rz) (см. build_characters.py).
-Глаза, брови и рот рассчитаны в этих координатах.
+Запуск: python3 tools/art/gen_faces.py → art/characters/textures/
+  face_<id>.png  — лицо 2048², RGBA: в глазах ПРОРЕЗИ (alpha = 0), за ними глазные яблоки;
+                    ресницы с отдельными штрихами, складка века, брови, тень носа, губы, румянец;
+  eye_<id>.png   — глазное яблоко: склера, радужка с радиальными прожилками, зрачок, блики;
+  hair_strands.png — полупрозрачная карта прядей для «карт» волос (тонируется цветом вершин);
+  knit.png, rib.png, cloth.png — фактуры вязки и гладкой ткани (умножаются на цвет вещи).
+Проекция лица на голову: u = 0.5 + x / (2·rx), v = 0.5 − (z − cz) / (2·rz) (см. build_characters.py).
+Ориентир качества — art/references/style/13–15 и 3d/ (только как образец, без копирования).
 """
+import math
 import os
+import random
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "..", "art", "characters", "textures")
-N = 1024
+N = 2048
 SS = 2
-SKIN = (248, 226, 214)
+SKIN = (250, 230, 220)
+
+# Геометрия глаз в UV лица (общая с build_characters.py: EYE_U, EYE_V, EYE_W, EYE_H).
+EYE_U, EYE_V, EYE_W, EYE_H = 0.18, 0.535, 0.097, 0.071
+# Высоты носа и рта на текстуре — под вылепленную голову (NOSE_TIP_Z, MOUTH_Z в build_characters.py):
+# y = 0.5 − z / 2.
+NOSE_Y, MOUTH_Y = 0.5 + 0.4 / 2, 0.5 + 0.6 / 2
 
 CHARS = {
     # Кот (реф. 04): светло-голубые глаза, спокойное лицо, лёгкий румянец.
-    "kot": {"iris": (120, 176, 226), "iris_dark": (40, 74, 130), "brow": (40, 120, 120), "mouth": "neutral",
-            "blush": 0.55, "bags": False, "lash": (52, 40, 58)},
-    # Габи (реф. 05–07): фиолетовые глаза, мягкая улыбка.
-    "gabi": {"iris": (160, 132, 214), "iris_dark": (70, 48, 120), "brow": (150, 50, 70), "mouth": "smile",
-             "blush": 0.7, "bags": False, "lash": (60, 36, 50)},
-    # Сора (реф. 12): тёмные глаза, тени усталости, хитрая улыбка.
-    "sora": {"iris": (92, 104, 116), "iris_dark": (30, 36, 44), "brow": (36, 92, 96), "mouth": "smirk",
-             "blush": 0.35, "bags": True, "lash": (38, 32, 40)},
+    # Ресницы, складка века и брови у Кота — объёмные (build_characters.build_lashes), на текстуре их нет.
+    "kot": {"iris": (168, 184, 228), "iris_dark": (52, 62, 112), "brow": (44, 118, 120), "mouth": "lips",
+            "blush": 0.45, "bags": False, "lash": (48, 36, 54), "lash_len": 1.0, "geo_lashes": True},
+    # Габи (реф. 05–07): фиолетовые глаза, мягкая улыбка, ресницы гуще.
+    "gabi": {"iris": (176, 146, 226), "iris_dark": (72, 44, 124), "brow": (150, 50, 70), "mouth": "smile",
+             "blush": 0.65, "bags": False, "lash": (58, 32, 46), "lash_len": 1.35},
+    # Сора (реф. 12): тёмные глаза, тени усталости, хитрая полуулыбка.
+    "sora": {"iris": (104, 116, 128), "iris_dark": (28, 34, 42), "brow": (36, 92, 96), "mouth": "smirk",
+             "blush": 0.3, "bags": True, "lash": (36, 30, 38), "lash_len": 0.8},
 }
 
 
-def soft_ellipse(img, box, color, alpha, blur):
-    m = Image.new("L", img.size, 0)
-    ImageDraw.Draw(m).ellipse(box, fill=int(255 * alpha))
-    m = m.filter(ImageFilter.GaussianBlur(blur))
-    layer = Image.new("RGBA", img.size, color + (255,))
-    layer.putalpha(m)
-    img.alpha_composite(layer)
+def soft(size, color, alpha, blur, draw_fn):
+    m = Image.new("L", size, 0)
+    draw_fn(ImageDraw.Draw(m))
+    if blur:
+        m = m.filter(ImageFilter.GaussianBlur(blur))
+    layer = Image.new("RGBA", size, color + (255,))
+    layer.putalpha(Image.fromarray((np.array(m, dtype=np.float32) * alpha).astype(np.uint8)))
+    return layer
 
 
-def eye(img, cx, cy, c, mirror):
-    d = ImageDraw.Draw(img)
-    S = N * SS
-    w, h = S * 0.085, S * 0.105
-    # Склера (миндалевидная).
-    d.ellipse((cx - w, cy - h * 0.85, cx + w, cy + h * 0.95), fill=(255, 252, 250, 255))
-    # Радужка: вытянутый овал с градиентом сверху вниз.
-    iw, ih = w * 0.78, h * 0.92
-    iris = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    idr = ImageDraw.Draw(iris)
-    steps = 24
-    for k in range(steps):
-        t = k / (steps - 1)
-        col = tuple(int(c["iris_dark"][i] + (c["iris"][i] - c["iris_dark"][i]) * t) for i in range(3))
-        yy = cy - ih * 0.8 + ih * 1.7 * t
-        idr.ellipse((cx - iw, cy - ih * 0.85, cx + iw, cy + ih * 0.95), fill=None)
-        idr.rectangle((cx - iw, yy, cx + iw, yy + ih * 1.7 / steps + 2), fill=col + (255,))
-    m = Image.new("L", img.size, 0)
-    ImageDraw.Draw(m).ellipse((cx - iw, cy - ih * 0.85, cx + iw, cy + ih * 0.95), fill=255)
-    iris.putalpha(m)
-    img.alpha_composite(iris)
-    d.ellipse((cx - iw, cy - ih * 0.85, cx + iw, cy + ih * 0.95), outline=c["iris_dark"] + (255,), width=int(S * 0.006))
-    # Зрачок.
-    d.ellipse((cx - iw * 0.42, cy - ih * 0.3, cx + iw * 0.42, cy + ih * 0.5), fill=tuple(v // 2 for v in c["iris_dark"]) + (255,))
-    # Нижний светлый полумесяц радужки.
-    soft_ellipse(img, (cx - iw * 0.6, cy + ih * 0.25, cx + iw * 0.6, cy + ih * 0.85), tuple(min(255, v + 60) for v in c["iris"]), 0.7, S * 0.006)
-    # Блики.
-    hx = -1 if not mirror else 1
-    d.ellipse((cx + hx * iw * 0.45 - w * 0.22, cy - ih * 0.6, cx + hx * iw * 0.45 + w * 0.22, cy - ih * 0.12), fill=(255, 255, 255, 255))
-    d.ellipse((cx - hx * iw * 0.35 - w * 0.09, cy + ih * 0.35, cx - hx * iw * 0.35 + w * 0.09, cy + ih * 0.55), fill=(255, 255, 255, 230))
-    # Верхнее веко-ресницы: толстая дуга + стрелка во внешний угол.
-    lw = int(S * 0.016)
-    d.arc((cx - w * 1.08, cy - h * 0.95, cx + w * 1.08, cy + h * 0.9), 195, 345, fill=c["lash"] + (255,), width=lw)
-    ox = cx + (w * 1.05 if mirror else -w * 1.05)
-    tip = ox + (w * 0.35 if mirror else -w * 0.35)
-    d.polygon([(ox, cy - h * 0.2), (tip, cy - h * 0.48), (ox + (-w * 0.1 if mirror else w * 0.1), cy - h * 0.55)], fill=c["lash"] + (255,))
-    # Нижнее веко.
-    d.arc((cx - w * 0.8, cy - h * 0.6, cx + w * 0.8, cy + h * 1.0), 60, 120, fill=c["lash"] + (150,), width=int(S * 0.005))
+def almond(cx, cy, w, h, steps=40, lift=0.18):
+    """Миндалевидный контур глаза: верх выпуклее, внешний угол чуть приподнят."""
+    pts = []
+    for i in range(steps + 1):
+        a = math.pi * i / steps
+        x = cx - w * math.cos(a)
+        y = cy - h * math.sin(a) * 1.0 + (x - cx) / w * h * lift
+        pts.append((x, y))
+    for i in range(steps + 1):
+        a = math.pi * i / steps
+        x = cx + w * math.cos(a)
+        y = cy + h * math.sin(a) * 0.62 + (x - cx) / w * h * lift * 0.5
+        pts.append((x, y))
+    return pts
 
 
 def face(cid, c):
     S = N * SS
     img = Image.new("RGBA", (S, S), SKIN + (255,))
-    eye_v, eye_du = 0.545, 0.19
+    # Лёгкая объёмная тень по краям лица и под подбородком.
+    img.alpha_composite(soft((S, S), (232, 196, 190), 0.55, S * 0.05,
+                             lambda d: (d.rectangle((0, 0, S * 0.08, S), fill=255), d.rectangle((S * 0.92, 0, S, S), fill=255),
+                                        d.rectangle((0, S * 0.93, S, S), fill=255))))
+    holes = Image.new("L", (S, S), 255)
+    hd = ImageDraw.Draw(holes)
     for side in (-1, 1):
-        cx, cy = S * (0.5 + side * eye_du), S * eye_v
-        if c["bags"]:
-            d = ImageDraw.Draw(img)
-            d.arc((cx - S * 0.08, cy - S * 0.02, cx + S * 0.08, cy + S * 0.13), 20, 160, fill=(170, 120, 150, 140), width=int(S * 0.006))
-        eye(img, cx, cy, c, side > 0)
-        # Брови — тонкие дуги цвета волос.
+        cx, cy = S * (0.5 + side * EYE_U), S * EYE_V
+        w, h = S * EYE_W, S * EYE_H
+        # Внешний угол — к краю лица: для правого глаза зеркалим наклон.
+        pts = almond(cx, cy, w, h, lift=-0.16 * side)
+        hd.polygon(pts, fill=0)
         d = ImageDraw.Draw(img)
-        bx = cx + side * S * 0.01
-        d.arc((bx - S * 0.09, S * 0.36, bx + S * 0.09, S * 0.46), 200, 330, fill=c["brow"] + (255,), width=int(S * 0.009))
+        # Тень под верхним веком на коже (вокруг прорези) — глубина глазницы.
+        img.alpha_composite(soft((S, S), (214, 160, 160), 0.6, S * 0.006, lambda dd: dd.line(pts[:41], fill=255, width=int(S * 0.012))))
+        if c.get("geo_lashes"):
+            img.alpha_composite(soft((S, S), (242, 150, 160), c["blush"] * 0.55, S * 0.02,
+                                     lambda dd: dd.ellipse((cx - w * 0.9, cy + h * 1.6, cx + w * 0.9, cy + h * 2.4), fill=255)))
+            continue
+        # Складка века.
+        crease = [(x, y - h * 0.42) for x, y in pts[6:36]]
+        d.line(crease, fill=(196, 140, 140, 200), width=int(S * 0.0025))
+        # Верхнее веко: толстая линия ресниц, к внешнему углу толще.
+        up = pts[:41]
+        for i in range(len(up) - 1):
+            t = i / (len(up) - 1)
+            outer = t if side > 0 else 1 - t
+            wd = int(S * (0.006 + 0.01 * outer))
+            d.line((up[i], up[i + 1]), fill=c["lash"] + (255,), width=wd)
+        # Отдельные ресницы-штрихи к внешнему углу.
+        rnd = random.Random(7 + side)
+        for k in range(7):
+            t = 0.55 + 0.45 * k / 6
+            i = int(t * 40) if side > 0 else int((1 - t) * 40)
+            x, y = up[i]
+            L = S * 0.022 * c["lash_len"] * (0.6 + 0.6 * k / 6)
+            ang = math.radians(-60 - 25 * k / 6) if side > 0 else math.radians(-120 + 25 * k / 6)
+            d.line((x, y, x + math.cos(ang) * L, y + math.sin(ang) * L), fill=c["lash"] + (255,), width=int(S * 0.004))
+        # Нижнее веко — тонкая неполная линия.
+        low = pts[41:]
+        d.line(low[8:33], fill=c["lash"] + (150,), width=int(S * 0.003))
+        if c["bags"]:
+            d.arc((cx - w * 0.9, cy + h * 0.1, cx + w * 0.9, cy + h * 1.6), 25, 155, fill=(176, 120, 150, 150), width=int(S * 0.004))
+        # Брови.
+        bx = cx + side * S * 0.004
+        d.arc((bx - w * 1.15, cy - h * 3.0, bx + w * 1.15, cy - h * 0.9), 205 if side > 0 else 215, 325 if side > 0 else 335,
+              fill=c["brow"] + (255,), width=int(S * 0.006))
         # Румянец.
-        soft_ellipse(img, (cx - S * 0.08, S * 0.63, cx + S * 0.08, S * 0.69), (240, 150, 160), c["blush"] * 0.6, S * 0.015)
+        img.alpha_composite(soft((S, S), (242, 150, 160), c["blush"] * 0.55, S * 0.02,
+                                 lambda dd: dd.ellipse((cx - w * 0.9, cy + h * 1.6, cx + w * 0.9, cy + h * 2.4), fill=255)))
     d = ImageDraw.Draw(img)
-    # Нос — маленькая тень.
-    d.line((S * 0.505, S * 0.66, S * 0.495, S * 0.69), fill=(214, 168, 160, 255), width=int(S * 0.005))
-    # Рот.
-    mc = (150, 82, 92, 255)
-    mw = int(S * 0.006)
-    if c["mouth"] == "neutral":
-        d.arc((S * 0.46, S * 0.75, S * 0.54, S * 0.79), 20, 160, fill=mc, width=mw)
+    # Нос: мягкая тень сбоку и блик.
+    img.alpha_composite(soft((S, S), (220, 168, 160), 0.7, S * 0.004,
+                             lambda dd: dd.line((S * 0.506, S * (NOSE_Y - 0.045), S * 0.5, S * (NOSE_Y + 0.005)), fill=255, width=int(S * 0.005))))
+    img.alpha_composite(soft((S, S), (255, 250, 246), 0.8, S * 0.003,
+                             lambda dd: dd.ellipse((S * 0.493, S * (NOSE_Y - 0.012), S * 0.499, S * (NOSE_Y - 0.005)), fill=255)))
+    # Тень под кончиком носа.
+    img.alpha_composite(soft((S, S), (226, 170, 166), 0.55, S * 0.004,
+                             lambda dd: dd.ellipse((S * 0.488, S * (NOSE_Y + 0.008), S * 0.512, S * (NOSE_Y + 0.016)), fill=255)))
+    # Губы.
+    mc = (176, 96, 104, 255)
+    mw = int(S * 0.0045)
+    my = MOUTH_Y - 0.0
+    if c["mouth"] == "lips":
+        # Спокойные губы (реф. 16): тонкая линия рта, мягкая розовая нижняя губа, лёгкая тень под ней.
+        img.alpha_composite(soft((S, S), (236, 160, 160), 0.75, S * 0.005,
+                                 lambda dd: dd.ellipse((S * 0.478, S * (my + 0.004), S * 0.522, S * (my + 0.02)), fill=255)))
+        img.alpha_composite(soft((S, S), (232, 172, 170), 0.5, S * 0.004,
+                                 lambda dd: dd.ellipse((S * 0.474, S * (my - 0.016), S * 0.526, S * (my - 0.002)), fill=255)))
+        img.alpha_composite(soft((S, S), (214, 170, 166), 0.35, S * 0.006,
+                                 lambda dd: dd.ellipse((S * 0.485, S * (my + 0.03), S * 0.515, S * (my + 0.042)), fill=255)))
+        d = ImageDraw.Draw(img)
+        d.line([(S * 0.468, S * (my + 0.002)), (S * 0.485, S * my), (S * 0.5, S * (my + 0.0015)), (S * 0.515, S * my), (S * 0.532, S * (my + 0.002))],
+               fill=(168, 96, 104, 255), width=int(S * 0.0032), joint="curve")
+    elif c["mouth"] == "neutral":
+        d.arc((S * 0.47, S * (my - 0.012), S * 0.53, S * (my + 0.013)), 25, 155, fill=mc, width=mw)
     elif c["mouth"] == "smile":
-        d.arc((S * 0.44, S * 0.72, S * 0.56, S * 0.79), 15, 165, fill=mc, width=mw)
-    else:  # хитрая полуулыбка
-        d.arc((S * 0.45, S * 0.72, S * 0.57, S * 0.79), 10, 120, fill=mc, width=mw)
-        d.line((S * 0.45, S * 0.755, S * 0.47, S * 0.76), fill=mc, width=mw)
-    img.resize((N, N), Image.LANCZOS).convert("RGB").save(os.path.join(OUT, f"face_{cid}.png"))
+        d.arc((S * 0.46, S * (my - 0.027), S * 0.54, S * (my + 0.018)), 20, 160, fill=mc, width=mw)
+        img.alpha_composite(soft((S, S), (232, 140, 150), 0.35, S * 0.004, lambda dd: dd.ellipse((S * 0.485, S * (my + 0.016), S * 0.515, S * (my + 0.026)), fill=255)))
+    else:
+        d.arc((S * 0.47, S * (my - 0.027), S * 0.55, S * (my + 0.018)), 15, 120, fill=mc, width=mw)
+        d.line((S * 0.468, S * (my - 0.004), S * 0.48, S * (my - 0.001)), fill=mc, width=mw)
+    img.putalpha(Image.fromarray(np.minimum(np.array(img.split()[3]), np.array(holes))))
+    img.resize((N, N), Image.LANCZOS).save(os.path.join(OUT, f"face_{cid}.png"))
+
+
+def eye(cid, c, size=512):
+    """Глазное яблоко: склера с тенью от века, радужка с тонкими волокнами, тёмный лимб, светлое кольцо
+    у зрачка, «каустика» снизу, зрачок, блики (как на реф. 16)."""
+    S = size * SS
+    img = Image.new("RGBA", (S, S), (250, 249, 252, 255))
+    cx = cy = S / 2
+    img.alpha_composite(soft((S, S), (176, 166, 198), 0.85, S * 0.06, lambda d: d.rectangle((0, 0, S, S * 0.3), fill=255)))
+    r = S * 0.36
+    ys = np.linspace(-1, 1, S)[:, None]
+    xs = np.linspace(-1, 1, S)[None, :]
+    rr = np.sqrt((xs / 0.72) ** 2 + (ys / 0.72) ** 2)
+    ang = np.arctan2(ys, xs)
+    t = np.clip((ys + 0.72) / 1.44, 0, 1)
+    dark, light = np.array(c["iris_dark"], np.float32), np.array(c["iris"], np.float32)
+    col = dark[None, None, :] * (1 - t[..., None] ** 1.2) + light[None, None, :] * (t[..., None] ** 1.2)
+    rnd = np.random.default_rng(11)
+    fib = np.zeros_like(ang)
+    for f, a in ((38, 0.05), (71, 0.04), (113, 0.035), (167, 0.03)):
+        fib += a * np.sin(ang * f + rnd.uniform(0, 6.28) + rr * rnd.uniform(2, 6))
+    col = col * (0.95 + fib)[..., None]
+    collar = np.exp(-((rr - 0.5) / 0.08) ** 2)[..., None]          # светлое кольцо вокруг зрачка
+    col = col * (1 - collar * 0.25) + light[None, None, :] * 1.15 * collar * 0.25
+    rim = np.clip((rr - 0.8) / 0.2, 0, 1)[..., None]
+    col = col * (1 - rim ** 1.5 * 0.75)
+    alpha = np.clip((1.0 - rr) * 60, 0, 1) * 255
+    iris = Image.fromarray(np.dstack([np.clip(col, 0, 255), alpha]).astype(np.uint8), "RGBA")
+    img.alpha_composite(iris)
+    pr = r * 0.34
+    img.alpha_composite(soft((S, S), tuple(int(v * 0.25) for v in c["iris_dark"]), 1.0, S * 0.004,
+                             lambda d: d.ellipse((cx - pr, cy - pr * 1.08, cx + pr, cy + pr * 1.08), fill=255)))
+    img.alpha_composite(soft((S, S), tuple(min(255, v + 60) for v in c["iris"]), 0.55, S * 0.03,
+                             lambda dd: dd.ellipse((cx - r * 0.62, cy + r * 0.3, cx + r * 0.62, cy + r * 0.9), fill=255)))
+    img.alpha_composite(soft((S, S), (40, 40, 70), 0.35, S * 0.04,
+                             lambda dd: dd.rectangle((0, 0, S, cy - r * 0.45), fill=255)))        # тень от ресниц на радужке
+    img.alpha_composite(soft((S, S), (255, 255, 255), 1.0, S * 0.003,
+                             lambda dd: dd.ellipse((cx - r * 0.58, cy - r * 0.62, cx - r * 0.16, cy - r * 0.22), fill=255)))
+    img.alpha_composite(soft((S, S), (255, 255, 255), 0.85, S * 0.002,
+                             lambda dd: dd.ellipse((cx + r * 0.28, cy + r * 0.32, cx + r * 0.44, cy + r * 0.48), fill=255)))
+    img.alpha_composite(soft((S, S), (255, 255, 255), 0.7, S * 0.002,
+                             lambda dd: dd.ellipse((cx + r * 0.05, cy - r * 0.52, cx + r * 0.13, cy - r * 0.44), fill=255)))
+    img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"eye_{cid}.png"))
+
+
+def hair_strands(w=512, h=1024):
+    """Карта прядей: много тонких линий разной яркости, сужение к кончику (низ), прозрачные промежутки."""
+    rnd = random.Random(3)
+    S = SS
+    img = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # Плотная основа клока: широкая у корня, сужается к кончику (иначе пряди просвечивают).
+    base = Image.new("L", (w * S, h * S), 0)
+    bd = ImageDraw.Draw(base)
+    bd.polygon([(0.02 * w * S, 0), (0.98 * w * S, 0), (0.78 * w * S, 0.7 * h * S), (0.5 * w * S, 0.98 * h * S),
+                (0.22 * w * S, 0.7 * h * S)], fill=235)
+    base = base.filter(ImageFilter.GaussianBlur(10 * S))
+    core = Image.new("RGBA", (w * S, h * S), (200, 200, 200, 255))
+    core.putalpha(base)
+    img.alpha_composite(core)
+    d = ImageDraw.Draw(img)
+    for _ in range(420):
+        x0 = rnd.uniform(0.02, 0.98) * w * S
+        length = rnd.uniform(0.7, 1.0) * h * S
+        sway = rnd.uniform(-0.05, 0.05) * w * S
+        bright = int(rnd.uniform(150, 255))
+        width = rnd.uniform(1.5, 4.5) * S
+        pts = []
+        for k in range(21):
+            t = k / 20
+            x = x0 + sway * math.sin(t * math.pi) + (0.5 * w * S - x0) * t * 0.35
+            pts.append((x, t * length))
+        for k in range(20):
+            t = k / 20
+            a = int(255 * (1 - t ** 3))
+            d.line((pts[k], pts[k + 1]), fill=(bright, bright, bright, a), width=max(1, int(width * (1 - 0.7 * t))))
+    # Аниме-блик: светлая полоса в верхней трети.
+    hl = soft((w * S, h * S), (255, 255, 255), 0.0, 0, lambda dd: None)
+    arr = np.array(img).astype(np.float32)
+    yy = np.linspace(0, 1, h * S)[:, None]
+    band = np.exp(-((yy - 0.22) / 0.05) ** 2) * 0.35
+    arr[..., :3] = np.clip(arr[..., :3] * (1 + band[..., None]), 0, 255)
+    # «Растекание» цвета в прозрачные пиксели: иначе при уменьшении края прядей темнеют (тёмные «волоски»).
+    a = arr[..., 3:4] / 255.0
+    arr[..., :3] = arr[..., :3] * a + 205 * (1 - a)
+    img = Image.fromarray(arr.astype(np.uint8), "RGBA")
+    img.resize((w, h), Image.LANCZOS).save(os.path.join(OUT, "hair_strands.png"))
+
+
+def knit(size=512):
+    """Вязка «резинка»: вертикальные рубчики + мелкие петли. Серая — умножается на цвет вещи."""
+    S = size
+    ys, xs = np.mgrid[0:S, 0:S].astype(np.float32)
+    rib = 0.82 + 0.18 * np.abs(np.sin(xs / S * math.pi * 24))
+    loops = 0.94 + 0.06 * np.sin(ys / S * math.pi * 96 + np.sin(xs / S * math.pi * 48) * 2)
+    v = np.clip(rib * loops * 255, 0, 255).astype(np.uint8)
+    Image.fromarray(np.dstack([v, v, v]), "RGB").save(os.path.join(OUT, "knit.png"))
+    # Мягкая «резинка» свитера Кота (реф. 16): ровные вертикальные рубчики без «ёлочки».
+    prof = 0.5 + 0.5 * np.cos(xs / S * math.pi * 2 * 16)
+    v = np.clip((0.8 + 0.2 * prof ** 0.6) * (0.97 + 0.03 * np.sin(ys / S * math.pi * 128)) * 255, 0, 255).astype(np.uint8)
+    Image.fromarray(np.dstack([v, v, v]), "RGB").save(os.path.join(OUT, "rib.png"))
+    rnd = np.random.default_rng(5)
+    noise = rnd.normal(0, 1, (S, S)).astype(np.float32)
+    img = Image.fromarray(np.clip(noise * 40 + 128, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2))
+    a = np.array(img).astype(np.float32)
+    weave = 0.95 + 0.05 * np.sin(xs / S * math.pi * 160) * np.sin(ys / S * math.pi * 160)
+    v = np.clip((0.93 + (a - 128) / 128 * 0.05) * weave * 255, 0, 255).astype(np.uint8)
+    Image.fromarray(np.dstack([v, v, v]), "RGB").save(os.path.join(OUT, "cloth.png"))
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
     for cid, c in CHARS.items():
         face(cid, c)
+        eye(cid, c)
+    hair_strands()
+    knit()
     print("ok", sorted(os.listdir(OUT)))
 
 

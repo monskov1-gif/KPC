@@ -4,6 +4,7 @@ shader_type spatial;
 uniform vec4 albedo : source_color = vec4(1.0);
 uniform sampler2D albedo_tex : source_color, hint_default_white;
 uniform bool use_vertex_color = false;
+uniform bool use_alpha_scissor = false;
 uniform vec4 shade_color : source_color = vec4(0.80, 0.66, 0.74, 1.0);
 uniform float shade_threshold = 0.42;
 uniform float shade_softness = 0.06;
@@ -22,6 +23,9 @@ void fragment() {
 		base.rgb *= vcol.rgb;
 	}
 	ALBEDO = base.rgb;
+	if (use_alpha_scissor && base.a < 0.5) {
+		discard;
+	}
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	EMISSION = rim_color.rgb * rim * rim_strength * base.rgb;
 }

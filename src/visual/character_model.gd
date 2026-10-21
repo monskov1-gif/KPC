@@ -6,11 +6,21 @@ extends Node3D
 
 const TOON := preload("res://art/shaders/toon.gdshader")
 const OUTLINE := preload("res://art/shaders/outline.gdshader")
+const HAIR := preload("res://art/shaders/toon_hair.gdshader")
 const MODEL_DIR := "res://art/characters/"
 
 var character_id := ""
 var _root: Node3D
 var _garments: Dictionary = {}     # "слот__шаблон" -> MeshInstance3D
+var _underwear: Dictionary = {}    # "briefs"/"panties"/"bra" -> MeshInstance3D
+
+## Какие слоты одежды закрывают какую часть белья. Бельё скрывается только под вещью,
+## поэтому полностью раздеть персонажа нельзя (без вещей бельё всегда видно).
+const UNDERWEAR_COVERED_BY := {
+	"bra": ["upper_body", "outerwear", "full_body"],
+	"briefs": ["lower_body", "full_body"],
+	"panties": ["lower_body", "full_body"],
+}
 var _materials: Dictionary = {}    # кэш материалов по ключу
 var _fallback: PlaceholderAppearance
 
@@ -21,6 +31,7 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 		_root.queue_free()
 		_root = null
 	_garments.clear()
+	_underwear.clear()
 	var path := MODEL_DIR + character_id + ".glb"
 	if not ResourceLoader.exists(path):
 		push_warning("Нет 3D-модели %s — используется заглушка" % path)
@@ -62,6 +73,14 @@ func apply_items(items: Array[ClothingItem]) -> void:
 		return
 	for g in _garments.values():
 		g.visible = false
+	var slots := {}
+	for it in items:
+		slots[it.slot] = true
+	for part in _underwear:
+		var covered := false
+		for slot in UNDERWEAR_COVERED_BY.get(part, []):
+			covered = covered or slots.has(slot)
+		(_underwear[part] as MeshInstance3D).visible = not covered
 	for it in items:
 		var key := _template_for(it)
 		if key == "" or not _garments.has(key):
@@ -85,9 +104,12 @@ func _prepare(node: Node) -> void:
 	for mi in node.find_children("*", "MeshInstance3D", true, false):
 		var m := mi as MeshInstance3D
 		var name := String(m.name)
+		# underwear__* — базовый слой: всегда виден, раздеть полностью нельзя.
 		if name.begins_with("garment__"):
 			_garments[name.trim_prefix("garment__")] = m
 			m.visible = false
+		elif name.begins_with("underwear__"):
+			_underwear[name.trim_prefix("underwear__")] = m
 		for i in m.mesh.get_surface_count():
 			m.set_surface_override_material(i, _toon_for(m.mesh.surface_get_material(i), name))
 
@@ -97,34 +119,59 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 	var key := mesh_name + "/" + src_name if mesh_name.begins_with("garment__") else src_name
 	if _materials.has(key):
 		return _materials[key]
+	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
+	# glTF хранит цвет в линейном пространстве, импорт переводит его в sRGB; тун-шейдер берёт цвет как есть,
+	# поэтому возвращаем исходное значение из Blender — иначе тёмные цвета (ремень, бельё) выходят блёклыми.
+	var color: Color = (src as BaseMaterial3D).albedo_color.srgb_to_linear() if src is BaseMaterial3D else Color.WHITE
 	var m := ShaderMaterial.new()
-	m.shader = TOON
-	var color := Color.WHITE
-	if src is BaseMaterial3D:
-		color = (src as BaseMaterial3D).albedo_color
-		var t := (src as BaseMaterial3D).albedo_texture
-		if t:
-			m.set_shader_parameter("albedo_tex", t)
-	m.set_shader_parameter("albedo", color)
 	if src_name == "hair":
-		m.set_shader_parameter("use_vertex_color", true)
-		m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.86))
-		m.set_shader_parameter("rim_strength", 0.45)
-	elif src_name.begins_with("face") or src_name == "skin":
-		m.set_shader_parameter("shade_color", Color(0.93, 0.76, 0.76))
-	var outline := ShaderMaterial.new()
-	outline.shader = OUTLINE
-	# Волосам — тонкий контур: на прядях толстый контур выглядит как проволока.
-	outline.set_shader_parameter("thickness", 0.0012 if src_name == "hair" else (0.0025 if src_name.begins_with("face") else 0.0035))
-	m.next_pass = outline
+		# Карты прядей: отдельный шейдер, без контура (контур на полупрозрачных картах даёт «проволоку»).
+		m.shader = HAIR
+		m.set_shader_parameter("strands", tex)
+		_materials[key] = m
+		return m
+	m.shader = TOON
+	if tex:
+		m.set_shader_parameter("albedo_tex", tex)
+	m.set_shader_parameter("albedo", color)
+	var thickness := 0.0032
+	match src_name:
+		"hair_cap":
+			m.set_shader_parameter("use_vertex_color", true)
+			m.set_shader_parameter("shade_color", Color(0.58, 0.64, 0.86))
+			thickness = 0.0
+		"hair_solid":
+			# Объёмные пряди-клоки: тун-свет + тонкий контур, чтобы читались завитки.
+			m.set_shader_parameter("use_vertex_color", true)
+			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9))
+			thickness = 0.0012
+		"skin":
+			m.set_shader_parameter("shade_color", Color(0.94, 0.76, 0.76))
+		_:
+			if src_name.begins_with("face"):
+				m.set_shader_parameter("shade_color", Color(0.95, 0.8, 0.8))
+				m.set_shader_parameter("use_alpha_scissor", true)
+				thickness = 0.0022
+			elif src_name.begins_with("eye"):
+				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.95))
+				m.set_shader_parameter("rim_strength", 0.0)
+				thickness = 0.0
+	if thickness > 0.0:
+		var outline := ShaderMaterial.new()
+		outline.shader = OUTLINE
+		outline.set_shader_parameter("thickness", thickness)
+		if src_name.begins_with("face") and tex:
+			outline.set_shader_parameter("mask_tex", tex)
+			outline.set_shader_parameter("use_mask", true)
+		m.next_pass = outline
 	_materials[key] = m
 	return m
 
 
-## Цвет вещи: основной материал шаблона («garment_white») окрашивается, детали (цветы) остаются своими.
+## Цвет вещи: основная ткань шаблона («garment_*») окрашивается; детали (цветы, пряжка, ремень) остаются своими.
 func _tint(mi: MeshInstance3D, c: Color) -> void:
 	for i in mi.mesh.get_surface_count():
 		var mat := mi.get_surface_override_material(i) as ShaderMaterial
 		var src := mi.mesh.surface_get_material(i)
-		if mat and src and src.resource_name == "garment_white":
+		if mat and src and src.resource_name.begins_with("garment_"):
 			mat.set_shader_parameter("albedo", c)
