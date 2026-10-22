@@ -163,9 +163,9 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 				m.set_shader_parameter("shade_color", Color(0.95, 0.8, 0.8))
 				m.set_shader_parameter("use_alpha_scissor", true)
 				thickness = 0.0022
-			elif src_name in ["lash", "brow", "crease", "strap", "patch"]:
-				# Объёмные ресницы, брови, складка века, повязка и шнурок: ровный цвет, без контура
-				# (с контуром повязка читается как дыра, а ресницы — как каракули).
+			elif src_name in ["lash", "brow", "crease", "strap", "patch", "skin_line", "nipple", "nipple_tip"]:
+				# Объёмные ресницы, брови, складка века, повязка и шнурок, «наклейки» на коже (соски, линии рельефа):
+				# ровный цвет, без контура (с контуром повязка читается как дыра, а ресницы — как каракули).
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.9))
 				m.set_shader_parameter("rim_strength", 0.0)
 				thickness = 0.0

@@ -237,6 +237,9 @@ def body_joints(p):
     return J
 
 
+BODY_EXTRA = []           # «наклейки» на теле (соски, линии рельефа) — привязываются к скелету вместе с телом
+
+
 def build_mh_body(p, sex, skin_mat):
     """Тело на базовой модели MakeHuman (CC0): см. tools/art/mh_body.py. Возвращает (объект, J)."""
     sys.path.insert(0, os.path.dirname(__file__))
@@ -244,10 +247,13 @@ def build_mh_body(p, sex, skin_mat):
     s = p["s"]
     mh = p["mh"]
     vs, faces, groups = mh_body.shape(sex, teen=mh.get("teen", 0.45), thin=mh.get("thin", 0.7), bust=mh.get("bust", 0.0))
-    sk = mh_body.pose_arms(vs, groups, mh.get("arms_down", 15))
+    sk = mh_body.pose_arms(vs, groups, mh.get("arms_down", 15), clav=mh.get("clav", 0.0), spine_back=mh.get("spine_back", 0.0),
+                           neck_fwd=mh.get("neck_fwd", 0.0), knee_back=mh.get("knee_back", 0.0),
+                           legs_back=mh.get("legs_back", 0.0))
     mh_body.lengthen(vs, groups, sk, arm=mh.get("arm_len", 1.2), foot=mh.get("foot_len", 1.12))
     verts, fcs, M = mh_body.to_character(vs, faces, groups, neck_z=mh["neck_z"] * s, pelvis_z=mh["pelvis_z"] * s,
-                                          slim=mh.get("slim", 1.0), legw=mh_body.leg_weights(sk))
+                                          slim=mh.get("slim", 1.0), legw=mh_body.leg_weights(sk), leg_xs=mh.get("leg_xs"),
+                                          torso_ys=mh.get("torso_ys"), torso_xs=mh.get("torso_xs"))
     me = bpy.data.meshes.new("body")
     me.from_pydata([Vector(v) for v in verts], [], fcs)
     me.validate()
@@ -256,13 +262,20 @@ def build_mh_body(p, sex, skin_mat):
     bm = bmesh.new()
     bm.from_mesh(me)
     top = [e for e in bm.edges if e.is_boundary and all(v.co.z > mh["neck_z"] * s - 0.03 * s for v in e.verts)]
-    for step in range(3):
+    # шаги шеи: (сужение X, сужение Y, сдвиг Y (+ назад), подъём) — у Кота шея длинная и идёт вперёд к челюсти
+    nk = mh.get("neck_steps", [(0.97, 0.9, 0.009, 0.03)] * 3)
+    for kx_, ky_, dy_, dz_ in nk:
         res = bmesh.ops.extrude_edge_only(bm, edges=top)
         nv = [g for g in res["geom"] if isinstance(g, bmesh.types.BMVert)]
         c = sum((v.co for v in nv), Vector()) / len(nv)
+        ex = max(abs(v.co.x - c.x) for v in nv) or 1e-4
+        ey = max(abs(v.co.y - c.y) for v in nv) or 1e-4
         for v in nv:
             d = v.co - c
-            v.co = c + Vector((d.x * 0.97, d.y * 0.9, 0)) + Vector((0, 0.009 * s, 0.03 * s))
+            # кольцо — к эллипсу: иначе бугор кадыка со среза MakeHuman тянется вверх гребнем и даёт черты контура
+            a = math.atan2(d.y / ey, d.x / ex)
+            d = d.lerp(Vector((ex * math.cos(a), ey * math.sin(a), d.z)), mh.get("neck_round", 0.0))
+            v.co = c + Vector((d.x * kx_, d.y * ky_, 0)) + Vector((0, dy_ * s, dz_ * s))
         top = [g for g in res["geom"] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     # На открытой (срезанной у шеи) сетке recalc иногда выбирает «внутрь» — проверяем по торсу и при нужде
@@ -287,7 +300,13 @@ def build_mh_body(p, sex, skin_mat):
     # (копии тела) остаются лёгкими для веб-версии.
     shade_smooth(o)
     me.materials.append(skin_mat)
-    paint_skin(o, M, s)
+    paint_skin(o, M, s, mh.get("anat"))
+    global BODY_EXTRA
+    BODY_EXTRA = []
+    if mh.get("anat", {}).get("marks"):
+        mk = skin_marks(o, M, s, mh["anat"])
+        if mk is not None:
+            BODY_EXTRA.append(mk)
     V = lambda k: Vector(M[k])
     spines = sorted([k for k in M if k.startswith("spine-")], key=lambda k: M[k][2])
     J = {"pelvis": V("pelvis"), "spine": V(spines[0]), "chest": V(spines[1]), "upchest": V(spines[-1]), "neck": V("neck")}
@@ -304,7 +323,7 @@ def build_mh_body(p, sex, skin_mat):
     return o, J
 
 
-def paint_skin(o, M, s):
+def paint_skin(o, M, s, anat=None):
     """Базовая «отрисовка» тела в цвете вершин: впадины анатомии темнее (ключицы, межрёберье, пресс,
     подмышки, колени, щиколотки — по кривизне самой сетки), тёплый румянец на коленях, локтях, плечах,
     костяшках и пальцах ног. Без этого тело в тун-шейдере выглядит плоской заливкой."""
@@ -337,6 +356,7 @@ def paint_skin(o, M, s):
     P = lambda k: pts[k] if k in pts else None
     neck, pel = P("neck"), P("pelvis")
     tz = lambda f: pel.z + f * (neck.z - pel.z)            # высота как доля таз→шея
+    anat = anat or {}
     strokes = []
     for sx in (1, -1):
         sh = P("l-shoulder" if sx > 0 else "r-shoulder")
@@ -344,12 +364,20 @@ def paint_skin(o, M, s):
         hp = P("l-upper-leg" if sx > 0 else "r-upper-leg")
         strokes += [
             (Vector((sx * 0.012, 0, tz(0.93))), Vector((sx * abs(sh.x) * 0.9, 0, tz(0.97))), 0.0132, 0.48, -1),   # ключица
-            (Vector((sx * 0.012, 0, tz(0.70))), Vector((sx * 0.07, 0, tz(0.69))), 0.0198, 0.32, -1),   # низ грудной
-            (Vector((sx * 0.052, 0, tz(0.75))), Vector((sx * 0.052, 0, tz(0.749))), 0.012, 0.75, -1),       # сосок
-            (Vector((sx * 0.07, 0, tz(0.69))), Vector((sx * 0.085, 0, tz(0.76))), 0.0176, 0.18, -1),
-            (Vector((sx * 0.004, 0, tz(0.56))), Vector((sx * 0.036, 0, tz(0.555))), 0.0088, 0.36, -1),          # пресс
-            (Vector((sx * 0.004, 0, tz(0.44))), Vector((sx * 0.034, 0, tz(0.435))), 0.0088, 0.33, -1),
-            (Vector((sx * 0.004, 0, tz(0.32))), Vector((sx * 0.032, 0, tz(0.315))), 0.0088, 0.11, -1),
+            (Vector((sx * 0.012, 0, tz(anat.get("pec_t", 0.70)))), Vector((sx * 0.07, 0, tz(anat.get("pec_t", 0.70) - 0.01))),
+             0.0198, 0.32, -1),   # низ грудной
+            # сосок: если он отдельной «наклейкой» (anat["marks"]) — здесь только мягкий ореол вокруг
+            (Vector((sx * anat.get("nipple_x", 0.052), 0, tz(anat.get("nipple_t", 0.75)))),
+             Vector((sx * anat.get("nipple_x", 0.052), 0, tz(anat.get("nipple_t", 0.75)) - 0.001)),
+             0.012 if not anat.get("marks") else 0.016, 0.75 if not anat.get("marks") else 0.18, -1),
+            (Vector((sx * 0.07, 0, tz(anat.get("pec_t", 0.70) - 0.01))), Vector((sx * 0.085, 0, tz(anat.get("pec_t", 0.70) + 0.06))),
+             0.0176, 0.18, -1),
+        ]
+        ab = anat.get("abs_t", (0.56, 0.44, 0.32))
+        strokes += [
+            (Vector((sx * 0.004, 0, tz(ab[0]))), Vector((sx * 0.036, 0, tz(ab[0] - 0.005))), 0.0088, 0.36, -1),          # пресс
+            (Vector((sx * 0.004, 0, tz(ab[1]))), Vector((sx * 0.034, 0, tz(ab[1] - 0.005))), 0.0088, 0.33, -1),
+            (Vector((sx * 0.004, 0, tz(ab[2]))), Vector((sx * 0.032, 0, tz(ab[2] - 0.005))), 0.0088, 0.11, -1),
             (Vector((sx * 0.055, 0, tz(0.63))), Vector((sx * 0.082, 0, tz(0.59))), 0.0088, 0.14, -1),           # рёбра
             (Vector((sx * 0.058, 0, tz(0.56))), Vector((sx * 0.084, 0, tz(0.52))), 0.0088, 0.12, -1),
             (Vector((sx * 0.06, 0, tz(0.49))), Vector((sx * 0.083, 0, tz(0.45))), 0.0088, 0.11, -1),
@@ -361,7 +389,7 @@ def paint_skin(o, M, s):
         ]
     strokes += [
         (Vector((0, 0, tz(0.69))), Vector((0, 0, tz(0.24))), 0.0088, 0.15, -1),      # белая линия живота
-        (Vector((0, 0, tz(0.17))), Vector((0, 0, tz(0.165))), 0.009, 0.57, -1),      # пупок
+        (Vector((0, 0, tz(anat.get("navel_t", 0.17)))), Vector((0, 0, tz(anat.get("navel_t", 0.17)) - 0.0025)), 0.009, 0.57, -1),  # пупок
         (Vector((0, 0, tz(0.91))), Vector((0, 0, tz(0.9))), 0.0176, 0.34, -1),        # ярёмная ямка
         (Vector((0, 0, tz(0.95))), Vector((0, 0, tz(0.12))), 0.0132, 0.23, 1),        # позвоночник
     ]
@@ -399,6 +427,89 @@ def paint_skin(o, M, s):
         for li in poly.loop_indices:
             c = vcol[me.loops[li].vertex_index]
             col.data[li].color = (c.x, c.y, c.z, 1.0)
+
+
+def skin_marks(body, M, s, anat):
+    """Соски и тонкие линии рельефа (ключицы, низ грудных, рёбра) — как на Meshy-листе: отдельная сетка-«наклейка»,
+    прижатая к коже (вершинной покраской на сетке MakeHuman ~1.5 см такую мелочь не нарисовать).
+    Координаты — x (м) и высота как доля таз→шея (t); точки проецируются на тело лучом спереди."""
+    neck, pel = Vector(M["neck"]), Vector(M["pelvis"])
+    tz = lambda f: pel.z + f * (neck.z - pel.z)
+    tree = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
+
+    def on_skin(x, t):
+        hit = tree.ray_cast(Vector((x, -1.0, tz(t))), Vector((0, 1, 0)))
+        if hit[0] is None:
+            return None, None
+        n = hit[1] if hit[1].y < 0 else -hit[1]
+        return hit[0], n
+    verts, faces, mats = [], [], []
+    lift = 0.0007 * s
+
+    def disc(x, t, r, mi, seg=14):
+        c, n = on_skin(x, t)
+        if c is None:
+            return
+        e1 = n.cross(Vector((0, 0, 1))).normalized()
+        e2 = n.cross(e1).normalized()
+        i0 = len(verts)
+        verts.append(c + n * (lift * 1.3))
+        for k in range(seg):
+            a = 2 * math.pi * k / seg
+            q = c + (e1 * math.cos(a) + e2 * math.sin(a)) * r
+            loc, nn, _, _ = tree.find_nearest(q)
+            nn = nn if nn.dot(n) > 0 else -nn
+            verts.append(loc + nn * lift)
+        for k in range(seg):
+            faces.append((i0, i0 + 1 + k, i0 + 1 + (k + 1) % seg))
+            mats.append(mi)
+
+    def line(pts, w, mi):
+        """Тонкая линия по коже: pts — [(x, t)], ширина w (м) с сужением к концам."""
+        P = []
+        for (x0, t0), (x1, t1) in zip(pts, pts[1:]):
+            for k in range(6):
+                f = k / 6
+                q = on_skin(x0 + (x1 - x0) * f, t0 + (t1 - t0) * f)
+                if q[0] is not None:
+                    P.append(q)
+        q = on_skin(*pts[-1])
+        if q[0] is not None:
+            P.append(q)
+        m = len(P)
+        if m < 3:
+            return
+        i0 = len(verts)
+        for i, (c, n) in enumerate(P):
+            T = (P[min(i + 1, m - 1)][0] - P[max(i - 1, 0)][0]).normalized()
+            sd = n.cross(T).normalized()
+            u = i / (m - 1)
+            ww = w * s * math.sin(math.pi * u) ** 0.6 * 0.5
+            verts.append(c + n * lift - sd * ww)
+            verts.append(c + n * lift + sd * ww)
+        for i in range(m - 1):
+            a = i0 + 2 * i
+            faces.append((a, a + 2, a + 3, a + 1))
+            mats.append(mi)
+    for sx in (1, -1):
+        nx, nt = anat["nipple_x"] * sx, anat["nipple_t"]
+        disc(nx, nt, anat.get("areola_r", 0.0065) * s, 0)
+        disc(nx, nt, anat.get("areola_r", 0.0065) * s * 0.38, 2, seg=10)
+        for ln in anat.get("lines", []):
+            line([(sx * x, t) for x, t in ln[0]], ln[1], 1)
+    if not faces:
+        return None
+    me = bpy.data.meshes.new("body_marks")
+    me.from_pydata(verts, [], faces)
+    me.validate()
+    o = new_obj("body_marks", me)
+    for name, col in (("nipple", anat.get("areola", (0.88, 0.6, 0.6))), ("skin_line", anat.get("line", (0.72, 0.48, 0.5))),
+                      ("nipple_tip", anat.get("tip", (0.82, 0.52, 0.54)))):
+        me.materials.append(mat(name, col + (1,), rough=0.6))
+    for poly, mi in zip(me.polygons, mats):
+        poly.material_index = mi
+        poly.use_smooth = True
+    return o
 
 
 def body_edges():
@@ -1117,6 +1228,59 @@ def ribbon(pts, ups, sides, widths, lift, m, ridge=0.32, thick=0.18):
     return o
 
 
+def _env_clamp(co, hd, env, margin=0.0):
+    """Точка, мягко поджатая внутрь огибающей копны: полуширина W и вынос назад B по высоте
+    zn = (z − cz)/rz (в долях rx/ry); внутри 0.75·предела без изменений, дальше плавно (tanh) до предела."""
+    rx, ry, rz, cz = hd
+
+    def lim(table, zn):
+        if zn <= table[0][0]:
+            return table[0][1]
+        for (z0, a0), (z1, a1) in zip(table, table[1:]):
+            if zn <= z1:
+                return a0 + (a1 - a0) * (zn - z0) / (z1 - z0)
+        return table[-1][1]
+
+    def soft(r, R):
+        R = max(R - margin, 1e-4)
+        r0 = 0.75 * R
+        return r if r <= r0 else r0 + (R - r0) * math.tanh((r - r0) / (R - r0))
+    zn = (co.z - cz) / rz
+    x = math.copysign(soft(abs(co.x), lim(env["side"], zn) * rx), co.x)
+    y = soft(co.y, lim(env["back"], zn) * ry) if co.y > 0 and env.get("back") else co.y
+    return Vector((x, y, co.z))
+
+
+def hair_envelope(obj, hd, env):
+    """Силуэт копны по референсу (Meshy-лист): гладкая поверхность (шлем) поджимается по вершинам."""
+    me = obj.data
+    inv = obj.matrix_world.inverted()
+    for v in me.vertices:
+        v.co = inv @ _env_clamp(obj.matrix_world @ v.co, hd, env)
+    me.update()
+
+
+def envelope_pts(pts, hd, env, margin=0.008, rigid=False):
+    """Осевая линия пряди внутрь огибающей БЕЗ сплющивания локонов: сдвиг считается в каждой точке, берётся
+    наибольший в окне ±8 точек и сглаживается вдоль пряди — завиток смещается целиком, как жёсткий.
+    rigid — вся прядь (кудрь-спираль) одним сдвигом, по самой выступающей точке."""
+    d = [_env_clamp(P, hd, env, margin) - P for P in pts]
+    if rigid:
+        big = max(d, key=lambda q: q.length)
+        return [P + big for P in pts]
+    n = len(pts)
+    mx = [max(d[max(0, i - 8):i + 9], key=lambda q: q.length) for i in range(n)]
+    out = []
+    for i in range(n):
+        acc, ws = Vector(), 0.0
+        for j in range(max(0, i - 8), min(n, i + 9)):
+            w = math.exp(-0.5 * ((i - j) / 4.0) ** 2)
+            acc += mx[j] * w
+            ws += w
+        out.append(pts[i] + acc / ws)
+    return out
+
+
 def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
     """Причёска по принципу игровых аниме-моделей (изучено на референсах art/references/3d и Lyney):
     1) «шлем» — масса волос вокруг черепа (копия головы, отодвинутая наружу; задаёт объём и форму);
@@ -1234,6 +1398,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                 up = N
             pts.append(P.copy())
             ups.append(up.copy())
+        if hp.get("envelope"):
+            pts = envelope_pts(pts, hd, hp["envelope"])
         for i in range(len(pts)):
             T = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
             sd = T.cross(ups[i])
@@ -1264,11 +1430,11 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
             if o is not None:
                 objs.append(o)
     # Кудри-спирали (Meshy-лист: бока и затылок — мелкие тугие локоны): круглые трубки, винтом вниз-наружу.
-    rg = hp.get("ringlet_coils")
-    if rg:
+    rgs = hp.get("ringlet_coils") or []
+    for rg in (rgs if isinstance(rgs, list) else [rgs]):          # несколько наборов: основной + нижние у челюсти
         for j in range(rg["count"]):
-            theta = rnd.uniform(-math.pi, math.pi)
-            if abs(theta) < rg.get("skip_front", 0.7):
+            theta = rnd.uniform(*rg.get("theta", (-math.pi, math.pi)))
+            if abs(theta) < rg.get("skip_front", 0.7) or abs(theta) > rg.get("max_theta", 9.0):
                 continue
             phi = rnd.uniform(*rg["phi"])
             P0, N0 = on_helm(theta, phi)
@@ -1291,6 +1457,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                 a = a0 + spin * 2 * math.pi * turns * t
                 rr = r * (0.6 + 0.4 * min(1.0, t * 3))
                 pts.append(P0 + N0 * (0.003 + r * 0.8) + axis * drop * t + (e1 * math.cos(a) + e2 * math.sin(a)) * rr)
+            if hp.get("envelope"):
+                pts = envelope_pts(pts, hd, hp["envelope"], margin=0.004)
             objs.append(clump(pts, rg["w"] * 1.0, rg["w"] * 0.45, (rx, ry, rz, cz), mat_strand, flat=0.85, seg=6, v_tip=0.0))
     # Прядь на глаз под повязкой — длинная лента через глаз до щеки.
     if hp.get("eye_lock"):
@@ -1303,12 +1471,17 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
     hair_obj = join(objs, "hair_cards")
     # Цвет по высоте (Meshy-лист): мятный сверху → голубой к низу копны; каждая прядь чуть своего оттенка.
     paint_gradient(hair_obj, cz + rz * 0.75, cz - rz * 0.35, hp["c_root"], hp["c_tip"], strand_jitter=hp.get("strand_jitter", 0.0))
-    paint_gradient(helm, cz + rz * 1.2, cz - rz * 0.4, hp["c_root"], hp["c_tip"])
+    # шлем — внутренняя масса: темнее прядей (hp «cap_shade»), читается как тень между локонами, а не гладкий колпак
+    shade = hp.get("cap_shade", 1.0)
+    paint_gradient(helm, cz + rz * 1.2, cz - rz * 0.4, tuple(c * shade for c in hp["c_root"]),
+                   tuple(c * shade for c in hp["c_tip"]))
     # Толщина шлема: изнанка у щёк — настоящая поверхность цвета волос, а не «дыра» с контуром.
     sol = helm.modifiers.new("sol", "SOLIDIFY")
     sol.thickness = 0.004
     sol.offset = -1
     apply_mods(helm)
+    if hp.get("envelope"):
+        hair_envelope(helm, hd, hp["envelope"])
     parts = [helm]
     if hp.get("ahoge_spiral"):
         st = whorl.copy()
@@ -2331,14 +2504,35 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
                  # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
-                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": 11, "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.86}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": -2, "clav": 14, "arm_len": 1.1, "spine_back": 8, "knee_back": 4, "legs_back": 2.5,
+                        "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.86,
+                        # ширина ног и глубина торса — по наложению на Meshy-лист (tools/art/body_overlay.sh)
+                        "leg_xs": [(0.0, 1.0), (0.1, 1.0), (0.2, 0.95), (0.33, 0.74), (0.46, 0.85), (0.555, 0.88),
+                                   (0.72, 0.75), (0.82, 0.9), (0.92, 0.95), (1.0, 1.0)],
+                        "torso_ys": [(0.0, 1.0), (0.17, 1.03), (0.38, 0.86), (0.59, 0.88), (0.77, 1.0), (1.0, 1.0)],
+                        "torso_xs": [(0.0, 1.0), (0.3, 1.0), (0.4, 0.95), (0.5, 1.0), (0.84, 1.0), (0.9, 0.93), (0.95, 0.85),
+                                     (1.0, 0.9)],
+                        "neck_round": 0.6,
+                        "neck_steps": [(0.98, 0.95, 0.0, 0.03), (0.97, 0.93, -0.006, 0.03), (0.97, 0.92, -0.01, 0.03)],
+                        # анатомия по Meshy-листу: соски, пупок и тонкие линии рельефа (x в м, t — доля таз→шея)
+                        "anat": {"marks": True, "nipple_x": 0.084, "nipple_t": 0.647, "navel_t": 0.255, "areola_r": 0.006,
+                                 "pec_t": 0.585, "abs_t": (0.5, 0.42, 0.34), "line": (0.8, 0.58, 0.58),
+                                 "areola": (0.92, 0.66, 0.64), "tip": (0.85, 0.55, 0.56),
+                                 "lines": [
+                                     ([(0.035, 0.895), (0.07, 0.91), (0.1, 0.905), (0.125, 0.885)], 0.0016),   # ключица
+                                     ([(0.05, 0.575), (0.08, 0.568), (0.105, 0.59), (0.122, 0.625)], 0.0014),  # низ грудной
+                                     ([(0.1, 0.53), (0.083, 0.505)], 0.001),                                   # рёбра
+                                     ([(0.098, 0.465), (0.082, 0.44)], 0.001),
+                                     ([(0.094, 0.4), (0.079, 0.38)], 0.0009)]}}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
         # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.34, "nape": 1.3, "thick_top": 0.085, "thick_side": 0.04,
-                 "cheek_puff": 0.3, "face_open_x": 0.68, "thick": 1.0,
+        # Силуэт копны — по наложению на Meshy-лист (tools/art/body_overlay.sh, таблица «причёска»): спереди почти
+        # одной ширины от макушки до щёк (~0.22 Hc) и сужается к подбородку, сзади прилегает к затылку и шее.
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.34, "nape": 0.95, "thick_top": 0.05, "thick_side": 0.02,
+                 "cheek_puff": 0.0, "face_open_x": 0.68, "thick": 1.0,
                  "whorl": (0.12, 1.0),
                  # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
                  "groups": [
@@ -2356,8 +2550,12 @@ CHARACTERS = {
                       "sway": 0.3, "curl": (120, 220), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 1.15,
                       "curl_both": True},
                      # нижний слой: свисающие локоны закрывают затылок и шею до ворота
-                     {"count": 24, "theta": (-3.14, 3.14), "phi": (1.3, 1.8), "length": (0.16, 0.27), "w": (0.021, 0.028),
+                     {"count": 24, "theta": (-3.14, 3.14), "phi": (1.3, 1.65), "length": (0.14, 0.24), "w": (0.021, 0.028),
                       "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 1.2,
+                      "curl_both": True},
+                     # боковые локоны до линии подбородка — обрамляют челюсть (реф.: копна сужается книзу к лицу)
+                     {"count": 26, "theta": (-2.1, 2.1), "phi": (1.55, 1.9), "length": (0.2, 0.26), "w": (0.014, 0.018),
+                      "sway": 0.12, "curl": (320, 440), "curl_frac": 0.35, "bias": 0.97, "lift": 0.01, "skip_front": 1.3,
                       "curl_both": True},
                      # мелкие завитки по поверхности (фактура кудрей)
                      {"count": 60, "theta": (-3.14, 3.14), "phi": (0.7, 1.3), "length": (0.05, 0.08), "w": (0.017, 0.022),
@@ -2366,11 +2564,19 @@ CHARACTERS = {
                  ],
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
                  "ahoge_spiral": True, "ahoge_h": 0.6, "strand_jitter": 0.06,
-                 "ringlet_coils": {"count": 280, "phi": (0.8, 2.0), "r": (0.009, 0.014), "turns": (1.4, 2.4),
-                                   "drop": (0.045, 0.09), "w": 0.022, "splay": 0.35, "skip_front": 0.72},
-                 "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72)},
+                 "ringlet_coils": [{"count": 380, "phi": (0.85, 1.8), "r": (0.009, 0.014), "turns": (1.4, 2.4),
+                                    "drop": (0.035, 0.07), "w": 0.022, "splay": 0.18, "skip_front": 0.72},
+                                   # нижние кудри по бокам — свисают к линии подбородка (реф.: копна обрамляет челюсть)
+                                   {"count": 70, "phi": (1.7, 2.05), "r": (0.009, 0.013), "turns": (1.6, 2.4),
+                                    "drop": (0.04, 0.065), "w": 0.021, "splay": 0.45, "skip_front": 1.1, "max_theta": 2.3}],
+                 # огибающая силуэта (zn, предел в rx / ry) — снята с Meshy-листа по наложению
+                 "envelope": {"side": [(-1.5, 0.7), (-1.25, 1.05), (-1.0, 1.35), (-0.61, 1.77), (-0.23, 1.9), (0.16, 1.84), (0.54, 1.9),
+                                       (0.93, 1.82), (1.32, 1.84)],
+                              "back": [(-1.39, 0.6), (-1.0, 0.73), (-0.61, 1.12), (-0.23, 1.39), (0.16, 1.59), (0.54, 1.53),
+                                       (0.93, 1.26), (1.32, 0.99)]},
+                 "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72), "cap_shade": 0.8},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
-        "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.35, "tilt": 24, "yaw": -4},
+        "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.1, "h": 1.12, "d": 0.35, "tilt": 24, "yaw": -4},
         # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
         "clips": {"fish": [(-1.3, 1.45, 1.38, 2.4, 2.0), (1.3, 1.45, 1.38, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.4, 0.1, 2.0)},
         "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.05, 0.09, 0.09)},
@@ -2612,7 +2818,7 @@ def build(cid):
     export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))
     on_head = ("garment__headwear", "garment__face")
-    bind(rig, [body] + body_layers + [g for g in garments if not g.name.startswith(on_head)])
+    bind(rig, [body] + BODY_EXTRA + body_layers + [g for g in garments if not g.name.startswith(on_head)])
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
 

@@ -206,13 +206,26 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs_in=3.0):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs_in=3.0, clav=0.0, spine_back=0.0,
+              neck_fwd=0.0, knee_back=0.0, legs_back=0.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
-    предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
+    предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0).
+    Осанка (градусы): clav — ключицы вниз (покатые плечи), spine_back — грудной отдел назад (грудь не выпячена,
+    основание шеи за подбородком), neck_fwd — шея вперёд, knee_back — колени чуть назад (бедро назад, голень
+    вперёд, стопа ровно), legs_back — ноги целиком назад от тазобедренного сустава (стопа ровно),
+    как стоит модель на листе."""
     import math
     sk = Skeleton(vs)
+    # +угол вокруг X (MakeHuman: +Z — вперёд) наклоняет торс вперёд, а опущенную ногу — назад
+    if spine_back:
+        sk.rotate("spine03", _rot([1, 0, 0], -math.radians(spine_back) * 0.5))
+        sk.rotate("spine01", _rot([1, 0, 0], -math.radians(spine_back) * 0.5))
+    if neck_fwd:
+        sk.rotate("neck01", _rot([1, 0, 0], math.radians(neck_fwd)))
     for sx, S in ((1, "L"), (-1, "R")):
         ua, la, wr = f"upperarm01.{S}", f"lowerarm01.{S}", f"wrist.{S}"
+        if clav:
+            sk.rotate(f"clavicle.{S}", _rot([0, 0, 1], -math.radians(clav) * sx))
         # опускание делим: треть — плечо (shoulder01), две трети — плечевая кость (без сжатия подмышки)
         sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 6) * sx))
         sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 5 / 6) * sx))
@@ -270,6 +283,14 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs
     for sx, S in ((1, "L"), (-1, "R")):
         sk.rotate(f"upperleg01.{S}", _rot([0, 0, 1], -math.radians(legs_in) * sx))
         sk.rotate(f"foot.{S}", _rot([0, 0, 1], math.radians(legs_in) * sx))
+        if legs_back:
+            sk.rotate(f"upperleg01.{S}", _rot([1, 0, 0], math.radians(legs_back)))
+            sk.rotate(f"foot.{S}", _rot([1, 0, 0], -math.radians(legs_back)))
+        if knee_back:
+            # бедро назад на knee_back, голень вперёд вдвое (лодыжка почти на месте), стопа — обратно в пол
+            sk.rotate(f"upperleg01.{S}", _rot([1, 0, 0], math.radians(knee_back)))
+            sk.rotate(f"lowerleg01.{S}", _rot([1, 0, 0], -math.radians(knee_back) * 2.0))
+            sk.rotate(f"foot.{S}", _rot([1, 0, 0], math.radians(knee_back)))
     sk.apply(groups)
     return sk
 
@@ -412,7 +433,8 @@ def leg_weights(sk):
     return out
 
 
-def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=None, legw=None):
+def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=None, legw=None, leg_xs=None,
+                 torso_ys=None, torso_xs=None):
     """Перевод в координаты игры (Z вверх, лицо −Y, метры) с пропорциями персонажа.
     Ниже таза — масштаб, ставящий таз на pelvis_z (ноги); выше — масштаб от таза до шеи (neck_z).
     slim — сужение по X/Y. Вершины головы (выше cut_y, по высоте MakeHuman) убираются.
@@ -445,6 +467,15 @@ def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=Non
         remap[i] = len(out_v)
         out_v.append(conv(vs[i], lw_of(i)))
     out_f = [[remap[i] for i in f] for f in faces if all(i in remap for i in f)]
+    if leg_xs:
+        _slim_legs(out_v, [lw_of(i) for i in sorted(keep)], pelvis_z, leg_xs)
+    if torso_ys:
+        _slim_torso_depth(out_v, [lw_of(i) for i in sorted(keep)], pelvis_z, neck_z, torso_ys, s)
+    if torso_xs:
+        # ширина торса по высоте (к оси X = 0): переход длинной шеи в покатые плечи — резче, как у рефа
+        for i, (v, lw) in enumerate(zip(out_v, [lw_of(i) for i in sorted(keep)])):
+            k = 1 - (1 - lw) * (1 - _interp(torso_xs, (v[2] - pelvis_z) / (neck_z - pelvis_z)))
+            out_v[i] = (v[0] * k, v[1], v[2])
     J = {}
     for name in groups:
         if name.startswith("joint-"):
@@ -452,3 +483,71 @@ def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=Non
             lw = 1.0 if any(t in n for t in ("upper-leg", "knee", "ankle", "foot", "toe", "ground")) else 0.0
             J[n] = conv(joint(vs, groups, n), lw)
     return out_v, out_f, J
+
+
+def _slim_legs(out_v, lws, pelvis_z, leg_xs):
+    """Ноги уже по ширине (вид спереди), не трогая глубину: каждая нога сжимается по X к своей средней линии
+    на этой высоте. leg_xs — [(h, k)], h — высота в долях от пола до таза, k — множитель ширины.
+    Нужен, чтобы подогнать бедро/икру к силуэту референса, не сдвигая ноги к центру и не сужая лодыжку."""
+    def k_at(h):
+        if h <= leg_xs[0][0]:
+            return leg_xs[0][1]
+        for (h0, k0), (h1, k1) in zip(leg_xs, leg_xs[1:]):
+            if h <= h1:
+                return k0 + (k1 - k0) * (h - h0) / (h1 - h0)
+        return leg_xs[-1][1]
+    # средняя линия ноги на высоте — по крайним точкам в окне ±2 см (кольца сетки MakeHuman наклонные,
+    # в тонкий срез попадает лишь часть кольца)
+    step = 0.005 * pelvis_z
+    bins = {}
+    for v, lw in zip(out_v, lws):
+        if lw > 0.9 and v[0] != 0:
+            key = (v[0] > 0, round(v[2] / step))
+            lo, hi = bins.get(key, (v[0], v[0]))
+            bins[key] = (min(lo, v[0]), max(hi, v[0]))
+    win = {}
+    for (side, k) in bins:
+        near = [bins[(side, k + d)] for d in range(-4, 5) if (side, k + d) in bins]
+        win[(side, k)] = (min(q[0] for q in near), max(q[1] for q in near))
+    bins = win
+    for i, (v, lw) in enumerate(zip(out_v, lws)):
+        if lw <= 0:
+            continue
+        key = (v[0] > 0, round(v[2] / step))
+        if key not in bins:
+            continue
+        c = sum(bins[key]) / 2
+        k = 1 - lw * (1 - k_at(v[2] / pelvis_z))
+        out_v[i] = (c + (v[0] - c) * k, v[1], v[2])
+
+
+def _interp(table, h):
+    if h <= table[0][0]:
+        return table[0][1]
+    for (h0, k0), (h1, k1) in zip(table, table[1:]):
+        if h <= h1:
+            return k0 + (k1 - k0) * (h - h0) / (h1 - h0)
+    return table[-1][1]
+
+
+def _slim_torso_depth(out_v, lws, pelvis_z, neck_z, torso_ys, s):
+    """Глубина торса (вид сбоку) по высоте: грудная клетка у худого подростка площе, чем у базы MakeHuman.
+    torso_ys — [(t, k)], t — доля высоты от таза (0) до шеи (1); сжатие по Y к средней линии торса на этой высоте."""
+    step = 0.005
+    bins = {}
+    for v, lw in zip(out_v, lws):
+        if lw < 0.1 and abs(v[0]) < 0.08 * s:
+            key = round(v[2] / step)
+            lo, hi = bins.get(key, (v[1], v[1]))
+            bins[key] = (min(lo, v[1]), max(hi, v[1]))
+    bins = {k: (min(bins[k + d][0] for d in range(-3, 4) if k + d in bins),
+                max(bins[k + d][1] for d in range(-3, 4) if k + d in bins)) for k in bins}
+    for i, (v, lw) in enumerate(zip(out_v, lws)):
+        if lw >= 1:
+            continue
+        key = round(v[2] / step)
+        if key not in bins:
+            continue
+        c = sum(bins[key]) / 2
+        k = 1 - (1 - lw) * (1 - _interp(torso_ys, (v[2] - pelvis_z) / (neck_z - pelvis_z)))
+        out_v[i] = (v[0], c + (v[1] - c) * k, v[2])
