@@ -1244,7 +1244,7 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                   f"chord={(pts[-1]-pts[0]).length:.3f} zmin={min(q.z for q in pts):.3f} nc={nc} tail={[round(q.z, 3) for q in pts[-nc-1::max(1, nc // 5)]]}")
         m = len(pts)
         # Ширина держится почти до конца (завиток должен быть виден), сужение — только у самого кончика.
-        widths = [w0 * (0.75 + 0.25 * min(1.0, (i / (m - 1)) / 0.2)) * (1 - max(0.0, (i / (m - 1) - 0.72) / 0.28) ** 1.4)
+        widths = [w0 * (0.3 + 0.7 * min(1.0, (i / (m - 1)) / 0.2)) * (1 - max(0.0, (i / (m - 1) - 0.72) / 0.28) ** 1.4)
                   for i in range(m)]
         return ribbon(pts, ups, sides, widths, lift, mat_strand, thick=thick)
 
@@ -1496,10 +1496,10 @@ def cat_ear_mesh(W, H, D, side, m_out, m_in, m_fur):
         bm.faces.new((front[0][i], front[0][i + 1], back[0][i + 1], back[0][i]))
     # Шерсть: тонкие белёсые пряди-треугольники из середины уха вверх-наружу по краю тёмной части.
     rnd = random.Random(7 + side)
-    for k in range(24):
-        t = 0.1 + 0.6 * rnd.random()
+    for k in range(30):
+        t = 0.04 + 0.42 * rnd.random()
         v = H * t
-        u = -side * rnd.uniform(0.45, 0.62)              # шерсть — только с внутреннего края уха
+        u = rnd.uniform(-0.5, 0.5)                       # шерсть пучками в низу чашки (Meshy)
         x = centre(v) + u * half_w(v)
         y = -D * 0.15 + D * 0.9 * (1 - u * u) * math.sin(math.pi * min(1.0, t * 1.1)) - 0.0015
         L = H * rnd.uniform(0.25, 0.45)
@@ -1525,7 +1525,7 @@ def build_ears(hd, color, inner, ear):
     """Кошачьи уши на шлеме волос: форма — cat_ear_mesh; наклон наружу (tilt) и разворот к зрителю (yaw)."""
     rx, ry, rz, cz = hd
     objs, tips = [], []
-    fur = mat("ear_fur", (0.72, 0.74, 0.74, 1), rough=0.6)
+    fur = mat("ear_fur", (0.5, 0.53, 0.54, 1), rough=0.6)
     for side in (-1, 1):
         base = conform(on_scalp(hd, side * ear["theta"], ear["phi"], ear["lift"]), ear["lift"])
         W, H, D = rx * ear["w"], rx * ear["h"], rx * ear["d"]
@@ -2331,13 +2331,13 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
                  # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
-                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": 11, "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": 11, "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.86}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
         # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.28, "nape": 1.3, "thick_top": 0.085, "thick_side": 0.04,
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.34, "nape": 1.3, "thick_top": 0.085, "thick_side": 0.04,
                  "cheek_puff": 0.3, "face_open_x": 0.68, "thick": 1.0,
                  "whorl": (0.12, 1.0),
                  # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
@@ -2356,7 +2356,7 @@ CHARACTERS = {
                       "sway": 0.3, "curl": (120, 220), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 1.15,
                       "curl_both": True},
                      # нижний слой: свисающие локоны закрывают затылок и шею до ворота
-                     {"count": 24, "theta": (-3.14, 3.14), "phi": (1.3, 1.8), "length": (0.14, 0.24), "w": (0.021, 0.028),
+                     {"count": 24, "theta": (-3.14, 3.14), "phi": (1.3, 1.8), "length": (0.16, 0.27), "w": (0.021, 0.028),
                       "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 1.2,
                       "curl_both": True},
                      # мелкие завитки по поверхности (фактура кудрей)
@@ -2366,8 +2366,8 @@ CHARACTERS = {
                  ],
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
                  "ahoge_spiral": True, "ahoge_h": 0.6, "strand_jitter": 0.06,
-                 "ringlet_coils": {"count": 280, "phi": (0.8, 1.9), "r": (0.009, 0.014), "turns": (1.4, 2.4),
-                                   "drop": (0.03, 0.065), "w": 0.013, "splay": 0.35, "skip_front": 0.72},
+                 "ringlet_coils": {"count": 280, "phi": (0.8, 2.0), "r": (0.009, 0.014), "turns": (1.4, 2.4),
+                                   "drop": (0.03, 0.065), "w": 0.017, "splay": 0.35, "skip_front": 0.72},
                  "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
         "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.35, "tilt": 24, "yaw": -4},

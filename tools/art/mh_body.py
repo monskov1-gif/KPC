@@ -363,7 +363,7 @@ def bone_share(sk, prefixes):
     return out
 
 
-def lengthen(vs, groups, sk, arm=1.2, foot=1.12, hand=1.25):
+def lengthen(vs, groups, sk, arm=1.2, foot=1.12, hand=1.0):
     """Удлинить руки (от плечевого сустава вдоль оси руки) и стопы (от голеностопа вперёд) по весам скелета —
     аниме-пропорции Meshy-листа: кончики пальцев ниже промежности, стопа длиннее."""
     aw = bone_share(sk, ARM_BONES)
