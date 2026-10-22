@@ -237,6 +237,56 @@ def body_joints(p):
     return J
 
 
+def build_mh_body(p, sex, skin_mat):
+    """Тело на базовой модели MakeHuman (CC0): см. tools/art/mh_body.py. Возвращает (объект, J)."""
+    sys.path.insert(0, os.path.dirname(__file__))
+    import mh_body
+    s = p["s"]
+    mh = p["mh"]
+    vs, faces, groups = mh_body.shape(sex, teen=mh.get("teen", 0.45), thin=mh.get("thin", 0.7), bust=mh.get("bust", 0.0))
+    sk = mh_body.pose_arms(vs, groups, mh.get("arms_down", 15))
+    mh_body.lengthen(vs, groups, sk, arm=mh.get("arm_len", 1.2), foot=mh.get("foot_len", 1.12))
+    verts, fcs, M = mh_body.to_character(vs, faces, groups, neck_z=mh["neck_z"] * s, pelvis_z=mh["pelvis_z"] * s,
+                                          slim=mh.get("slim", 1.0), legw=mh_body.leg_weights(sk))
+    me = bpy.data.meshes.new("body")
+    me.from_pydata([Vector(v) for v in verts], [], fcs)
+    me.validate()
+    o = new_obj("body", me)
+    # Шея продлевается вверх внутрь нашей головы (голова MakeHuman срезана).
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    top = [e for e in bm.edges if e.is_boundary and all(v.co.z > mh["neck_z"] * s - 0.03 * s for v in e.verts)]
+    for step in range(3):
+        res = bmesh.ops.extrude_edge_only(bm, edges=top)
+        nv = [g for g in res["geom"] if isinstance(g, bmesh.types.BMVert)]
+        c = sum((v.co for v in nv), Vector()) / len(nv)
+        for v in nv:
+            d = v.co - c
+            v.co = c + Vector((d.x * 0.93, d.y * 0.93, 0)) + Vector((0, 0.004 * s, 0.03 * s))
+        top = [g for g in res["geom"] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    # Без subdivision: у базовой сетки ~13k граней — достаточно для гладкого тела, а одежда-оболочки
+    # (копии тела) остаются лёгкими для веб-версии.
+    shade_smooth(o)
+    me.materials.append(skin_mat)
+    V = lambda k: Vector(M[k])
+    spines = sorted([k for k in M if k.startswith("spine-")], key=lambda k: M[k][2])
+    J = {"pelvis": V("pelvis"), "spine": V(spines[0]), "chest": V(spines[1]), "upchest": V(spines[-1]), "neck": V("neck")}
+    J["head"] = J["neck"] + Vector((0, 0.002, 0.055)) * s
+    for side, mk in (("l", "l"), ("r", "r")):
+        J["sh_" + side] = V(f"{mk}-shoulder")
+        J["el_" + side] = V(f"{mk}-elbow")
+        J["wr_" + side] = V(f"{mk}-hand")
+        J["palm_" + side] = V(f"{mk}-finger-3-1")
+        J["hip_" + side] = V(f"{mk}-upper-leg")
+        J["kn_" + side] = V(f"{mk}-knee")
+        J["an_" + side] = V(f"{mk}-ankle")
+        J["to_" + side] = V(f"{mk}-toe-3-1")
+    return o, J
+
+
 def body_edges():
     e = [("pelvis", "spine"), ("spine", "chest"), ("chest", "upchest"), ("upchest", "neck"), ("neck", "head"), ("head", "throat"),
          ("pelvis", "hip_l"), ("hip_l", "kn_l"), ("kn_l", "an_l"), ("an_l", "to_l"),
@@ -1003,9 +1053,9 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                 return b
             if b[0] is None:
                 return a
-            c = Vector((0, 0, cz))
-            # если над точкой есть шлем на том же луче — берём шлем
-            return a if (a[0] - c).length >= (b[0] - c).length - 0.002 or (P - a[0]).length < 0.012 else b
+            # ближайшая поверхность, с перевесом в пользу шлема (пряди не проваливаются под него на череп);
+            # ниже края шлема на лбу ближе лицо — чёлка ложится на лоб, а не застревает на кромке шлема
+            return a if a[3] <= b[3] + 0.01 else b
     t_snap = _Outer()
     CONFORM = (t_helm, Vector((0, 0, cz)), rx, cz, rz)          # уши, заколки, хохолок — на шлеме
     bottom = cz - rz * nape
@@ -1018,11 +1068,11 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
         h = t_helm.ray_cast(Vector((0, 0, cz)) + d * rx * 4, -d)
         return (h[0], h[1]) if h[0] else (None, None)
 
-    def strand(theta, phi, length, w0, lift, sway, curl_deg, curl_frac, bias, phase):
+    def strand(theta, phi, length, w0, lift, sway, curl_deg, curl_frac, bias, phase, thick=0.18, twist=0.0):
         P, N = on_helm(theta, phi)
         if P is None:
             return None
-        step = 0.004
+        step = 0.006
         n = max(6, int(length / step))
         nc = int(n * curl_frac)
         pts, ups, sides = [P.copy()], [N.copy()], []
@@ -1047,6 +1097,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
             if i >= n - nc:                            # завиток: кончик загибается наружу и вверх
                 if B is None:
                     B = d.cross(N).normalized()
+                    if twist:                          # ось завитка чуть повёрнута — локон, а не плоский крючок
+                        B = (Matrix.Rotation(twist, 3, d) @ B).normalized()
                 d = (Matrix.Rotation(math.radians(curl_deg) / max(nc, 1), 3, B) @ d).normalized()
                 P = P + d * step
                 up = B.cross(d).normalized()
@@ -1077,7 +1129,7 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
         # Ширина держится почти до конца (завиток должен быть виден), сужение — только у самого кончика.
         widths = [w0 * (0.75 + 0.25 * min(1.0, (i / (m - 1)) / 0.2)) * (1 - max(0.0, (i / (m - 1) - 0.72) / 0.28) ** 1.4)
                   for i in range(m)]
-        return ribbon(pts, ups, sides, widths, lift, mat_strand)
+        return ribbon(pts, ups, sides, widths, lift, mat_strand, thick=thick)
 
     objs = []
     for g in hp["groups"]:
@@ -1087,9 +1139,11 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
             if g.get("skip_front") and abs(theta) < g["skip_front"]:
                 continue                                   # спереди вместо мантии — чёлка
             phi = rnd.uniform(*g["phi"])
+            cd = rnd.uniform(*g["curl"]) * (rnd.choice((-1, 1)) if g.get("curl_both") else 1)
             o = strand(theta, phi, rnd.uniform(*g["length"]), rnd.uniform(*g["w"]), g.get("lift", 0.002) + 0.0012 * j % 0.004,
-                       g.get("sway", 0.2), rnd.uniform(*g["curl"]), g.get("curl_frac", 0.3), g.get("bias", 0.3),
-                       rnd.uniform(0, 6.28))
+                       g.get("sway", 0.2), cd, g.get("curl_frac", 0.3), g.get("bias", 0.3),
+                       rnd.uniform(0, 6.28), thick=g.get("thick", hp.get("thick", 0.18)),
+                       twist=rnd.uniform(-0.6, 0.6) if g.get("curl_both") else 0.0)
             if o is not None:
                 objs.append(o)
     # Прядь на глаз под повязкой — длинная лента через глаз до щеки.
@@ -1323,6 +1377,17 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     for v, n, off in moves:
         v.co += n * off
     bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    # Кромка вещи: удаление по вершинам даёт «пилу» — выравниваем край (сглаживание вдоль граничной петли).
+    for _ in range(6):
+        upd = []
+        for v in bm.verts:
+            if not v.is_boundary:
+                continue
+            nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+            if len(nb) == 2:
+                upd.append((v, (nb[0].co + nb[1].co) / 2))
+        for v, c in upd:
+            v.co = v.co * 0.4 + c * 0.6
     if smooth:
         for _ in range(smooth):
             bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
@@ -1370,14 +1435,16 @@ def legs(J, p, name, m, kind):
     waist_z = J["pelvis"].lerp(J["spine"], 0.6).z
 
     if kind == "trousers":
+        hem_z = J["an_l"].z + 0.012 * s
+        arm_x = abs(J["sh_l"].x) * 0.95
+
         def spec(b, t, co):
-            if b == "hips":
-                return 0.008 * s if co.z <= waist_z else None
-            if b.startswith("thigh"):
-                return 0.01 * s
-            if b.startswith("shin"):
-                return (0.01 + 0.01 * t) * s if t < 0.97 else None
-            return None
+            if b.startswith(("upper_arm", "forearm", "hand")):
+                return None
+            if not hem_z <= co.z <= waist_z:
+                return None
+            k = max(0.0, min(1.0, (J["kn_l"].z - co.z) / (J["kn_l"].z - hem_z)))
+            return (0.01 + 0.01 * k) * s
         return shell(name, m, spec, smooth=1)
     if kind == "socks":
         def spec(b, t, co):
@@ -1412,18 +1479,23 @@ def underwear(J, p, kind, m):
     wb_z = J["pelvis"].lerp(J["spine"], 0.3 if kind == "male" else 0.18).z
     leg = 0.3 if kind == "male" else 0.16
 
+    leg_z = J["hip_l"].z - leg * (J["hip_l"].z - J["kn_l"].z)
+    arm_x = abs(J["sh_l"].x) * 0.95
+
     def low(b, t, co):
-        if b == "hips":
-            return 0.0035 * s if co.z <= wb_z else None
-        if b.startswith("thigh"):
-            return 0.0035 * s if t < leg else None
-        return None
+        # Геометрически: от линии пояса до среза на бедре; руки (кисти у бёдер) не захватываем.
+        if b.startswith(("upper_arm", "forearm", "hand")) or abs(co.x) > arm_x:
+            return None
+        return 0.0035 * s if leg_z <= co.z <= wb_z else None
     out.append(shell("underwear__briefs" if kind == "male" else "underwear__panties", m, low))
     if kind == "female":
-        cz = J["chest"].z + 0.01 * s
+        # уровень груди — где тело сильнее всего выступает вперёд (по самой сетке, а не по доле роста)
+        z0, z1 = J["pelvis"].z + 0.45 * (J["neck"].z - J["pelvis"].z), J["pelvis"].z + 0.9 * (J["neck"].z - J["pelvis"].z)
+        cand = [v.co for v in _BODY.data.vertices if 0.02 * s < abs(v.co.x) < 0.09 * s and z0 < v.co.z < z1]
+        cz = min(cand, key=lambda c: c.y).z if cand else J["chest"].z
 
         def bra(b, t, co):
-            if b in ("chest", "upper_chest", "spine") and abs(co.z - cz) < 0.042 * s:
+            if not b.startswith(("upper_arm", "forearm", "hand")) and -0.06 * s < co.z - cz < 0.045 * s:
                 return 0.0035 * s
             return None
         out.append(shell("underwear__bra", m, bra))
@@ -1706,9 +1778,9 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
         if b == "hips" or b.startswith("thigh"):
             return base + 0.01 * s if co.z >= hem_z else None
         if b == "neck":
-            return base * 0.5 if co.z <= J["neck"].z - 0.012 * s else None
+            return base * 0.5 if co.z <= J["neck"].z - 0.03 * s else None
         if b.startswith("upper_arm"):
-            return base * 0.6 + 0.012 * s * t
+            return base * 0.8 + 0.014 * s * t        # спущенное плечо, рукав сразу свободный
         if b.startswith("forearm"):
             if t < 0.85:   # рукав-фонарик: расширяется к запястью (реф. 16), над манжетой — пышнее всего
                 return 0.03 * s + 0.036 * s * (t / 0.85) ** 1.5
@@ -1724,15 +1796,23 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
     hsy = ((hy1 - hy0) / 2 + 0.034 * s) / hr
     hem = lathe("hem", [(hem_z - 0.004 * s, hr * 0.97), (hem_z + 0.008 * s, hr), (hem_z + 0.03 * s, hr), (hem_z + 0.045 * s, hr * 0.97)],
                 m, center=(0, hcy), sy=hsy, uv=(5, 7))
-    # Высокий ворот: широкое основание, подвёрнутый валик, верх у линии челюсти.
+    # Высокий ворот-«труба» (Meshy-лист, IMG_4680/4685): плотно облегает шею (на ~1.5 см шире её),
+    # с подвёрнутым толстым валиком; верх — под подбородком; низ расширяется и ложится на плечи свитера.
     nz = J["neck"].z
-    # Широкий высокий ворот-«хомут» (реф. 16): ширина ≈ 2.2 расстояния глаз–подбородок, верх у подбородка.
-    # Низ ворота утоплен в свитер (иначе по груди виден «гранёный» уступ).
-    prof = [(nz + dz * s, r * s) for dz, r in ((-0.11, 0.07), (-0.08, 0.082), (-0.05, 0.092), (-0.025, 0.094), (0.0, 0.09),
-                                                  (0.026, 0.088), (0.046, 0.082), (0.062, 0.072), (0.072, 0.062), (0.076, 0.052))]
-    collar = lathe("collar", prof, m, center=(0, J["neck"].y + 0.004 * s), sy=0.9, uv=(7, 7),
-                   wobble=lambda a, k: 0.03 * math.sin(a * 7 + k) if k in (2, 3, 4, 5, 6) else 0.0)
-    MARKS["collar"] = Vector((0, J["neck"].y + 0.004 * s - 0.072 * s * 0.9, nz + 0.072 * s))
+    nr = 0.5 * (section(_BODY, nz, band=0.01 * s, xmax=0.09 * s)[0] * 2) / 2 * 2      # полуширина шеи
+    ny0, ny1 = section(_BODY, nz, band=0.01 * s, xmax=0.09 * s)[1:]
+    ncy = (ny0 + ny1) / 2
+    nsy = ((ny1 - ny0) / 2) / max(nr, 1e-4)
+    r0 = nr + 0.016 * s
+    prof = [(nz - 0.11 * s, r0 + 0.035 * s), (nz - 0.085 * s, r0 + 0.035 * s), (nz - 0.06 * s, r0 + 0.026 * s),
+            (nz - 0.035 * s, r0 + 0.014 * s),
+            (nz - 0.015 * s, r0 + 0.004 * s), (nz + 0.005 * s, r0 + 0.002 * s),
+            # валик: подвёрнутый край, толще трубы
+            (nz + 0.018 * s, r0 + 0.012 * s), (nz + 0.032 * s, r0 + 0.017 * s), (nz + 0.046 * s, r0 + 0.012 * s),
+            (nz + 0.056 * s, r0 + 0.004 * s), (nz + 0.062 * s, r0 - 0.004 * s)]
+    collar = lathe("collar", prof, m, center=(0, ncy), sy=min(1.15, max(0.85, nsy)), uv=(9, 9), seg=64,
+                   wobble=lambda a, k: 0.035 * max(0.0, math.cos(a * 22)) ** 2)   # вертикальные рубчики вязки
+    MARKS["collar"] = Vector((0, ncy - (r0 + 0.017 * s) * min(1.15, max(0.85, nsy)), nz + 0.062 * s))
     # Вышивка (реф. 16, вид спереди): крупная ветка на левой стороне груди (для зрителя справа, +X)
     # и маленькая веточка внизу справа у персонажа (для зрителя слева, −X).
     tree = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
@@ -1765,22 +1845,34 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
     s = p["s"]
     waist_top = belt_z + 0.13 * s     # пояс глубоко уходит под свитер — без голой полоски
 
+    leg_z = J["hip_l"].z - 0.55 * (J["hip_l"].z - J["kn_l"].z)
+    arm_x = abs(J["sh_l"].x) * 0.95
+
     def spec(b, t, co):
-        if b in ("hips", "spine", "chest"):
-            return 0.028 * s if co.z <= waist_top else None     # мешковатый пояс
-        if b.startswith("thigh"):
-            return 0.028 * s if t < 0.3 else None
-        return None
+        if b.startswith(("upper_arm", "forearm", "hand")) or abs(co.x) > arm_x:
+            return None
+        return 0.028 * s if leg_z <= co.z <= waist_top else None     # мешковатый пояс
     parts = [shell("tmp", m, spec, smooth=1)]
     legs_by_side = {}
     for sx in (1, -1):
         hip = J["hip_l"] if sx > 0 else J["hip_r"]
         # Очень широкие штанины (реф. 16, по наложению): у пола полуширина брюк ≈ 3U, между штанинами ~5 см.
-        top_c = Vector((sx * 0.085 * s, hip.y, hip.z + 0.02 * s))
+        # центр штанины — по реальному сечению бедра тела (у базовой модели бедро впереди сустава)
+        zz = hip.z - 0.06 * s
+        th = [v.co for v in _BODY.data.vertices if abs(v.co.z - zz) < 0.01 * s and v.co.x * sx > 0.01 * s
+              and abs(v.co.x) < abs(J["sh_l"].x) * 0.9]
+        # перед штанины — на 1.5 см впереди бедра (по центру сечения мешают ягодицы: штанина уезжала назад
+        # и спереди сквозь неё проступала кожа)
+        thf = [v.co for v in _BODY.data.vertices if J["kn_l"].z < v.co.z < hip.z and v.co.x * sx > 0.01 * s
+               and abs(v.co.x) < abs(J["sh_l"].x) * 0.9]
+        fy = min(q.y for q in thf) if thf else hip.y - 0.08 * s
+        cy = fy + 0.095 * s * 0.95 - 0.015 * s
+        cx = (min(abs(q.x) for q in th) + max(abs(q.x) for q in th)) / 2 if th else 0.085 * s
+        top_c = Vector((sx * cx, cy, hip.z + 0.02 * s))
         bot_c = Vector((sx * 0.152 * s, 0.006 * s, 0.085 * s))     # низ над ботинками (реф. 16)
         n = 16
         axis = [top_c.lerp(bot_c, k / (n - 1)) for k in range(n)]
-        key = [(0.0, 0.08), (0.12, 0.088), (0.4, 0.097), (0.6, 0.104), (1.0, 0.124)]
+        key = [(0.0, 0.095), (0.12, 0.098), (0.4, 0.1), (0.6, 0.106), (1.0, 0.124)]
 
         def rad(t):
             for (t0, r0), (t1, r1) in zip(key, key[1:]):
@@ -2025,48 +2117,46 @@ CHARACTERS = {
     # кошачьи уши, хохолок. Свитер с высоким воротом и цветами — оверсайз, рукава до костяшек.
     "kot": {
         "sex": "male",
-        "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1), "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+        "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
+                 # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
+                 "mh": {"teen": 0.5, "thin": 0.8, "neck_z": 1.36, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
         # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.12, "nape": 0.92, "thick_top": 0.04, "thick_side": 0.035,
-                 "cheek_puff": 1.1, "face_open_x": 0.82,
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.12, "nape": 0.62, "thick_top": 0.06, "thick_side": 0.055,
+                 "cheek_puff": 0.35, "face_open_x": 0.82, "thick": 0.6,
                  "whorl": (0.12, 1.0),
+                 # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
                  "groups": [
-                     # мантия: широкие пластины от макушки вниз по бокам и затылку, концы завиваются наружу
-                     {"count": 14, "theta": (-2.4, 2.4), "phi": (0.35, 0.5), "length": (0.33, 0.37), "w": (0.06, 0.075),
-                      "sway": 0.12, "curl": (140, 200), "curl_frac": 0.3, "bias": 0.35, "lift": 0.003, "skip_front": 0.95},
-                     {"count": 8, "theta": (2.25, 4.03), "phi": (0.4, 0.6), "length": (0.34, 0.38), "w": (0.065, 0.08),
-                      "sway": 0.12, "curl": (120, 180), "curl_frac": 0.3, "bias": 0.5, "lift": 0.003},
-                     # чёлка: от макушки до глаз, широкие острые пряди
-                     {"count": 11, "theta": (-1.1, 1.1), "phi": (0.3, 0.42), "length": (0.2, 0.23), "w": (0.045, 0.06),
-                      "sway": 0.2, "curl": (20, 50), "curl_frac": 0.25, "bias": 0.25, "lift": 0.006},
-                     # слой прядей поверх боков копны (щёки, уши, затылок снизу), концы — завитки наружу
-                     {"count": 12, "theta": (-2.6, -0.9), "phi": (0.6, 1.0), "length": (0.24, 0.28), "w": (0.045, 0.055),
-                      "sway": 0.2, "curl": (200, 280), "curl_frac": 0.4, "bias": 0.8, "lift": 0.005},
-                     {"count": 12, "theta": (0.9, 2.6), "phi": (0.6, 1.0), "length": (0.24, 0.28), "w": (0.045, 0.055),
-                      "sway": 0.2, "curl": (200, 280), "curl_frac": 0.4, "bias": 0.8, "lift": 0.005},
-                     # второй ряд чёлки — закрывает край шлема на лбу
-                     {"count": 9, "theta": (-0.9, 0.9), "phi": (0.5, 0.6), "length": (0.12, 0.14), "w": (0.04, 0.05),
-                      "sway": 0.25, "curl": (20, 50), "curl_frac": 0.25, "bias": 0.4, "lift": 0.009},
-                     # пряди вдоль щёк до линии челюсти
-                     {"count": 4, "theta": (-1.45, -0.95), "phi": (0.55, 0.75), "length": (0.22, 0.26), "w": (0.04, 0.05),
-                      "sway": 0.15, "curl": (60, 120), "curl_frac": 0.3, "bias": 0.85, "lift": 0.007},
-                     {"count": 4, "theta": (0.95, 1.45), "phi": (0.55, 0.75), "length": (0.22, 0.26), "w": (0.04, 0.05),
-                      "sway": 0.15, "curl": (60, 120), "curl_frac": 0.3, "bias": 0.85, "lift": 0.007},
-                     # боковые локоны с завитком (реф. 16)
-                     {"count": 4, "theta": (-1.95, -1.15), "phi": (0.6, 0.8), "length": (0.17, 0.2), "w": (0.045, 0.055),
-                      "sway": 0.15, "curl": (200, 260), "curl_frac": 0.45, "bias": 0.6, "lift": 0.008},
-                     {"count": 4, "theta": (1.15, 1.95), "phi": (0.6, 0.8), "length": (0.17, 0.2), "w": (0.045, 0.055),
-                      "sway": 0.15, "curl": (200, 260), "curl_frac": 0.45, "bias": 0.6, "lift": 0.008},
+                     # мантия от макушки: длины сильно разные — концы-завитки на разной высоте (не «юбка»)
+                     {"count": 47, "theta": (-2.4, 2.4), "phi": (0.22, 0.5), "length": (0.2, 0.37), "w": (0.026, 0.038),
+                      "sway": 0.3, "curl": (220, 340), "curl_frac": 0.35, "bias": 0.35, "lift": 0.004, "skip_front": 0.95,
+                      "curl_both": True},
+                     {"count": 28, "theta": (2.2, 4.08), "phi": (0.3, 0.8), "length": (0.22, 0.36), "w": (0.026, 0.038),
+                      "sway": 0.3, "curl": (220, 340), "curl_frac": 0.35, "bias": 0.5, "lift": 0.004, "curl_both": True},
+                     # чёлка: локоны до глаз и ниже, концы — завитки вбок
+                     {"count": 24, "theta": (-1.15, 1.15), "phi": (0.25, 0.45), "length": (0.2, 0.26), "w": (0.026, 0.036),
+                      "sway": 0.3, "curl": (25, 70), "curl_frac": 0.22, "bias": 0.55, "lift": 0.007, "curl_both": True},
+                     # средний слой по бокам и сзади
+                     {"count": 61, "theta": (-3.14, 3.14), "phi": (0.6, 1.25), "length": (0.12, 0.26), "w": (0.022, 0.032),
+                      "sway": 0.3, "curl": (250, 360), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 0.85,
+                      "curl_both": True},
+                     # нижний слой: свисающие локоны закрывают затылок и шею до ворота
+                     {"count": 56, "theta": (-3.14, 3.14), "phi": (1.2, 1.75), "length": (0.08, 0.16), "w": (0.021, 0.028),
+                      "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 0.75,
+                      "curl_both": True},
+                     # мелкие завитки по поверхности (фактура кудрей)
+                     {"count": 70, "theta": (-3.14, 3.14), "phi": (0.25, 1.3), "length": (0.05, 0.08), "w": (0.017, 0.022),
+                      "sway": 0.1, "curl": (260, 360), "curl_frac": 0.8, "bias": 0.5, "lift": 0.011, "skip_front": 0.6,
+                      "curl_both": True},
                  ],
-                 "eye_lock": {"count": 2, "theta": 0.4, "phi": 0.32, "length": 0.19, "w": 0.06, "curl": 45},
+                 "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
                  "ahoge_spiral": True, "ahoge_h": 0.45, "strand_jitter": 0.06,
                  "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
-        "ear": {"theta": 1.38, "phi": 0.86, "lift": 1.1, "tip": (0.5, 0.02, 0.92), "r": 0.5},
+        "ear": {"theta": 1.3, "phi": 0.8, "lift": 1.1, "tip": (0.42, 0.02, 1.35), "r": 0.56},
         # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
         "clips": {"fish": [(-1.3, 1.45, 1.5, 1.5, 2.0), (1.3, 1.2, 1.5, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.45, 0.1, 1.4)},
         "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
@@ -2077,9 +2167,11 @@ CHARACTERS = {
     # Габи (реф. 05–07): рост не задан — близко к Коту. Два пучка вместе с распущенными волосами (ответ пользователя).
     "gabi": {
         "sex": "female",
-        "body": {"s": 0.98, "shoulder": 0.135, "hip": 0.084, "head": 1.0, "waist": 0.07, "chest": 0.092, "chest_d": 0.08, "hip_r": 0.108},
+        "body": {"s": 0.98, "shoulder": 0.135, "hip": 0.084, "head": 1.0,
+                 # тело — та же открытая база (CC0), женская форма; пропорции Silver Palace — только как замеры
+                 "mh": {"teen": 0.35, "thin": 0.6, "bust": 0.65, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 0.95}, "waist": 0.07, "chest": 0.092, "chest_d": 0.08, "hip_r": 0.108},
         "hair": {"layers": [(0.15, 20, 1.06), (0.45, 28, 1.1), (0.8, 30, 1.14)], "bang_front": 0.6, "bang_len": 1.2,
-                 "side_len": 2.0, "long": 0.42, "curl": 0.1, "w": 0.95, "cap_low": 0.75, "buns": [-1, 1],
+                 "side_len": 2.0, "long": 0.22, "curl": 0.1, "w": 0.95, "cap_low": 0.75, "buns": [-1, 1],
                  "c_root": (0.8, 0.28, 0.42), "c_tip": (0.99, 0.62, 0.3)},
         "ears": None,
         "garments": ["top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress", "socks", "shoes",
@@ -2088,7 +2180,8 @@ CHARACTERS = {
     # Сора (реф. 12): 206 см, шире в плечах; растрёпанные бирюзовые волосы с хвостом, уши, хохолок.
     "sora": {
         "sex": "male",
-        "body": {"s": 206 / 163, "shoulder": 0.16, "hip": 0.082, "head": 0.95, "waist": 0.084, "chest": 0.104, "hip_r": 0.1},
+        "body": {"s": 206 / 163, "shoulder": 0.16, "hip": 0.082, "head": 0.95,
+                 "mh": {"teen": 0.0, "thin": 0.5, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 1.0}, "waist": 0.084, "chest": 0.104, "hip_r": 0.1},
         "hair": {"layers": [(0.12, 18, 1.07), (0.4, 26, 1.12), (0.75, 28, 1.17)], "bang_front": 0.55, "bang_len": 1.3,
                  "side_len": 1.85, "long": 0.04, "curl": 0.3, "w": 0.95, "cap_low": 0.6, "ahoge": True, "ponytail": True,
                  "c_root": (0.2, 0.6, 0.6), "c_tip": (0.16, 0.44, 0.54)},
@@ -2105,8 +2198,11 @@ def build(cid):
     c = CHARACTERS[cid]
     p = c["body"]
     s = p["s"]
-    J = body_joints(p)
     skin = mat("skin", SKIN, rough=0.6)
+    if p.get("mh"):
+        body, J = build_mh_body(p, c["sex"], skin)
+    else:
+        J = body_joints(p)
     knit = mat("garment_knit", (1, 1, 1, 1), tex=os.path.join(TEX, "knit.png"))
     cloth = mat("garment_cloth", (1, 1, 1, 1), tex=os.path.join(TEX, "cloth.png"))
     plain = mat("garment_plain", (1, 1, 1, 1))
@@ -2120,10 +2216,11 @@ def build(cid):
     # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     under = mat("underwear", (0.92, 0.6, 0.7, 1) if c["sex"] == "female" else (0.2, 0.25, 0.4, 1), rough=0.6)
 
-    R = body_radii(p)
-    body = build_part("body", J, list(J.keys()), body_edges(), lambda j: _rs(R[j], s), skin)
-    if c["sex"] == "female":
-        add_bust(body, J, p)
+    if not p.get("mh"):
+        R = body_radii(p)
+        body = build_part("body", J, list(J.keys()), body_edges(), lambda j: _rs(R[j], s), skin)
+        if c["sex"] == "female":
+            add_bust(body, J, p)
     set_body(body, J)
     head, hd = build_head(cid, J, p)
     eyes = build_eyes(cid, head, hd)
@@ -2226,7 +2323,7 @@ def build(cid):
             tree = BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get())
             # Повязка (реф. 16) — скруглённый прямоугольник, повторяет изгиб лица: кусок оболочки головы.
             ex = ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx
-            pa, pb, pcz = (FP["eye_w"] * 2 + 0.1) * rx, rz * 0.26, ez + rz * FP.get("patch_dz", 0.06)
+            pa, pb, pcz = (FP["eye_w"] * 2 + 0.04) * rx, rz * 0.22, ez + rz * FP.get("patch_dz", 0.06)
             pm = head.data.copy()
             patch = new_obj("patch", pm)
             bm = bmesh.new()

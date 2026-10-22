@@ -169,3 +169,18 @@ func _ref_view(id: String, cam_pos: Vector3, default_yaw: float, fov: float) -> 
 	if f:
 		f.store_string(JSON.stringify(out, "  "))
 		f.close()
+
+
+## Тело Кота без одежды крупно: плечи/руки и голени (проверка деформаций базовой модели).
+func debug_kot_body_closeup() -> void:
+	debug_underwear()
+	_kot_turn(0.0)
+	var cam := get_viewport().get_camera_3d()
+	cam.position = get_node("kot").position + Vector3(0.0, 0.8, 2.2)
+
+
+func debug_kot_body_side() -> void:
+	debug_underwear()
+	_kot_turn(-90.0)
+	var cam := get_viewport().get_camera_3d()
+	cam.position = get_node("kot").position + Vector3(0.0, 0.8, 2.2)
