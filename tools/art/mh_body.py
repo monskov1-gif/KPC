@@ -206,7 +206,7 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=14.0, legs_in=3.0):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs_in=3.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
     import math

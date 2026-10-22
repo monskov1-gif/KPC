@@ -1503,7 +1503,7 @@ def cat_ear_mesh(W, H, D, side, m_out, m_in, m_fur):
         x = centre(v) + u * half_w(v)
         y = -D * 0.15 + D * 0.9 * (1 - u * u) * math.sin(math.pi * min(1.0, t * 1.1)) - 0.0015
         L = H * rnd.uniform(0.25, 0.45)
-        w = W * 0.05
+        w = W * 0.025
         dx = -u * 0.35 * L
         a = bm.verts.new((x - w, y, v))
         b_ = bm.verts.new((x + w, y, v))
@@ -2367,13 +2367,13 @@ CHARACTERS = {
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
                  "ahoge_spiral": True, "ahoge_h": 0.6, "strand_jitter": 0.06,
                  "ringlet_coils": {"count": 280, "phi": (0.8, 2.0), "r": (0.009, 0.014), "turns": (1.4, 2.4),
-                                   "drop": (0.03, 0.065), "w": 0.017, "splay": 0.35, "skip_front": 0.72},
+                                   "drop": (0.045, 0.09), "w": 0.022, "splay": 0.35, "skip_front": 0.72},
                  "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
         "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.35, "tilt": 24, "yaw": -4},
         # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
         "clips": {"fish": [(-1.3, 1.45, 1.38, 2.4, 2.0), (1.3, 1.45, 1.38, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.4, 0.1, 2.0)},
-        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.3, 0.48, 0.48)},
+        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.05, 0.09, 0.09)},
         "ears": (0.42, 0.62, 0.56), "ear_inner": (0.22, 0.21, 0.22),
         "garments": ["kot_sweater", "kot_cargo", "kot_boots", "top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress",
                      "socks", "shoes", "gloves", "head_clips", "face_eyepatch", "neck_necklace"],
