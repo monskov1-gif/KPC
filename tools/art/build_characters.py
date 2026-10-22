@@ -262,7 +262,7 @@ def build_mh_body(p, sex, skin_mat):
         c = sum((v.co for v in nv), Vector()) / len(nv)
         for v in nv:
             d = v.co - c
-            v.co = c + Vector((d.x * 0.93, d.y * 0.93, 0)) + Vector((0, 0.004 * s, 0.03 * s))
+            v.co = c + Vector((d.x * 0.97, d.y * 0.97, 0)) + Vector((0, 0.004 * s, 0.03 * s))
         top = [g for g in res["geom"] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     bm.to_mesh(me)
@@ -656,6 +656,8 @@ def build_lashes(head_obj, hd, c):
 
     out = []
     for side in (-1, 1):
+        if c.get("skip_patch_side") and side == FP["patch_side"]:
+            continue                                    # под повязкой ресниц не видно (не торчат сквозь неё)
         cx, cy, w, h = 0.5 + side * FP["eye_u"], FP["eye_v"], FP["eye_w"], FP["eye_h"]
         pts = almond(cx, cy, w, h, lift=-FP["eye_lift"] * side)
         up = pts[:41] if side > 0 else pts[:41][::-1]           # от внутреннего угла к внешнему
@@ -1316,7 +1318,7 @@ def build_ears(hd, color, inner, ear):
         axis = Vector((side * rx * tx, ry * ty, rz * tz))
         tips.append(base + axis)
         rot = Vector((0, 0, 1)).rotation_difference(axis.normalized()).to_matrix().to_4x4()
-        for m, r, depth, flat, fwd in ((color, ear["r"], 1.0, 0.42, 0.0), (inner, ear["r"] * 0.75, 0.8, 0.22, -0.06)):
+        for m, r, depth, flat, fwd in ((color, ear["r"], 1.0, 0.42, 0.0), (inner, ear["r"] * 0.5, 0.68, 0.22, -0.07)):
             bpy.ops.mesh.primitive_cone_add(vertices=20, radius1=rx * r, radius2=0, depth=axis.length * depth,
                                             location=(0, 0, axis.length * depth / 2))
             o = bpy.context.active_object
@@ -1477,7 +1479,7 @@ def underwear(J, p, kind, m):
     s = p["s"]
     out = []
     wb_z = J["pelvis"].lerp(J["spine"], 0.3 if kind == "male" else 0.18).z
-    leg = 0.3 if kind == "male" else 0.16
+    leg = 0.3 if kind == "male" else 0.24
 
     leg_z = J["hip_l"].z - leg * (J["hip_l"].z - J["kn_l"].z)
     arm_x = abs(J["sh_l"].x) * 0.95
@@ -1495,8 +1497,8 @@ def underwear(J, p, kind, m):
         cz = min(cand, key=lambda c: c.y).z if cand else J["chest"].z
 
         def bra(b, t, co):
-            if not b.startswith(("upper_arm", "forearm", "hand")) and -0.06 * s < co.z - cz < 0.045 * s:
-                return 0.0035 * s
+            if abs(co.x) < arm_x and -0.06 * s < co.z - cz < 0.045 * s:
+                return 0.005 * s
             return None
         out.append(shell("underwear__bra", m, bra))
     return out
@@ -1782,13 +1784,13 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
         if b.startswith("upper_arm"):
             return base * 0.8 + 0.014 * s * t        # спущенное плечо, рукав сразу свободный
         if b.startswith("forearm"):
-            if t < 0.85:   # рукав-фонарик: расширяется к запястью (реф. 16), над манжетой — пышнее всего
-                return 0.03 * s + 0.036 * s * (t / 0.85) ** 1.5
+            if t < 0.72:   # рукав-фонарик: расширяется к запястью (реф. 16), над манжетой — пышнее всего
+                return 0.03 * s + 0.036 * s * (t / 0.72) ** 1.5
             return 0.009 * s   # манжета-резинка
         if b.startswith("hand"):
             return 0.009 * s if t < 0.1 else None
         return None
-    body = shell("tmp", m, spec, smooth=3, uv=(3, 5))
+    body = shell("tmp", m, spec, smooth=6, uv=(3, 5))
     # Ровный низ-резинка поверх рваного края оболочки.
     hx, hy0, hy1 = section(_BODY, hem_z + 0.02 * s, band=0.02 * s, xmax=0.165 * s)
     hcy = (hy0 + hy1) / 2
@@ -1804,7 +1806,7 @@ def kot_sweater(J, p, m, flower_mats, leaf_m, stem_m, hem_z):
     ncy = (ny0 + ny1) / 2
     nsy = ((ny1 - ny0) / 2) / max(nr, 1e-4)
     r0 = nr + 0.016 * s
-    prof = [(nz - 0.11 * s, r0 + 0.035 * s), (nz - 0.085 * s, r0 + 0.035 * s), (nz - 0.06 * s, r0 + 0.026 * s),
+    prof = [(nz - 0.06 * s, r0 + 0.03 * s), (nz - 0.05 * s, r0 + 0.026 * s),
             (nz - 0.035 * s, r0 + 0.014 * s),
             (nz - 0.015 * s, r0 + 0.004 * s), (nz + 0.005 * s, r0 + 0.002 * s),
             # валик: подвёрнутый край, толще трубы
@@ -1945,7 +1947,7 @@ def kot_cargo(J, p, m, metal, leather, chain_m, flower_mats, leaf_m, badge_mats,
     if loc is None:
         loc, nrm = Vector((-0.095 * s, -0.11 * s, belt_z - 0.075 * s)), Vector((0, -1, 0))
     M = basis_at(loc + nrm * 0.01 * s, nrm)
-    for k, (r, z) in enumerate(((0.03, 0.0), (0.022, 0.002), (0.0125, 0.0035), (0.006, 0.0048))):
+    for k, (r, z) in enumerate(((0.05, 0.0), (0.037, 0.002), (0.021, 0.0035), (0.01, 0.0048))):
         bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=r * s, depth=0.003 * s, location=(0, 0, z * s))
         d = bpy.context.active_object
         d.data.transform(Matrix.Translation((0, 0, z * s)))
@@ -1970,9 +1972,9 @@ def kot_boots(J, p, m, sole_m):
 
     def spec(b, t, co):
         if b.startswith("foot"):
-            return 0.022 * s
+            return 0.03 * s
         if b.startswith("shin"):
-            return 0.022 * s if t > 0.72 else None
+            return 0.03 * s if t > 0.72 else None
         return None
     parts = [shell("tmp", m, spec, smooth=2, uv=(2, 6))]
     for side in ("l", "r"):
@@ -1981,7 +1983,7 @@ def kot_boots(J, p, m, sole_m):
         x = (an.x + to.x) / 2
         bm = bmesh.new()
         vs = []
-        for yy, ztop, hw in ((heel_y, 0.075, 0.046), (toe_y, 0.04, 0.054)):
+        for yy, ztop, hw in ((heel_y, 0.1, 0.05), (toe_y, 0.065, 0.06)):
             for xx in (-hw, hw):
                 vs.append(bm.verts.new((x + xx * s, yy, -0.028 * s)))
                 vs.append(bm.verts.new((x + xx * s, yy, ztop * s)))
@@ -1998,10 +2000,6 @@ def kot_boots(J, p, m, sole_m):
         shade_smooth(so)
         so.data.materials.append(sole_m)
         parts.append(so)
-        # Рифление подошвы: тёмные поперечные выступы по бокам.
-        for k in range(6):
-            yy = heel_y + (toe_y - heel_y) * (k + 0.5) / 6
-            parts.append(box((x, yy, -0.027 * s), (0.088 * s, 0.01 * s, 0.008 * s), sole_m, bevel=0.002 * s))
     return join(parts, "garment__footwear__boots")
 
 
@@ -2119,14 +2117,14 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
                  # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
-                 "mh": {"teen": 0.5, "thin": 0.8, "neck_z": 1.36, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+                 "mh": {"teen": 0.5, "thin": 0.6, "neck_z": 1.36, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
         # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
         "hair": {"ribbons": True, "solid": True, "hairline": 0.12, "nape": 0.62, "thick_top": 0.06, "thick_side": 0.055,
-                 "cheek_puff": 0.35, "face_open_x": 0.82, "thick": 0.6,
+                 "cheek_puff": 0.35, "face_open_x": 0.82, "thick": 1.0,
                  "whorl": (0.12, 1.0),
                  # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
                  "groups": [
@@ -2141,11 +2139,11 @@ CHARACTERS = {
                       "sway": 0.3, "curl": (25, 70), "curl_frac": 0.22, "bias": 0.55, "lift": 0.007, "curl_both": True},
                      # средний слой по бокам и сзади
                      {"count": 61, "theta": (-3.14, 3.14), "phi": (0.6, 1.25), "length": (0.12, 0.26), "w": (0.022, 0.032),
-                      "sway": 0.3, "curl": (250, 360), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 0.85,
+                      "sway": 0.3, "curl": (250, 360), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 1.15,
                       "curl_both": True},
                      # нижний слой: свисающие локоны закрывают затылок и шею до ворота
-                     {"count": 56, "theta": (-3.14, 3.14), "phi": (1.2, 1.75), "length": (0.08, 0.16), "w": (0.021, 0.028),
-                      "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 0.75,
+                     {"count": 80, "theta": (-3.14, 3.14), "phi": (1.3, 2.05), "length": (0.08, 0.16), "w": (0.021, 0.028),
+                      "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 1.2,
                       "curl_both": True},
                      # мелкие завитки по поверхности (фактура кудрей)
                      {"count": 70, "theta": (-3.14, 3.14), "phi": (0.25, 1.3), "length": (0.05, 0.08), "w": (0.017, 0.022),
@@ -2153,14 +2151,14 @@ CHARACTERS = {
                       "curl_both": True},
                  ],
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
-                 "ahoge_spiral": True, "ahoge_h": 0.45, "strand_jitter": 0.06,
+                 "ahoge_spiral": True, "ahoge_h": 0.8, "strand_jitter": 0.06,
                  "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
-        "ear": {"theta": 1.3, "phi": 0.8, "lift": 1.1, "tip": (0.42, 0.02, 1.35), "r": 0.56},
+        "ear": {"theta": 1.3, "phi": 0.8, "lift": 1.25, "tip": (0.55, 0.04, 1.4), "r": 0.72},
         # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
-        "clips": {"fish": [(-1.3, 1.45, 1.5, 1.5, 2.0), (1.3, 1.2, 1.5, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.45, 0.1, 1.4)},
-        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
-        "ears": (0.56, 0.72, 0.64), "ear_inner": (0.3, 0.25, 0.25),
+        "clips": {"fish": [(-1.3, 1.45, 1.38, 1.5, 2.0), (1.3, 1.2, 1.38, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.4, 0.1, 1.4)},
+        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32), "skip_patch_side": True},
+        "ears": (0.56, 0.72, 0.64), "ear_inner": (0.3, 0.29, 0.31),
         "garments": ["kot_sweater", "kot_cargo", "kot_boots", "top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress",
                      "socks", "shoes", "gloves", "head_clips", "face_eyepatch", "neck_necklace"],
     },

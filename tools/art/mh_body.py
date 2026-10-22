@@ -206,7 +206,7 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=10.0, legs_in=4.5):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=25.0, legs_in=2.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
     import math
@@ -214,8 +214,9 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=10.0, legs
     for sx, S in ((1, "L"), (-1, "R")):
         ua, la, wr = f"upperarm01.{S}", f"lowerarm01.{S}", f"wrist.{S}"
         # опускание делим: треть — плечо (shoulder01), две трети — плечевая кость (без сжатия подмышки)
-        sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 3) * sx))
-        sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 2 / 3) * sx))
+        sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 6) * sx))
+        sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 5 / 6) * sx))
+        sk.rotate(ua, _rot([1, 0, 0], -math.radians(8)))          # рука чуть назад — в профиль не вынесена вперёд
         M = sk.world()
         sh = _apply(M[ua], sk.head[ua])
         el = _apply(M[la], sk.head[la])
@@ -256,6 +257,15 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=10.0, legs
                 f5 = _apply(M[f"finger5-1.{S}"], sk.head[f"finger5-1.{S}"])
                 ax = _norm(_sub(f2, f5))
                 sk.rotate(bn, _rot(ax, math.radians(finger_curl) * sx * (1 if j == 1 else 0.7)))
+        # большой палец — к ладони (не оттопырен крючком)
+        for j in (2, 3):
+            bn = f"finger1-{j}.{S}"
+            M = sk.world()
+            f2 = _apply(M[f"finger2-1.{S}"], sk.head[f"finger2-1.{S}"])
+            th = _apply(M[bn], sk.head[bn])
+            tt = _apply(M[bn], sk.tail[bn])
+            ax = _norm(_cross(_sub(tt, th), _sub(f2, th)))
+            sk.rotate(bn, _rot(ax, math.radians(20)))
     # ноги: стойка ровнее (у базы ноги расставлены «Λ»), стопы обратно параллельно полу
     for sx, S in ((1, "L"), (-1, "R")):
         sk.rotate(f"upperleg01.{S}", _rot([0, 0, 1], -math.radians(legs_in) * sx))
@@ -382,6 +392,8 @@ def lengthen(vs, groups, sk, arm=1.2, foot=1.12):
             if f > 0:
                 dz = v[2] - an[2]
                 v[2] = an[2] + dz * (1 + (foot - 1) * f)
+                dx = v[0] - an[0]
+                v[0] = an[0] + dx * (1 + 0.2 * f)          # стопа шире (у Meshy-листа стопа крупнее)
 
 
 def leg_weights(sk):
@@ -409,7 +421,7 @@ def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=Non
         # Ноги — масштаб ног (тоньше), торс и руки — масштаб торса; доля lw — по весам скелета,
         # а не по высоте (иначе опущенные ниже таза кисти ломаются на линии таза).
         z = (1 - lw) * (pelvis_z + (v[1] - p_y) * k_up) + lw * ((v[1] - ground) * k_leg)
-        kx = (1 - lw) * k_xy + lw * k_leg * 0.84      # ноги уже по ширине…
+        kx = (1 - lw) * k_xy + lw * k_leg * 0.95      # ноги чуть уже по ширине…
         ky = (1 - lw) * k_xy + lw * k_leg * 1.0       # …но не мельче по глубине (икра сбоку)
         return (v[0] * kx, -v[2] * ky, z)
 

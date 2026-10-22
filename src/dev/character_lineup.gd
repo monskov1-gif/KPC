@@ -59,7 +59,7 @@ func _focus(id: String) -> void:
 func debug_head_kot() -> void:
 	var cam := get_viewport().get_camera_3d()
 	var m: Node3D = get_node("kot")
-	cam.position = m.position + Vector3(0, 1.55, 0.62)
+	cam.position = m.position + Vector3(0, 1.6, 0.75)
 	cam.rotation_degrees = Vector3(-2, 0, 0)
 
 
@@ -86,7 +86,7 @@ func _kot_turn(yaw: float) -> void:
 	var m: Node3D = get_node("kot")
 	m.rotation_degrees.y = yaw
 	var cam := get_viewport().get_camera_3d()
-	cam.position = m.position + Vector3(0.0, 0.84, 3.3)
+	cam.position = m.position + Vector3(0.0, 0.9, 3.5)
 	cam.rotation_degrees = Vector3(-1, 0, 0)
 
 
@@ -126,7 +126,7 @@ func debug_head_kot_side() -> void:
 func _kot_head_turn(yaw: float) -> void:
 	_kot_turn(yaw)
 	var cam := get_viewport().get_camera_3d()
-	cam.position = get_node("kot").position + Vector3(0, 1.55, 0.62)
+	cam.position = get_node("kot").position + Vector3(0, 1.6, 0.75)
 	cam.rotation_degrees = Vector3(-2, 0, 0)
 
 
