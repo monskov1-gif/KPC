@@ -146,15 +146,28 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 			# Объёмные пряди-клоки: тун-свет + тонкий контур, чтобы читались завитки.
 			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9))
-			# Без контура на каждой пряди: при сотнях локонов обводка превращает причёску в «клубок линий».
-			thickness = 0.0
+			# Тонкий контур: читаются отдельные пряди (толстый превращал причёску в «клубок линий»).
+			thickness = 0.0007
+		"ear", "ear_inner", "ear_fur":
+			thickness = 0.0012    # тонкий контур — ухо не «вырезано» толстой линией
 		"skin":
+			# Цвет кожи с «отрисовкой» анатомии (впадины, румянец) — в цвете вершин (paint_skin).
+			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.94, 0.76, 0.76))
+			# Мягкая светотень кожи: видна форма тела (рёбра, ключицы, колени), а не плоская заливка.
+			m.set_shader_parameter("shade_softness", 0.22)
+			m.set_shader_parameter("shade_threshold", 0.5)
 		_:
 			if src_name.begins_with("face"):
 				m.set_shader_parameter("shade_color", Color(0.95, 0.8, 0.8))
 				m.set_shader_parameter("use_alpha_scissor", true)
 				thickness = 0.0022
+			elif src_name in ["lash", "brow", "crease", "strap", "patch"]:
+				# Объёмные ресницы, брови, складка века, повязка и шнурок: ровный цвет, без контура
+				# (с контуром повязка читается как дыра, а ресницы — как каракули).
+				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.9))
+				m.set_shader_parameter("rim_strength", 0.0)
+				thickness = 0.0
 			elif src_name.begins_with("eye"):
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.95))
 				m.set_shader_parameter("rim_strength", 0.0)
@@ -163,6 +176,9 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		var outline := ShaderMaterial.new()
 		outline.shader = OUTLINE
 		outline.set_shader_parameter("thickness", thickness)
+		if src_name == "hair_solid":
+			# контур прядей — тёмно-бирюзовый, а не бордовый: в просветах между прядями он не читается дырой
+			outline.set_shader_parameter("outline_color", Color(0.2, 0.32, 0.42))
 		if src_name.begins_with("face") and tex:
 			outline.set_shader_parameter("mask_tex", tex)
 			outline.set_shader_parameter("use_mask", true)

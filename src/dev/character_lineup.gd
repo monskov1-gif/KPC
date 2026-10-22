@@ -126,7 +126,7 @@ func debug_head_kot_side() -> void:
 func _kot_head_turn(yaw: float) -> void:
 	_kot_turn(yaw)
 	var cam := get_viewport().get_camera_3d()
-	cam.position = get_node("kot").position + Vector3(0, 1.6, 0.75)
+	cam.position = get_node("kot").position + Vector3(0, 1.62, 0.88)
 	cam.rotation_degrees = Vector3(-2, 0, 0)
 
 
@@ -184,3 +184,19 @@ func debug_kot_body_side() -> void:
 	_kot_turn(-90.0)
 	var cam := get_viewport().get_camera_3d()
 	cam.position = get_node("kot").position + Vector3(0.0, 0.8, 2.2)
+
+
+## Лицо без одежды и повязки: спереди, три четверти, профиль (для проверки лица критиком).
+func debug_face_bare_front() -> void:
+	debug_underwear()
+	_kot_head_turn(0.0)
+
+
+func debug_face_bare_34() -> void:
+	debug_underwear()
+	_kot_head_turn(-32.0)
+
+
+func debug_face_bare_side() -> void:
+	debug_underwear()
+	_kot_head_turn(-90.0)

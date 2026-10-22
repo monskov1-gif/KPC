@@ -12,9 +12,18 @@ void vertex() {
 	VERTEX += NORMAL * thickness;
 }
 
+uniform float mask_margin = 0.014;   // контур не рисуется и рядом с прорезями глаз (иначе — толстая «подводка»)
+
 void fragment() {
-	if (use_mask && texture(mask_tex, UV).a < 0.5) {
-		discard;
+	if (use_mask) {
+		float a = texture(mask_tex, UV).a;
+		a = min(a, texture(mask_tex, UV + vec2(mask_margin, 0.0)).a);
+		a = min(a, texture(mask_tex, UV - vec2(mask_margin, 0.0)).a);
+		a = min(a, texture(mask_tex, UV + vec2(0.0, mask_margin)).a);
+		a = min(a, texture(mask_tex, UV - vec2(0.0, mask_margin)).a);
+		if (a < 0.5) {
+			discard;
+		}
 	}
 	ALBEDO = outline_color.rgb;
 }
