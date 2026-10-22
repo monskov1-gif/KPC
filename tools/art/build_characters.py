@@ -334,7 +334,16 @@ def sculpt_head(x, y, z):
         y *= 1 + (sy - 1) * vert_w
     if z > 0:
         z *= 1 + (sz - 1) * sstep(0.0, 0.6, z)
+    return sculpt_features(x, y, z, temples=True)
+
+
+def sculpt_features(x, y, z, temples=False):
+    """Черты лица поверх формы головы: виски, скулы, глазницы, надбровья, нос, губы, подбородок."""
+    g = math.exp
+    front = max(0.0, -y)
     ax = abs(x)
+    if not temples:
+        front = min(1.0, front)
     # Виски чуть уже, скулы чуть выпуклее.
     x *= 1 - 0.035 * g(-((ax - 0.9) / 0.15) ** 2) * g(-((z - 0.2) / 0.25) ** 2)
     y -= 0.03 * front * g(-((ax - 0.5) / 0.2) ** 2) * g(-((z + 0.28) / 0.15) ** 2)
@@ -362,11 +371,84 @@ def sculpt_head(x, y, z):
     return x, y, z
 
 
+def loft_head_mesh(rx, ry, rz, cz, L):
+    """Голова «лофтом» по сечениям (как моделят по видам спереди и сбоку): на каждой высоте — полуширина,
+    передняя и задняя точка профиля (таблицы в U = глаз–подбородок, от подбородка; см. docs/MODEL_STUDY.md).
+    Возвращает вершины/грани в нормированных координатах головы (x/rx, y/ry, (z−cz)/rz)."""
+    U = (1 - 2 * FP["eye_v"] + 1) * rz      # глаз над подбородком: z_eye − (−1)
+    lv = [q[0] for q in L["halfw"]]
+    def tab(name, z):
+        return _pw(z, [(q[0], q[1]) for q in sorted(L[name], key=lambda q: -q[0])])
+    top = max(lv)
+    n_lv, n_a = 72, 96
+    rings = []
+    for i in range(n_lv + 1):
+        z = top * (i / n_lv) ** 1.0
+        hw, fr, bk = tab("halfw", z), tab("front", z), tab("back", z)
+        mid = tab("mid", z) if "mid" in L else (fr + bk) / 2
+        ring = []
+        for k in range(n_a):
+            a = 2 * math.pi * k / n_a                     # 0 — спереди (−Y), π/2 — +X
+            sx, cy = math.sin(a), math.cos(a)
+            if cy >= 0:                                   # передняя половина: «плоскость лица»
+                yy = mid + (fr - mid) * cy ** L.get("front_p", 0.75)
+            else:
+                yy = mid + (bk - mid) * (-cy) ** L.get("back_p", 1.0)
+            xx = hw * (abs(sx) ** L.get("side_p", 0.9)) * (1 if sx >= 0 else -1)
+            # Ширина/глубина: глаза Кота крупнее, чем у изученной модели — голова шире, чтобы внешний угол глаза
+            # остался на ~80% ширины лица (как у неё), а не у края головы.
+            ring.append((xx * L.get("w_scale", 1.0) * U, (yy + L.get("y_off", 0.0)) * L.get("d_scale", 1.0) * U, z * U))
+        rings.append(ring)
+    verts, faces = [], []
+    for ring in rings:
+        verts += ring
+    for i in range(n_lv):
+        for k in range(n_a):
+            a0, a1 = i * n_a + k, i * n_a + (k + 1) % n_a
+            faces.append((a0, a1, a1 + n_a, a0 + n_a))
+    # крышка макушки и низ подбородка
+    tc = len(verts); verts.append((0, rings[-1][0][1] * 0 + sum(q[1] for q in rings[-1]) / n_a, top * U))
+    for k in range(n_a):
+        faces.append(((n_lv) * n_a + k, (n_lv) * n_a + (k + 1) % n_a, tc))
+    bc = len(verts); verts.append((0, sum(q[1] for q in rings[0]) / n_a, 0))
+    for k in range(n_a):
+        faces.append(((k + 1) % n_a, k, bc))
+    chin_z = cz - rz
+    return [(x / rx, y / ry, (z + chin_z - cz) / rz) for x, y, z in verts], faces
+
+
 def build_head(cid, J, p):
-    """Вылепленная голова (sculpt_head) с плотной сеткой; лицо — рисованная текстура во фронтальной проекции."""
+    """Вылепленная голова (sculpt_head) с плотной сеткой; лицо — рисованная текстура во фронтальной проекции.
+    Если в face_params есть «loft» — форма головы строится по сечениям (шаблон по изученной модели)."""
     s = p["s"]
     rx, ry, rz = 0.08 * s * p["head"], 0.094 * s * p["head"], 0.106 * s * p["head"]
     cz = J["head"].z + rz * 1.12
+    if FP.get("loft"):
+        vs, fs = loft_head_mesh(rx, ry, rz, cz, FP["loft"])
+        me = bpy.data.meshes.new("head")
+        me.from_pydata([Vector(v) for v in vs], [], fs)
+        me.validate()
+        o = new_obj("head", me)
+        bpy.context.view_layer.objects.active = o
+        sub = o.modifiers.new("sub", "SUBSURF")
+        sub.levels = 1
+        apply_mods(o)
+        me = o.data
+        for v in me.vertices:
+            x, y, z = sculpt_features(*v.co)
+            v.co = Vector((x * rx, y * ry, z * rz + cz))
+        bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
+        uv = me.uv_layers.active or me.uv_layers.new(name="UVMap")
+        for poly in me.polygons:
+            for li in poly.loop_indices:
+                co = me.vertices[me.loops[li].vertex_index].co
+                if co.y > -0.15 * ry:
+                    uv.data[li].uv = (0.02, 0.02)
+                else:
+                    uv.data[li].uv = (0.5 + co.x / (2 * rx), 0.5 + (co.z - cz) / (2 * rz))
+        shade_smooth(o)
+        me.materials.append(mat(f"face_{cid}", SKIN, tex=os.path.join(TEX, f"face_{cid}.png"), clip=True))
+        return o, (rx, ry, rz, cz)
     bpy.ops.mesh.primitive_uv_sphere_add(segments=160, ring_count=128, radius=1)
     o = bpy.context.active_object
     o.name = "head"
@@ -834,6 +916,212 @@ def head_shell_cap(cf, hp, mat_cap):
         me.uv_layers.remove(me.uv_layers[0])
     shade_smooth(cap)
     return cap
+
+
+def ribbon(pts, ups, sides, widths, lift, m, ridge=0.32, thick=0.18):
+    """Прядь-лента как у игровых аниме-моделей: плоская, с гребнем посередине, острый кончик.
+    pts — ось, ups — «наружу» (нормаль к голове), sides — поперёк ленты, widths — ширина в точках."""
+    bm = bmesh.new()
+    uv_layer = bm.loops.layers.uv.new("UVMap")
+    prof = [(-0.5, 0.0), (-0.25, 0.75), (0.0, 1.0 + ridge), (0.25, 0.75), (0.5, 0.0), (0.0, -0.6)]
+    rings = []
+    n = len(pts)
+    for i, (c, up, sd, w) in enumerate(zip(pts, ups, sides, widths)):
+        h = max(w, 1e-4) * thick * 0.5
+        base = c + up * lift
+        rings.append([bm.verts.new(base + sd * (a * w) + up * (b * h)) for a, b in prof])
+    for i in range(n - 1):
+        va, vb = 1 - i / (n - 1), 1 - (i + 1) / (n - 1)
+        for k in range(len(prof)):
+            k2 = (k + 1) % len(prof)
+            f = bm.faces.new((rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k]))
+            for loop, uvv in zip(f.loops, ((k / 6, va), (k2 / 6, va), (k2 / 6, vb), (k / 6, vb))):
+                loop[uv_layer].uv = uvv
+    bm.normal_update()
+    mid = n // 2
+    f0 = next(f for f in bm.faces if all(v in rings[mid] or v in rings[mid + 1] for v in f.verts))
+    if f0.normal.dot(f0.calc_center_median() - (pts[mid] + ups[mid] * lift)) < 0:
+        bmesh.ops.reverse_faces(bm, faces=bm.faces)
+    me = bpy.data.meshes.new("strand")
+    bm.to_mesh(me)
+    bm.free()
+    o = new_obj("strand", me)
+    o.data.materials.append(m)
+    shade_smooth(o)
+    return o
+
+
+def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
+    """Причёска по принципу игровых аниме-моделей (изучено на референсах art/references/3d и Lyney):
+    1) «шлем» — масса волос вокруг черепа (копия головы, отодвинутая наружу; задаёт объём и форму);
+    2) поверх — широкие плоские пряди-ленты: расходятся от вихра на макушке (вперёд — чёлка, вбок, назад),
+       лежат по поверхности шлема с S-изгибом, концы завиваются наружу-вверх (крючок/локон)."""
+    global CONFORM
+    rx, ry, rz, cz = hd
+    rnd = random.Random(sum(map(ord, cid)) + 11)
+    deps = bpy.context.evaluated_depsgraph_get()
+    # 1. Шлем.
+    me = head_obj.data.copy()
+    helm = new_obj("hair_cap", me)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.normal_update()
+    hl, nape = hp["hairline"], hp["nape"]
+    # Вырезаем только лицо (переднюю часть ниже линии роста) — бока над щеками и ушами остаются: там объём копны.
+    face_x = hp.get("face_open_x", 0.7) * rx
+    kill = [v for v in bm.verts if (v.co.y < -0.05 * ry and v.co.z < cz + rz * hl and
+                                    (abs(v.co.x) < face_x or v.co.y < -0.75 * ry)) or v.co.z < cz - rz * nape]
+    bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    t_top, t_side = hp["thick_top"], hp["thick_side"]
+    for v in bm.verts:
+        zn = (v.co.z - cz) / rz
+        k = min(1.0, max(0.0, (zn + 0.3) / 1.2))
+        t = t_side + (t_top - t_side) * k * k * (3 - 2 * k)
+        t *= 1 + hp.get("cheek_puff", 0.0) * math.exp(-((zn + 0.45) / 0.35) ** 2)   # пышнее на уровне щёк
+        if v.co.y < -0.4 * ry:
+            t *= 0.55                                  # у линии роста волос над лбом тоньше
+        v.co += v.normal * t
+    for _ in range(3):
+        bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    bm.to_mesh(me)
+    bm.free()
+    me.materials.clear()
+    me.materials.append(mat_cap)
+    if me.uv_layers:
+        me.uv_layers.remove(me.uv_layers[0])
+    shade_smooth(helm)
+    t_helm = BVHTree.FromObject(helm, bpy.context.evaluated_depsgraph_get())
+    t_face = BVHTree.FromObject(head_obj, bpy.context.evaluated_depsgraph_get())
+
+    class _Outer:
+        """Прижатие к ВНЕШНЕЙ поверхности: из шлема и головы берём ту точку, что дальше от центра
+        (иначе пряди проваливаются под шлем на череп)."""
+        def find_nearest(self, P):
+            a = t_helm.find_nearest(P)
+            b = t_face.find_nearest(P)
+            if a[0] is None:
+                return b
+            if b[0] is None:
+                return a
+            c = Vector((0, 0, cz))
+            # если над точкой есть шлем на том же луче — берём шлем
+            return a if (a[0] - c).length >= (b[0] - c).length - 0.002 or (P - a[0]).length < 0.012 else b
+    t_snap = _Outer()
+    CONFORM = (t_helm, Vector((0, 0, cz)), rx, cz, rz)          # уши, заколки, хохолок — на шлеме
+    bottom = cz - rz * nape
+    whorl_dir = Vector((0, hp["whorl"][0], hp["whorl"][1])).normalized()
+    hit = t_helm.ray_cast(Vector((0, 0, cz)) + whorl_dir * rx * 4, -whorl_dir)
+    whorl = hit[0] if hit[0] else Vector((0, 0, cz + rz))
+
+    def on_helm(theta, phi):
+        d = Vector((math.sin(phi) * math.sin(theta), -math.sin(phi) * math.cos(theta), math.cos(phi)))
+        h = t_helm.ray_cast(Vector((0, 0, cz)) + d * rx * 4, -d)
+        return (h[0], h[1]) if h[0] else (None, None)
+
+    def strand(theta, phi, length, w0, lift, sway, curl_deg, curl_frac, bias, phase):
+        P, N = on_helm(theta, phi)
+        if P is None:
+            return None
+        step = 0.004
+        n = max(6, int(length / step))
+        nc = int(n * curl_frac)
+        pts, ups, sides = [P.copy()], [N.copy()], []
+        d = None
+        B = None
+        for i in range(n):
+            loc, N2, _, dist = t_snap.find_nearest(P)
+            N = N2 if N2 is not None else N
+            if (P - Vector((0, 0, cz))).dot(N) < 0:
+                N = -N
+            away = P - whorl
+            away -= N * away.dot(N)
+            down = Vector((0, 0, -1)) - N * (-N.z)
+            # у корня — от вихра, дальше пряди падают вниз по голове (вес «вниз» растёт по длине)
+            b = bias + (1 - bias) * min(1.0, i / max(1.0, n * 0.45))
+            flow = away.normalized() * (1 - b) + (down.normalized() if down.length > 1e-6 else away.normalized()) * b
+            flow -= N * flow.dot(N)
+            ang = sway * math.sin(i / n * math.pi * 2 * 0.8 + phase)
+            flow = Matrix.Rotation(ang, 3, N) @ flow.normalized()
+            if i < n - nc:                             # в завитке «тяга вниз» не действует, иначе он распрямляется
+                d = flow if d is None else (d * 0.55 + flow * 0.45).normalized()
+            if i >= n - nc:                            # завиток: кончик загибается наружу и вверх
+                if B is None:
+                    B = d.cross(N).normalized()
+                d = (Matrix.Rotation(math.radians(curl_deg) / max(nc, 1), 3, B) @ d).normalized()
+                P = P + d * step
+                up = B.cross(d).normalized()
+            elif P.z < bottom:                          # ниже шлема — свободно висит
+                d = (d * 0.75 + Vector((0, 0, -1)) * 0.25).normalized()
+                P = P + d * step
+                up = N
+            else:
+                P = P + d * step
+                loc, N2, _, _ = t_snap.find_nearest(P)
+                if loc is not None:
+                    if (loc - Vector((0, 0, cz))).dot(N2) < 0:
+                        N2 = -N2
+                    P = loc + N2 * 0.0008
+                    N = N2
+                up = N
+            pts.append(P.copy())
+            ups.append(up.copy())
+        for i in range(len(pts)):
+            T = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+            sd = T.cross(ups[i])
+            sides.append(sd.normalized() if sd.length > 1e-6 else Vector((1, 0, 0)))
+        if os.environ.get("KPC_DBG"):
+            prog = sum((pts[i + 1] - pts[i]).length for i in range(len(pts) - 1))
+            print(f"DBG strand th={theta:+.2f} ph={phi:.2f} n={n} z {pts[0].z:.3f}->{pts[-1].z:.3f} path={prog:.3f} "
+                  f"chord={(pts[-1]-pts[0]).length:.3f} zmin={min(q.z for q in pts):.3f} nc={nc} tail={[round(q.z, 3) for q in pts[-nc-1::max(1, nc // 5)]]}")
+        m = len(pts)
+        # Ширина держится почти до конца (завиток должен быть виден), сужение — только у самого кончика.
+        widths = [w0 * (0.75 + 0.25 * min(1.0, (i / (m - 1)) / 0.2)) * (1 - max(0.0, (i / (m - 1) - 0.72) / 0.28) ** 1.4)
+                  for i in range(m)]
+        return ribbon(pts, ups, sides, widths, lift, mat_strand)
+
+    objs = []
+    for g in hp["groups"]:
+        for j in range(g["count"]):
+            th0, th1 = g["theta"]
+            theta = th0 + (th1 - th0) * (j + rnd.uniform(0.2, 0.8)) / g["count"]
+            if g.get("skip_front") and abs(theta) < g["skip_front"]:
+                continue                                   # спереди вместо мантии — чёлка
+            phi = rnd.uniform(*g["phi"])
+            o = strand(theta, phi, rnd.uniform(*g["length"]), rnd.uniform(*g["w"]), g.get("lift", 0.002) + 0.0012 * j % 0.004,
+                       g.get("sway", 0.2), rnd.uniform(*g["curl"]), g.get("curl_frac", 0.3), g.get("bias", 0.3),
+                       rnd.uniform(0, 6.28))
+            if o is not None:
+                objs.append(o)
+    # Прядь на глаз под повязкой — длинная лента через глаз до щеки.
+    if hp.get("eye_lock"):
+        el = hp["eye_lock"]
+        for k in range(el["count"]):
+            o = strand(FP["patch_side"] * (el["theta"] + 0.12 * k), el["phi"] + 0.04 * k, el["length"] * (1 - 0.1 * k),
+                       el["w"], 0.004 + 0.002 * k, 0.15, el["curl"], 0.25, 0.65, k * 1.3)
+            if o is not None:
+                objs.append(o)
+    hair_obj = join(objs, "hair_cards")
+    paint_gradient(hair_obj, 0, 0, hp["c_root"], hp["c_tip"], by_uv=True, strand_jitter=hp.get("strand_jitter", 0.0))
+    paint_gradient(helm, cz + rz * 1.2, cz - rz * 0.4, hp["c_root"], hp["c_tip"])
+    # Толщина шлема: изнанка у щёк — настоящая поверхность цвета волос, а не «дыра» с контуром.
+    sol = helm.modifiers.new("sol", "SOLIDIFY")
+    sol.thickness = 0.004
+    sol.offset = -1
+    apply_mods(helm)
+    parts = [helm]
+    if hp.get("ahoge_spiral"):
+        st = whorl.copy()
+        r0 = rx * 0.17
+        pts = [st + Vector((0.0, 0.0, rz * hp.get("ahoge_h", 0.3) * k / 5)) for k in range(6)]
+        c0 = pts[-1] + Vector((r0, 0, 0))
+        for k in range(1, 26):
+            a = math.pi - k / 25 * 2 * math.pi * 1.35
+            rr = r0 * (1 - 0.6 * k / 25)
+            pts.append(c0 + Vector((math.cos(a) * rr, -0.0006 * k, math.sin(a) * rr)))
+        ah = clump(pts, rx * 0.12, rx * 0.05, (rx, ry, rz, cz), mat_strand, flat=0.8, v_tip=0.55)
+        paint_gradient(ah, 0, 0, hp["c_root"], hp["c_tip"], by_uv=True)
+        hair_obj = join([hair_obj, ah], "hair_cards")
+    return [join(parts, "hair_cap"), hair_obj]
 
 
 def build_hair(cid, hd, hp, mat_cap, mat_cards, hd_head=None):
@@ -1741,14 +2029,41 @@ CHARACTERS = {
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
-        "hair": {"conform": True,
-                 # Объём (реф. 16): слои прядей стоят от кожи всё дальше — внешний ~5 см, концы расходятся.
-                 "layers": [(0.1, 18, 1.12), (0.3, 24, 1.25), (0.55, 28, 1.38), (0.8, 30, 1.5), (1.05, 28, 1.6)],
-                 "bang_front": 0.5,
-                 "bang_len": 1.66, "bang_lift_end": 1.06,
-                 "bang_row": {"count": 15, "spread": 1.0, "phi0": 0.45, "lift": 1.2, "w": 1.1}, "side_len": 2.1, "long": 0.0, "curl": 0.15, "w": 1.3,
-                 "cap_low": 0.62, "face_cut": 0.42, "eye_bang": {"len": 1.7, "lift0": 1.1, "lift1": 1.05},
-                 "ahoge_spiral": True, "ahoge_h": 0.45, "solid": True, "ringlets": 0, "strand_jitter": 0.07,
+        # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
+        # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.12, "nape": 0.92, "thick_top": 0.04, "thick_side": 0.035,
+                 "cheek_puff": 1.1, "face_open_x": 0.82,
+                 "whorl": (0.12, 1.0),
+                 "groups": [
+                     # мантия: широкие пластины от макушки вниз по бокам и затылку, концы завиваются наружу
+                     {"count": 14, "theta": (-2.4, 2.4), "phi": (0.35, 0.5), "length": (0.33, 0.37), "w": (0.06, 0.075),
+                      "sway": 0.12, "curl": (140, 200), "curl_frac": 0.3, "bias": 0.35, "lift": 0.003, "skip_front": 0.95},
+                     {"count": 8, "theta": (2.25, 4.03), "phi": (0.4, 0.6), "length": (0.34, 0.38), "w": (0.065, 0.08),
+                      "sway": 0.12, "curl": (120, 180), "curl_frac": 0.3, "bias": 0.5, "lift": 0.003},
+                     # чёлка: от макушки до глаз, широкие острые пряди
+                     {"count": 11, "theta": (-1.1, 1.1), "phi": (0.3, 0.42), "length": (0.2, 0.23), "w": (0.045, 0.06),
+                      "sway": 0.2, "curl": (20, 50), "curl_frac": 0.25, "bias": 0.25, "lift": 0.006},
+                     # слой прядей поверх боков копны (щёки, уши, затылок снизу), концы — завитки наружу
+                     {"count": 12, "theta": (-2.6, -0.9), "phi": (0.6, 1.0), "length": (0.24, 0.28), "w": (0.045, 0.055),
+                      "sway": 0.2, "curl": (200, 280), "curl_frac": 0.4, "bias": 0.8, "lift": 0.005},
+                     {"count": 12, "theta": (0.9, 2.6), "phi": (0.6, 1.0), "length": (0.24, 0.28), "w": (0.045, 0.055),
+                      "sway": 0.2, "curl": (200, 280), "curl_frac": 0.4, "bias": 0.8, "lift": 0.005},
+                     # второй ряд чёлки — закрывает край шлема на лбу
+                     {"count": 9, "theta": (-0.9, 0.9), "phi": (0.5, 0.6), "length": (0.12, 0.14), "w": (0.04, 0.05),
+                      "sway": 0.25, "curl": (20, 50), "curl_frac": 0.25, "bias": 0.4, "lift": 0.009},
+                     # пряди вдоль щёк до линии челюсти
+                     {"count": 4, "theta": (-1.45, -0.95), "phi": (0.55, 0.75), "length": (0.22, 0.26), "w": (0.04, 0.05),
+                      "sway": 0.15, "curl": (60, 120), "curl_frac": 0.3, "bias": 0.85, "lift": 0.007},
+                     {"count": 4, "theta": (0.95, 1.45), "phi": (0.55, 0.75), "length": (0.22, 0.26), "w": (0.04, 0.05),
+                      "sway": 0.15, "curl": (60, 120), "curl_frac": 0.3, "bias": 0.85, "lift": 0.007},
+                     # боковые локоны с завитком (реф. 16)
+                     {"count": 4, "theta": (-1.95, -1.15), "phi": (0.6, 0.8), "length": (0.17, 0.2), "w": (0.045, 0.055),
+                      "sway": 0.15, "curl": (200, 260), "curl_frac": 0.45, "bias": 0.6, "lift": 0.008},
+                     {"count": 4, "theta": (1.15, 1.95), "phi": (0.6, 0.8), "length": (0.17, 0.2), "w": (0.045, 0.055),
+                      "sway": 0.15, "curl": (200, 260), "curl_frac": 0.45, "bias": 0.6, "lift": 0.008},
+                 ],
+                 "eye_lock": {"count": 2, "theta": 0.4, "phi": 0.32, "length": 0.19, "w": 0.06, "curl": 45},
+                 "ahoge_spiral": True, "ahoge_h": 0.45, "strand_jitter": 0.06,
                  "c_root": (0.6, 0.76, 0.66), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
         "ear": {"theta": 1.38, "phi": 0.86, "lift": 1.1, "tip": (0.5, 0.02, 0.92), "r": 0.5},
@@ -1825,8 +2140,12 @@ def build(cid):
         sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
         hd_h = (hd[0] * sx, hd[1] * sy, hd[2] * sz, hd[3])
         CONFORM = (BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get()), Vector((0, 0, hd[3])), hd[0], hd[3], hd[2])
-    hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
-                      hd_head=hd if hv else None)
+    if c["hair"].get("ribbons"):
+        hair = build_hair_ribbons(cid, head, hd, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat)
+        hd_h = (hd[0] * 1.15, hd[1] * 1.15, hd[2] * 1.1, hd[3])
+    else:
+        hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
+                          hd_head=hd if hv else None)
     head_parts = [head] + eyes + hair
     marks = landmarks_head(head, hd, hair)
     if c.get("ears"):
@@ -1907,7 +2226,7 @@ def build(cid):
             tree = BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get())
             # Повязка (реф. 16) — скруглённый прямоугольник, повторяет изгиб лица: кусок оболочки головы.
             ex = ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx
-            pa, pb, pcz = rx * 0.55, rz * 0.3, ez + rz * FP.get("patch_dz", 0.06)
+            pa, pb, pcz = (FP["eye_w"] * 2 + 0.1) * rx, rz * 0.26, ez + rz * FP.get("patch_dz", 0.06)
             pm = head.data.copy()
             patch = new_obj("patch", pm)
             bm = bmesh.new()
