@@ -1262,6 +1262,35 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                        twist=rnd.uniform(-0.6, 0.6) if g.get("curl_both") else 0.0)
             if o is not None:
                 objs.append(o)
+    # Кудри-спирали (Meshy-лист: бока и затылок — мелкие тугие локоны): круглые трубки, винтом вниз-наружу.
+    rg = hp.get("ringlet_coils")
+    if rg:
+        for j in range(rg["count"]):
+            theta = rnd.uniform(-math.pi, math.pi)
+            if abs(theta) < rg.get("skip_front", 0.7):
+                continue
+            phi = rnd.uniform(*rg["phi"])
+            P0, N0 = on_helm(theta, phi)
+            if P0 is None:
+                continue
+            out = Vector((N0.x, N0.y, 0)).normalized() if Vector((N0.x, N0.y, 0)).length > 1e-4 else Vector((0, 1, 0))
+            axis = (out * rg.get("splay", 0.35) + Vector((0, 0, -1))).normalized()
+            e1 = axis.cross(Vector((0, 0, 1)))
+            e1 = e1.normalized() if e1.length > 1e-4 else Vector((1, 0, 0))
+            e2 = axis.cross(e1).normalized()
+            r = rnd.uniform(*rg["r"])
+            turns = rnd.uniform(*rg["turns"])
+            drop = rnd.uniform(*rg["drop"])
+            spin = rnd.choice((-1, 1))
+            steps = int(10 * turns) + 2
+            a0 = rnd.uniform(0, 6.28)
+            pts = [P0 + N0 * 0.002]
+            for i in range(1, steps + 1):
+                t = i / steps
+                a = a0 + spin * 2 * math.pi * turns * t
+                rr = r * (0.6 + 0.4 * min(1.0, t * 3))
+                pts.append(P0 + N0 * (0.003 + r * 0.8) + axis * drop * t + (e1 * math.cos(a) + e2 * math.sin(a)) * rr)
+            objs.append(clump(pts, rg["w"] * 1.0, rg["w"] * 0.45, (rx, ry, rz, cz), mat_strand, flat=0.85, seg=6, v_tip=0.0))
     # Прядь на глаз под повязкой — длинная лента через глаз до щеки.
     if hp.get("eye_lock"):
         el = hp["eye_lock"]
@@ -1271,7 +1300,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
             if o is not None:
                 objs.append(o)
     hair_obj = join(objs, "hair_cards")
-    paint_gradient(hair_obj, 0, 0, hp["c_root"], hp["c_tip"], by_uv=True, strand_jitter=hp.get("strand_jitter", 0.0))
+    # Цвет по высоте (Meshy-лист): мятный сверху → голубой к низу копны; каждая прядь чуть своего оттенка.
+    paint_gradient(hair_obj, cz + rz * 0.75, cz - rz * 0.35, hp["c_root"], hp["c_tip"], strand_jitter=hp.get("strand_jitter", 0.0))
     paint_gradient(helm, cz + rz * 1.2, cz - rz * 0.4, hp["c_root"], hp["c_tip"])
     # Толщина шлема: изнанка у щёк — настоящая поверхность цвета волос, а не «дыра» с контуром.
     sol = helm.modifiers.new("sol", "SOLIDIFY")
@@ -2321,20 +2351,22 @@ CHARACTERS = {
                      {"count": 18, "theta": (-1.15, 1.15), "phi": (0.25, 0.45), "length": (0.19, 0.24), "w": (0.026, 0.036),
                       "sway": 0.3, "curl": (25, 70), "curl_frac": 0.22, "bias": 0.55, "lift": 0.007, "curl_both": True},
                      # средний слой по бокам и сзади
-                     {"count": 61, "theta": (-3.14, 3.14), "phi": (0.6, 1.25), "length": (0.12, 0.26), "w": (0.022, 0.032),
+                     {"count": 26, "theta": (-3.14, 3.14), "phi": (0.6, 1.25), "length": (0.12, 0.26), "w": (0.022, 0.032),
                       "sway": 0.3, "curl": (120, 220), "curl_frac": 0.45, "bias": 0.75, "lift": 0.007, "skip_front": 1.15,
                       "curl_both": True},
                      # нижний слой: свисающие локоны закрывают затылок и шею до ворота
-                     {"count": 80, "theta": (-3.14, 3.14), "phi": (1.3, 1.8), "length": (0.14, 0.24), "w": (0.021, 0.028),
+                     {"count": 24, "theta": (-3.14, 3.14), "phi": (1.3, 1.8), "length": (0.14, 0.24), "w": (0.021, 0.028),
                       "sway": 0.2, "curl": (260, 380), "curl_frac": 0.6, "bias": 0.9, "lift": 0.006, "skip_front": 1.2,
                       "curl_both": True},
                      # мелкие завитки по поверхности (фактура кудрей)
-                     {"count": 160, "theta": (-3.14, 3.14), "phi": (0.25, 1.3), "length": (0.05, 0.08), "w": (0.017, 0.022),
+                     {"count": 60, "theta": (-3.14, 3.14), "phi": (0.25, 1.3), "length": (0.05, 0.08), "w": (0.017, 0.022),
                       "sway": 0.1, "curl": (260, 360), "curl_frac": 0.8, "bias": 0.5, "lift": 0.006, "skip_front": 0.6,
                       "curl_both": True},
                  ],
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
                  "ahoge_spiral": True, "ahoge_h": 0.6, "strand_jitter": 0.06,
+                 "ringlet_coils": {"count": 260, "phi": (0.8, 1.95), "r": (0.009, 0.014), "turns": (1.4, 2.4),
+                                   "drop": (0.035, 0.075), "w": 0.013, "splay": 0.5, "skip_front": 0.72},
                  "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
         "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.26, "tilt": 24, "yaw": -4},
