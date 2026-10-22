@@ -206,7 +206,7 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=25.0, legs_in=2.0):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=35.0, legs_in=5.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
     import math
@@ -216,7 +216,7 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=25.0, legs
         # опускание делим: треть — плечо (shoulder01), две трети — плечевая кость (без сжатия подмышки)
         sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 6) * sx))
         sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 5 / 6) * sx))
-        sk.rotate(ua, _rot([1, 0, 0], -math.radians(8)))          # рука чуть назад — в профиль не вынесена вперёд
+        sk.rotate(ua, _rot([1, 0, 0], -math.radians(20)))          # рука чуть назад — в профиль не вынесена вперёд
         M = sk.world()
         sh = _apply(M[ua], sk.head[ua])
         el = _apply(M[la], sk.head[la])
@@ -422,7 +422,7 @@ def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=Non
         # а не по высоте (иначе опущенные ниже таза кисти ломаются на линии таза).
         z = (1 - lw) * (pelvis_z + (v[1] - p_y) * k_up) + lw * ((v[1] - ground) * k_leg)
         kx = (1 - lw) * k_xy + lw * k_leg * 0.95      # ноги чуть уже по ширине…
-        ky = (1 - lw) * k_xy + lw * k_leg * 1.0       # …но не мельче по глубине (икра сбоку)
+        ky = (1 - lw) * k_up + lw * k_leg * 1.0       # …глубина торса без сужения (грудная клетка объёмнее)
         return (v[0] * kx, -v[2] * ky, z)
 
     def lw_of(i):

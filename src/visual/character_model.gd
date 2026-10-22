@@ -141,15 +141,16 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		"hair_cap":
 			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.58, 0.64, 0.86))
-			thickness = 0.0
+			thickness = 0.0013
 		"hair_solid":
 			# Объёмные пряди-клоки: тун-свет + тонкий контур, чтобы читались завитки.
 			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9))
 			# Тонкий контур: читаются отдельные пряди (толстый превращал причёску в «клубок линий»).
-			thickness = 0.0007
+			thickness = 0.0013
 		"ear", "ear_inner", "ear_fur":
 			thickness = 0.0012    # тонкий контур — ухо не «вырезано» толстой линией
+			m.set_shader_parameter("shade_color", Color(0.7, 0.75, 0.8))   # нейтральная тень: середина уха угольная, не сливовая
 		"skin":
 			# Цвет кожи с «отрисовкой» анатомии (впадины, румянец) — в цвете вершин (paint_skin).
 			m.set_shader_parameter("use_vertex_color", true)
@@ -176,7 +177,7 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		var outline := ShaderMaterial.new()
 		outline.shader = OUTLINE
 		outline.set_shader_parameter("thickness", thickness)
-		if src_name == "hair_solid":
+		if src_name in ["hair_solid", "hair_cap"]:
 			# контур прядей — тёмно-бирюзовый, а не бордовый: в просветах между прядями он не читается дырой
 			outline.set_shader_parameter("outline_color", Color(0.2, 0.32, 0.42))
 		if src_name.begins_with("face") and tex:

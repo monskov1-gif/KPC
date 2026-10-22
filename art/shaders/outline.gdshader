@@ -12,7 +12,7 @@ void vertex() {
 	VERTEX += NORMAL * thickness;
 }
 
-uniform float mask_margin = 0.014;   // контур не рисуется и рядом с прорезями глаз (иначе — толстая «подводка»)
+uniform float mask_margin = 0.03;   // контур не рисуется и рядом с прорезями глаз (иначе — толстая «подводка»)
 
 void fragment() {
 	if (use_mask) {

@@ -138,7 +138,7 @@ def face(cid, c):
     img.alpha_composite(soft((S, S), (255, 250, 246), 0.8, S * 0.003,
                              lambda dd: dd.ellipse((S * 0.493, S * (NOSE_Y - 0.012), S * 0.499, S * (NOSE_Y - 0.005)), fill=255)))
     # Тень под кончиком носа.
-    img.alpha_composite(soft((S, S), (226, 170, 166), 0.55, S * 0.004,
+    img.alpha_composite(soft((S, S), (212, 150, 148), 0.8, S * 0.004,
                              lambda dd: dd.ellipse((S * 0.488, S * (NOSE_Y + 0.008), S * 0.512, S * (NOSE_Y + 0.016)), fill=255)))
     # Губы.
     mc = (176, 96, 104, 255)
