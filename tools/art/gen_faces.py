@@ -34,7 +34,7 @@ def face_params(cid):
 CHARS = {
     # Кот (реф. 04): светло-голубые глаза, спокойное лицо, лёгкий румянец.
     # Ресницы, складка века и брови у Кота — объёмные (build_characters.build_lashes), на текстуре их нет.
-    "kot": {"iris": (168, 184, 228), "iris_dark": (52, 62, 112), "brow": (44, 118, 120), "mouth": "lips",
+    "kot": {"iris": (128, 146, 196), "iris_dark": (52, 62, 112), "brow": (44, 118, 120), "mouth": "lips",
             "blush": 0.45, "bags": False, "lash": (48, 36, 54), "lash_len": 1.0, "geo_lashes": True},
     # Габи (реф. 05–07): фиолетовые глаза, мягкая улыбка, ресницы гуще.
     "gabi": {"iris": (176, 146, 226), "iris_dark": (72, 44, 124), "brow": (150, 50, 70), "mouth": "smile",
@@ -139,7 +139,7 @@ def face(cid, c):
                              lambda dd: dd.ellipse((S * 0.493, S * (NOSE_Y - 0.012), S * 0.499, S * (NOSE_Y - 0.005)), fill=255)))
     # Тень под кончиком носа.
     img.alpha_composite(soft((S, S), (212, 150, 148), 0.8, S * 0.004,
-                             lambda dd: dd.ellipse((S * 0.488, S * (NOSE_Y + 0.008), S * 0.512, S * (NOSE_Y + 0.016)), fill=255)))
+                             lambda dd: dd.ellipse((S * 0.484, S * (NOSE_Y + 0.008), S * 0.516, S * (NOSE_Y + 0.016)), fill=255)))
     # Губы.
     mc = (176, 96, 104, 255)
     mw = int(S * 0.0045)
@@ -154,7 +154,7 @@ def face(cid, c):
                                  lambda dd: dd.ellipse((S * mx(0.485), S * (my + 0.03), S * mx(0.515), S * (my + 0.042)), fill=255)))
         d = ImageDraw.Draw(img)
         d.line([(S * mx(0.468), S * (my + 0.002)), (S * mx(0.485), S * my), (S * 0.5, S * (my + 0.0015)), (S * mx(0.515), S * my), (S * mx(0.532), S * (my + 0.002))],
-               fill=(168, 96, 104, 255), width=int(S * 0.0032), joint="curve")
+               fill=(150, 80, 90, 255), width=int(S * 0.0045), joint="curve")
     elif c["mouth"] == "neutral":
         d.arc((S * 0.47, S * (my - 0.012), S * 0.53, S * (my + 0.013)), 25, 155, fill=mc, width=mw)
     elif c["mouth"] == "smile":

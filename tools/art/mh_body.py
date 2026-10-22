@@ -206,7 +206,7 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=35.0, legs_in=5.0):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=22.0, legs_in=7.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
     import math
@@ -216,7 +216,7 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=35.0, legs
         # опускание делим: треть — плечо (shoulder01), две трети — плечевая кость (без сжатия подмышки)
         sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 6) * sx))
         sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 5 / 6) * sx))
-        sk.rotate(ua, _rot([1, 0, 0], -math.radians(20)))          # рука чуть назад — в профиль не вынесена вперёд
+        sk.rotate(ua, _rot([1, 0, 0], math.radians(14)))          # рука чуть назад — в профиль не вынесена вперёд
         M = sk.world()
         sh = _apply(M[ua], sk.head[ua])
         el = _apply(M[la], sk.head[la])
@@ -256,7 +256,7 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=35.0, legs
                 f2 = _apply(M[f"finger2-1.{S}"], sk.head[f"finger2-1.{S}"])
                 f5 = _apply(M[f"finger5-1.{S}"], sk.head[f"finger5-1.{S}"])
                 ax = _norm(_sub(f2, f5))
-                sk.rotate(bn, _rot(ax, math.radians(finger_curl) * sx * (1 if j == 1 else 0.7)))
+                sk.rotate(bn, _rot(ax, math.radians(finger_curl) * -sx * (1 if j == 1 else 0.7)))
         # большой палец — к ладони (не оттопырен крючком)
         for j in (2, 3):
             bn = f"finger1-{j}.{S}"
@@ -421,7 +421,7 @@ def to_character(vs, faces, groups, neck_z, pelvis_z, s=1.0, slim=1.0, cut_y=Non
         # Ноги — масштаб ног (тоньше), торс и руки — масштаб торса; доля lw — по весам скелета,
         # а не по высоте (иначе опущенные ниже таза кисти ломаются на линии таза).
         z = (1 - lw) * (pelvis_z + (v[1] - p_y) * k_up) + lw * ((v[1] - ground) * k_leg)
-        kx = (1 - lw) * k_xy + lw * k_leg * 0.95      # ноги чуть уже по ширине…
+        kx = (1 - lw) * k_xy + lw * k_leg * 0.96      # ноги по ширине (колени, икры)…
         ky = (1 - lw) * k_up + lw * k_leg * 1.0       # …глубина торса без сужения (грудная клетка объёмнее)
         return (v[0] * kx, -v[2] * ky, z)
 

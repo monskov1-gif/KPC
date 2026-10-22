@@ -345,14 +345,14 @@ def paint_skin(o, M, s):
         strokes += [
             (Vector((sx * 0.012, 0, tz(0.93))), Vector((sx * abs(sh.x) * 0.9, 0, tz(0.97))), 0.0132, 0.48, -1),   # ключица
             (Vector((sx * 0.012, 0, tz(0.70))), Vector((sx * 0.07, 0, tz(0.69))), 0.0198, 0.32, -1),   # низ грудной
-            (Vector((sx * 0.052, 0, tz(0.75))), Vector((sx * 0.052, 0, tz(0.749))), 0.0055, 0.45, -1),       # сосок
+            (Vector((sx * 0.052, 0, tz(0.75))), Vector((sx * 0.052, 0, tz(0.749))), 0.012, 0.75, -1),       # сосок
             (Vector((sx * 0.07, 0, tz(0.69))), Vector((sx * 0.085, 0, tz(0.76))), 0.0176, 0.18, -1),
-            (Vector((sx * 0.004, 0, tz(0.56))), Vector((sx * 0.036, 0, tz(0.555))), 0.0088, 0.24, -1),          # пресс
-            (Vector((sx * 0.004, 0, tz(0.44))), Vector((sx * 0.034, 0, tz(0.435))), 0.0088, 0.22, -1),
+            (Vector((sx * 0.004, 0, tz(0.56))), Vector((sx * 0.036, 0, tz(0.555))), 0.0088, 0.36, -1),          # пресс
+            (Vector((sx * 0.004, 0, tz(0.44))), Vector((sx * 0.034, 0, tz(0.435))), 0.0088, 0.33, -1),
             (Vector((sx * 0.004, 0, tz(0.32))), Vector((sx * 0.032, 0, tz(0.315))), 0.0088, 0.11, -1),
-            (Vector((sx * 0.055, 0, tz(0.63))), Vector((sx * 0.082, 0, tz(0.59))), 0.0088, 0.09, -1),           # рёбра
-            (Vector((sx * 0.058, 0, tz(0.56))), Vector((sx * 0.084, 0, tz(0.52))), 0.0088, 0.08, -1),
-            (Vector((sx * 0.06, 0, tz(0.49))), Vector((sx * 0.083, 0, tz(0.45))), 0.0088, 0.07, -1),
+            (Vector((sx * 0.055, 0, tz(0.63))), Vector((sx * 0.082, 0, tz(0.59))), 0.0088, 0.14, -1),           # рёбра
+            (Vector((sx * 0.058, 0, tz(0.56))), Vector((sx * 0.084, 0, tz(0.52))), 0.0088, 0.12, -1),
+            (Vector((sx * 0.06, 0, tz(0.49))), Vector((sx * 0.083, 0, tz(0.45))), 0.0088, 0.11, -1),
             (Vector((sx * 0.068, 0, tz(0.2))), Vector((sx * 0.028, 0, tz(0.02))), 0.0132, 0.25, -1),            # «V» к паху
             (Vector((kn.x - sx * 0.018, 0, kn.z - 0.022)), Vector((kn.x + sx * 0.018, 0, kn.z - 0.022)), 0.0132, 0.25, -1),  # под коленом
             (Vector((kn.x - sx * 0.02, 0, kn.z + 0.03)), Vector((kn.x + sx * 0.02, 0, kn.z + 0.03)), 0.0110, 0.14, -1),
@@ -783,7 +783,7 @@ def build_lashes(head_obj, hd, c):
         for i, (pt, n) in enumerate(P):
             t = i / (len(P) - 1)
             u_dir = (Vector((0, 0, 1)) - n * n.z).normalized()
-            th = (0.0024 + 0.0028 * t ** 1.3) * k          # густая верхняя линия по всей длине, к углу — «крыло»
+            th = (0.0036 + 0.0036 * t ** 1.3) * k          # густая верхняя линия по всей длине, к углу — «крыло»
             base = pt + n * 0.0003 - u_dir * 0.0004 * k
             top = pt + u_dir * th + n * (0.0006 + 0.5 * th)
             rows.append((base, top))
@@ -844,7 +844,7 @@ def build_lashes(head_obj, hd, c):
             pt, n = to3d(px, py, push=0.0005)
             u_dir = (Vector((0, 0, 1)) - n * n.z).normalized()
             inner = (1 - t) if side > 0 else t
-            wd = (0.0009 + 0.0016 * inner) * k
+            wd = (0.0006 + 0.0011 * inner) * k
             rows.append((pt - u_dir * wd, pt + u_dir * wd))
         out.append(_strip(rows, m_brow, "brow"))
     return out
@@ -1445,6 +1445,7 @@ def cat_ear_mesh(W, H, D, side, m_out, m_in, m_fur):
             x = cx + u * hw
             cup = D * 0.9 * (1 - u * u) * math.sin(math.pi * min(1.0, v / H * 1.1))      # вогнутая чашка
             bulge = D * (1 - u * u) ** 0.5 * (1 - v / H) + 0.002
+            bulge = max(bulge, cup + 0.15 * D)               # задняя стенка не протыкается чашкой
             rf.append(bm.verts.new((x, -bulge * 0.15 + cup, v)))
             rb.append(bm.verts.new((x, bulge, v)))
         front.append(rf)
@@ -2299,14 +2300,14 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
                  # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
-                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": 24, "neck_z": 1.36, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": 18, "neck_z": 1.36, "pelvis_z": 0.9, "slim": 0.89}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
         # Причёска по принципу игровых аниме-моделей (см. docs/MODEL_STUDY.md): шлем массы волос + пряди-ленты
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.28, "nape": 1.0, "thick_top": 0.06, "thick_side": 0.055,
-                 "cheek_puff": 0.45, "face_open_x": 0.82, "thick": 1.0,
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.28, "nape": 1.3, "thick_top": 0.085, "thick_side": 0.055,
+                 "cheek_puff": 0.45, "face_open_x": 0.68, "thick": 1.0,
                  "whorl": (0.12, 1.0),
                  # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
                  "groups": [
@@ -2317,7 +2318,7 @@ CHARACTERS = {
                      {"count": 28, "theta": (2.2, 4.08), "phi": (0.3, 0.8), "length": (0.22, 0.36), "w": (0.026, 0.038),
                       "sway": 0.3, "curl": (220, 340), "curl_frac": 0.35, "bias": 0.5, "lift": 0.004, "curl_both": True},
                      # чёлка: локоны до глаз и ниже, концы — завитки вбок
-                     {"count": 18, "theta": (-1.15, 1.15), "phi": (0.25, 0.45), "length": (0.15, 0.2), "w": (0.026, 0.036),
+                     {"count": 18, "theta": (-1.15, 1.15), "phi": (0.25, 0.45), "length": (0.19, 0.24), "w": (0.026, 0.036),
                       "sway": 0.3, "curl": (25, 70), "curl_frac": 0.22, "bias": 0.55, "lift": 0.007, "curl_both": True},
                      # средний слой по бокам и сзади
                      {"count": 61, "theta": (-3.14, 3.14), "phi": (0.6, 1.25), "length": (0.12, 0.26), "w": (0.022, 0.032),
@@ -2333,13 +2334,13 @@ CHARACTERS = {
                       "curl_both": True},
                  ],
                  "eye_lock": {"count": 3, "theta": 0.3, "phi": 0.3, "length": 0.2, "w": 0.045, "curl": 60},
-                 "ahoge_spiral": True, "ahoge_h": 0.35, "strand_jitter": 0.06,
+                 "ahoge_spiral": True, "ahoge_h": 0.6, "strand_jitter": 0.06,
                  "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72)},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
-        "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.26, "tilt": 16, "yaw": -4},
+        "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.3, "h": 1.3, "d": 0.26, "tilt": 24, "yaw": -4},
         # Заколки (theta, phi, отступ от кожи, поворот, масштаб): большая рыбка слева, малая справа, облачко.
         "clips": {"fish": [(-1.3, 1.45, 1.38, 2.4, 2.0), (1.3, 1.45, 1.38, 0.0, 1.5)], "cloud": (0.62, 0.95, 1.4, 0.1, 2.0)},
-        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.16, 0.3, 0.32)},
+        "geo_lashes": {"lash": (0.1, 0.08, 0.12), "brow": (0.3, 0.48, 0.48)},
         "ears": (0.56, 0.72, 0.64), "ear_inner": (0.13, 0.12, 0.13),
         "garments": ["kot_sweater", "kot_cargo", "kot_boots", "top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress",
                      "socks", "shoes", "gloves", "head_clips", "face_eyepatch", "neck_necklace"],
