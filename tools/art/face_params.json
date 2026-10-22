@@ -317,6 +317,7 @@
       "w_scale": 1.123,
       "d_scale": 0.966
     },
-    "brow_up": 1.5
+    "brow_up": 1.5,
+    "head_lift": 0.83
   }
 }

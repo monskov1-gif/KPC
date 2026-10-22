@@ -206,7 +206,7 @@ class Skeleton:
             self.vs[i][:] = v
 
 
-def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=22.0, legs_in=7.0):
+def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=14.0, legs_in=3.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0)."""
     import math
@@ -363,11 +363,13 @@ def bone_share(sk, prefixes):
     return out
 
 
-def lengthen(vs, groups, sk, arm=1.2, foot=1.12):
+def lengthen(vs, groups, sk, arm=1.2, foot=1.12, hand=1.25):
     """Удлинить руки (от плечевого сустава вдоль оси руки) и стопы (от голеностопа вперёд) по весам скелета —
     аниме-пропорции Meshy-листа: кончики пальцев ниже промежности, стопа длиннее."""
     aw = bone_share(sk, ARM_BONES)
     fw = bone_share(sk, FOOT_BONES)
+    hw = bone_share(sk, ("wrist", "finger", "metacarpal"))
+    jh = {i: 1.0 for g, idx in groups.items() if g.startswith("joint-") and any(t in g for t in ("finger", "hand-2", "hand-3")) for i in idx}
     jw = {}
     for g, idx in groups.items():
         if g.startswith("joint-"):
@@ -380,6 +382,7 @@ def lengthen(vs, groups, sk, arm=1.2, foot=1.12):
         hd = joint(vs, groups, f"{side}-hand")
         d = _norm(_sub(hd, sh))
         an = joint(vs, groups, f"{side}-ankle")
+        hd2 = [hd[c] + d[c] * _dot(_sub(hd, sh), d) * (arm - 1) for c in range(3)]   # запястье после удлинения руки
         for i, v in enumerate(vs):
             if v[0] * sx <= 0:
                 continue
@@ -389,6 +392,10 @@ def lengthen(vs, groups, sk, arm=1.2, foot=1.12):
                 if t > 0:
                     for c in range(3):
                         v[c] += d[c] * t * (arm - 1) * a
+            h = jh.get(i, hw.get(i, 0.0))
+            if h > 0:                                  # кисть крупнее (Meshy-лист): от запястья ×hand
+                for c in range(3):
+                    v[c] = hd2[c] + (v[c] - hd2[c]) * (1 + (hand - 1) * h)
             if f > 0:
                 dz = v[2] - an[2]
                 v[2] = an[2] + dz * (1 + (foot - 1) * f)
