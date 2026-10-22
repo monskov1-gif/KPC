@@ -416,7 +416,10 @@ func _frame_camera() -> void:
 	# Рост из данных персонажа: модели построены в реальном масштабе (Кот 163 см, Сора 206 см).
 	var h_cm = session.characters.get_data(character_id).get("height_cm")
 	var hgt := (float(h_cm) if h_cm != null else 160.0) / 100.0
-	_preview_cam.position = Vector3(0, hgt * 0.56, hgt * 2.45)
+	# Уши, хохолок и пышные волосы выше макушки — берём реальную высоту модели, чтобы их не срезало кадром.
+	if _appearance and _appearance.has_method("height"):
+		hgt = maxf(hgt, _appearance.height())
+	_preview_cam.position = Vector3(0, hgt * 0.53, hgt * 2.6)
 	_preview_cam.rotation_degrees = Vector3(-4, 0, 0)
 
 

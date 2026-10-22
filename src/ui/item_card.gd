@@ -71,6 +71,16 @@ func _process(_delta: float) -> void:
 		queue_redraw()
 
 
+static var _icons := {}
+
+
+static func _icon(id: String) -> Texture2D:
+	if not _icons.has(id):
+		var path := "res://art/items/%s.png" % id
+		_icons[id] = load(path) if ResourceLoader.exists(path) else null
+	return _icons[id]
+
+
 func _draw() -> void:
 	# Подложка — текстура карточки по редкости (art/ui/card_rN.png); надетая — со свечением.
 	var r := Rect2(Vector2.ZERO, size)
@@ -81,12 +91,18 @@ func _draw() -> void:
 		draw_texture_rect(UiTheme.tex("card_r%d.png" % stars), r, false,
 			Color(1.06, 1.06, 1.06) if _hover else Color.WHITE)
 
-	# Миниатюра: силуэт слота в цвете вещи (PLACEHOLDER до рендеров вещей).
+	# Миниатюра: рендер самой вещи из её 3D-меша (tools/render_icons.sh → art/items/<id>.png);
+	# если рендера нет — силуэт слота в цвете вещи.
 	var side := r.size.x * 0.62
 	var thumb := Rect2(Vector2((r.size.x - side) / 2.0, r.size.y * 0.2), Vector2(side, side))
-	var col := item.placeholder_color
-	Icons.draw(self, item.slot, thumb.grow(1.5), Color(0.35, 0.2, 0.25, 0.18))
-	Icons.draw(self, item.slot, thumb, col, col.darkened(0.4).lerp(UiTheme.TEXT_DIM, 0.25))
+	var icon := _icon(item.id)
+	if icon:
+		var big := Rect2(Vector2(r.size.x * 0.1, r.size.y * 0.12), Vector2(r.size.x * 0.8, r.size.x * 0.8))
+		draw_texture_rect(icon, big, false)
+	else:
+		var col := item.placeholder_color
+		Icons.draw(self, item.slot, thumb.grow(1.5), Color(0.35, 0.2, 0.25, 0.18))
+		Icons.draw(self, item.slot, thumb, col, col.darkened(0.4).lerp(UiTheme.TEXT_DIM, 0.25))
 
 	# Звёзды редкости — золотые с тёмным контуром, в правом верхнем углу.
 	var s := r.size.x * 0.12
