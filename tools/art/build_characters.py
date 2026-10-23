@@ -720,6 +720,24 @@ def build_head(cid, J, p):
         for v in me.vertices:
             x, y, z = sculpt_features(*v.co)
             v.co = Vector((x * rx, y * ry, z * rz + cz))
+        if FP.get("eye_flat"):
+            # Глаз лежит почти на ровной поверхности (как на арте): лицо вокруг глаза выравнивается к плоскости
+            # центра глаза, внешний угол не уходит вглубь по изгибу головы.
+            ef = FP["eye_flat"]
+            w = FP["eye_shape"]["width_m"]
+            for sd in (-1, 1):
+                ex, ez = sd * FP["eye_u"] * 2 * rx, cz - (FP["eye_v"] - 0.5) * 2 * rz
+                ref = min((v for v in me.vertices if v.co.y < 0), key=lambda v: (v.co.x - ex) ** 2 + (v.co.z - ez) ** 2)
+                yc = ref.co.y
+                ax, az = w * ef["rx"], w * ef["rz"]
+                for v in me.vertices:
+                    if v.co.y >= 0:
+                        continue
+                    d = math.sqrt(((v.co.x - ex) / ax) ** 2 + ((v.co.z - ez) / az) ** 2)
+                    if d >= 1.0 or v.co.y <= yc:
+                        continue
+                    k = ef["k"] * (1 - d * d) ** 2              # плавно к краю зоны
+                    v.co.y = v.co.y - (v.co.y - yc) * k
         bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
         uv = me.uv_layers.active or me.uv_layers.new(name="UVMap")
         for poly in me.polygons:

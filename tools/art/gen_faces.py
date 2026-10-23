@@ -229,6 +229,21 @@ def eye(cid, c, size=512):
     img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"eye_{cid}.png"))
 
 
+# Радужка, присланная пользователем (23.10): если есть — берётся она (круг вырезается по центру и радиусу).
+USER_IRIS = {"kot": ("art/references/eye/kot_iris_user.png", (506, 577), 490)}
+
+
+def iris_from_user(cid, size=1024):
+    src, (cx, cy), r = USER_IRIS[cid]
+    im = Image.open(os.path.join(os.path.dirname(__file__), "..", "..", src)).convert("RGB")
+    im = im.crop((cx - r, cy - r, cx + r, cy + r)).resize((size, size), Image.LANCZOS).convert("RGBA")
+    ys = np.linspace(-1, 1, size)[:, None]
+    xs = np.linspace(-1, 1, size)[None, :]
+    rr = np.sqrt(xs ** 2 + ys ** 2)
+    im.putalpha(Image.fromarray((np.clip((1.0 - rr) * 120, 0, 1) * 255).astype(np.uint8)))
+    im.save(os.path.join(OUT, f"iris_{cid}.png"))
+
+
 def iris(cid, c, size=1024):
     """Радужка отдельным диском (как у образца-подростка: радужка — свой меш перед склерой).
     Сверху темнее (тень века и ресниц), книзу светлее; тёмный лимб; крупный вертикальный зрачок со светлой
@@ -383,7 +398,7 @@ def main():
         face(cid, c)
         eye(cid, c)
         if face_params(cid).get("eye_shape"):
-            iris(cid, c)
+            iris_from_user(cid) if cid in USER_IRIS else iris(cid, c)
             sclera(cid)
     hair_strands()
     knit()
