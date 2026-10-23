@@ -17,6 +17,8 @@ static var start_scene := -1
 
 var story: StoryScript
 var location: StoryLocation
+## Живой мир локации: прохожие, птицы, поезд, облака (data/world/life.json).
+var life: WorldLife
 var player: StoryPlayer
 var cam: FollowCamera
 var overlay: StoryOverlay
@@ -40,6 +42,8 @@ func _ready() -> void:
 	_looks = DataLoader.load_json(LOOKS_PATH)
 	location = StoryLocation.new()
 	add_child(location)
+	life = WorldLife.new()
+	add_child(life)
 	player = StoryPlayer.new()
 	add_child(player)
 	player.add_child(blob_shadow(0.42))
@@ -56,7 +60,9 @@ func _ready() -> void:
 	_pause = Sheet.new()
 	_pause.max_size = Vector2(560, 480)
 	overlay.add_ui(_pause)
-	_pause.closed.connect(func(): get_tree().paused = false)
+	_pause.closed.connect(func():
+		get_tree().paused = false
+		Audio.save_settings())
 	_beacon = _make_beacon()
 	add_child(_beacon)
 	_beacon.visible = false
@@ -115,6 +121,7 @@ func enter_location(loc_id: String, model_id: String, spawn: String, time: Strin
 		location.load_location(loc_id)
 	location.apply_time(time)
 	Audio.set_location(loc_id, time)
+	life.build(location, player, time)
 	if model_id != player_model:
 		player_model = model_id
 		player.set_character(model_id, Game.session.characters, _outfit(model_id))
@@ -308,6 +315,7 @@ func _process(_delta: float) -> void:
 		_beacon.rotation.y += _delta * 0.8
 		var k := 0.85 + 0.15 * sin(Time.get_ticks_msec() * 0.004)
 		_beacon.scale = Vector3(k, 1, k)
+	_update_gazes()
 	if _cutscene or _interactables.is_empty():
 		return
 	var best := ""
@@ -323,6 +331,34 @@ func _process(_delta: float) -> void:
 			overlay.set_prompt("")
 		else:
 			overlay.set_prompt(_verb(best) + ("  ✓" if _seen.has(best) else ""))
+
+
+## Для снимков: поезд через переезд — сразу.
+func debug_train() -> void:
+	if not life._train.is_empty():
+		life.debug_train_at_crossing()
+		# герой у переезда, лицом к путям (снимок поезда)
+		var c: Vector3 = life._train.center
+		player.place(Transform3D(Basis.looking_at(Vector3(-1, 0, 0.35).normalized(), Vector3.UP), c + Vector3(7.5, 0, -0.8)))
+		cam.snap_behind(player.model.rotation.y)
+
+
+## Взгляды: NPC поворачивают голову к герою, когда он рядом; герой смотрит на ближайшего собеседника.
+func _update_gazes() -> void:
+	var head := player.global_position + Vector3(0, player.model.eye_height(), 0) if player.model else player.global_position
+	var nearest: CharacterModel = null
+	var nearest_d := 3.2
+	for m in _npcs.values():
+		var npc := m as CharacterModel
+		if npc == null or npc.look == null or not npc.is_inside_tree():
+			continue
+		var d := npc.global_position.distance_to(player.global_position)
+		npc.look.target = head if d < 4.5 else null
+		if d < nearest_d:
+			nearest_d = d
+			nearest = npc
+	if player.model and player.model.look:
+		player.model.look.target = nearest.global_position + Vector3(0, nearest.eye_height(), 0) if nearest else null
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -381,7 +417,9 @@ func open_pause() -> void:
 		l.custom_minimum_size.x = 120
 		h.add_child(l)
 		var bus: String = row[0]
-		h.add_child(UiTheme.slider(Audio.get_volume(bus), func(v: float): Audio.set_volume(bus, v)))
+		var sl := UiTheme.slider(Audio.get_volume(bus), func(v: float): Audio.set_volume(bus, v, false))
+		sl.drag_ended.connect(func(_changed: bool): Audio.save_settings())
+		h.add_child(sl)
 		_pause.content.add_child(h)
 	_pause.add_footer(UiTheme.secondary(UiTheme.button("В главное меню", to_title)))
 	_pause.add_footer(UiTheme.primary(UiTheme.button("Продолжить", _pause.close)))

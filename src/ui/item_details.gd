@@ -66,6 +66,7 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, item_id: String) -> void:
 			screen.try_equip(it.id)
 		sheet.close()))
 	action.custom_minimum_size = Vector2(240, 54)
+	action.set_meta("silent", true)        # звучит «надеть»
 	action.disabled = not worn and not ok
 	sheet.add_footer(action)
 	sheet.open(Localization.t(it.name_key), it.slot)

@@ -50,6 +50,7 @@ func test_story_audio_refs() -> void:
 				check(d.music.has(str(st.id)), "%s: нет музыки %s" % [sc.id, st.id])
 			if st.type == "sfx":
 				check(d.sfx.has(str(st.id)), "%s: нет эффекта %s" % [sc.id, st.id])
+				check(not d.sfx.get(str(st.id), {}).get("loop", false), "%s: петля %s в шаге sfx не остановится" % [sc.id, st.id])
 
 
 func test_audio_buses_created() -> void:

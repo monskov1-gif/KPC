@@ -692,6 +692,15 @@ def railway_crossing(S, Mt, x, y0, y1, track_len=50):
         sl.box((x, -track_len / 2 + k * 0.6, 0.0), (2.2, 0.22, 0.08), (1, 1, 1, 1))
     pad = S.b("crossing_pad-col", Mt["asphalt"], tile=1.28)
     pad.box((x, (y0 + y1) / 2, 0.0), (3.4, y1 - y0, 0.12), (1, 1, 1, 1))
+    # точки для живого мира: концы пути поезда, мигающие фонари и шлагбаумы (их двигает игра, WorldLife)
+    S.marker("train_a", (x, -track_len / 2, 0.15), face=(0, 1))
+    S.marker("train_b", (x, track_len / 2, 0.15), face=(0, 1))
+    S.marker("xing_center", (x, (y0 + y1) / 2, 0.1), face=(1, 0))
+    for n_, (yy, side) in enumerate(((y0 - 0.5, -1), (y1 + 0.5, 1))):
+        sx = x - 2.0 * side
+        for k_, dy in enumerate((-0.32, 0.32)):
+            S.marker(f"xing_lamp_{n_}_{k_}", (sx - 0.3 * side, yy + dy, 2.5), face=(-side, 0))
+        S.marker(f"xing_arm_{n_}", (sx + 0.25 * side, yy, 1.0), face=(0, -side))
     for yy, side in ((y0 - 0.5, -1), (y1 + 0.5, 1)):
         sx = x - 2.0 * side
         post = S.b("prop_crossing", Mt["metal"], smooth=True)
@@ -711,8 +720,6 @@ def railway_crossing(S, Mt, x, y0, y1, track_len=50):
             glow.blob((sx - 0.25 * side, yy + dy, 2.5), 0.12, hexc("d0443a"), seg=16, rings=12)
         arm = S.b("prop_crossing_box", Mt["metal"], bevel=0.01)
         arm.box((sx + 0.25 * side, yy, 0), (0.4, 0.4, 1.0), hexc("2a282a"))
-        for k in range(8):
-            arm.box((sx + 0.25 * side, yy, 1.0 + k * 0.4), (0.07, 0.07, 0.4), hexc("f2c230") if k % 2 else hexc("1f1d1f"))
 
 
 def bollard(S, Mt, x, y):

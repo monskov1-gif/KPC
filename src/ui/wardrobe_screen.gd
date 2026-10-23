@@ -519,7 +519,7 @@ func submit_challenge() -> void:
 	var report := session.scoring.score(ch, session.outfit_items(character_id))
 	var outcome := session.rewards.submit(ch, report)
 	var advice := FashionAdvisor.suggest(session, ch, character_id, session.equipment.get_outfit(character_id))
-	Audio.ui("ui_reward" if session.rewards.result(str(ch.get("id", ""))).get("cleared", false) else "ui_error")
+	Audio.ui("ui_reward" if outcome.get("passed", false) else "ui_error")
 	Game.save_game()
 	_refresh_all()
 	ResultPopup.fill(_sheet, self, ch, report, outcome, advice)

@@ -77,6 +77,7 @@ func _step(st: Dictionary) -> void:
 			game.set_cutscene(true)
 			game.location.apply_time(str(st.to), _t(st.seconds))
 			Audio.set_time(str(st.to))
+			game.life.set_time(str(st.to))
 			await _wait(st.seconds)
 			game.set_cutscene(false)
 		"montage":

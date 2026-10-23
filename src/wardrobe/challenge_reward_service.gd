@@ -66,7 +66,7 @@ func submit(challenge: Dictionary, report: Dictionary) -> Dictionary:
 	for reward in to_grant:
 		granted.append(_grant(reward))
 	result_recorded.emit(id, report)
-	return {"rewards": granted, "new_best": new_best, "first_clear": first_clear}
+	return {"rewards": granted, "new_best": new_best, "first_clear": first_clear, "passed": rank_i >= min_clear}
 
 
 func _grant(reward: Dictionary) -> Dictionary:

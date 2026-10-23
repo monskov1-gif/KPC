@@ -238,7 +238,41 @@ func _stylize(root: Node) -> void:
 			var sname := src.resource_name if src else ""
 			if sname.begins_with("add_") or sname.begins_with("view_"):
 				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			m.set_surface_override_material(i, _toon(src, nm.begins_with("prop_"), vcol))
+			var mat := _toon(src, nm.begins_with("prop_"), vcol)
+			var w := _wind_for(nm, m)
+			if w.x > 0.0:
+				mat = _windy(mat, w)
+			m.set_surface_override_material(i, mat)
+
+
+## Ветер по имени меша: листва деревьев, изгороди, бельё на верёвке, шторы.
+## Возвращает (размах, высота крепления или 1e6, длина подвеса).
+func _wind_for(mesh_name: String, m: MeshInstance3D) -> Vector3:
+	if mesh_name.begins_with("prop_trees"):
+		return Vector3(0.05, 1e6, 1.0)
+	if mesh_name.begins_with("prop_hedges"):
+		return Vector3(0.012, 1e6, 1.0)
+	if mesh_name.begins_with("prop_clothes") or mesh_name.begins_with("prop_curtains"):
+		var top := (m.global_transform * m.get_aabb()).end.y if m.is_inside_tree() else m.get_aabb().end.y
+		return Vector3(0.09 if mesh_name.begins_with("prop_clothes") else 0.015, top - 0.03, 0.6)
+	return Vector3.ZERO
+
+
+## Копия материала с ветром (и контур — тоже с ветром, иначе он отстаёт от листвы).
+func _windy(mat: ShaderMaterial, w: Vector3) -> ShaderMaterial:
+	var key := "%d/wind/%.3f/%.2f" % [mat.get_instance_id(), w.x, w.y]
+	if _materials.has(key):
+		return _materials[key]
+	var m := mat.duplicate() as ShaderMaterial
+	if mat.next_pass:
+		m.next_pass = mat.next_pass.duplicate()
+	for p in [m, m.next_pass]:
+		if p is ShaderMaterial:
+			p.set_shader_parameter("wind", w.x)
+			p.set_shader_parameter("wind_pin_top", w.y)
+			p.set_shader_parameter("wind_span", w.z)
+	_materials[key] = m
+	return m
 
 
 func _toon(src: Material, outline: bool, vcol: bool) -> ShaderMaterial:
@@ -293,9 +327,9 @@ func _set_glow(m: ShaderMaterial, t: String) -> void:
 	var dark := t in ["night", "storm"]
 	var lit := dark or t == "evening"
 	if kind == "glow_signal":
-		# сигнальные фонари переезда — свой цвет из вершин, светятся всегда
-		m.set_shader_parameter("albedo", Color.WHITE)
-		m.set_shader_parameter("emission_boost", 0.6)
+		# стёкла фонарей переезда — тёмно-красные; мигают отдельные огни поверх (WorldLife, при подходе поезда)
+		m.set_shader_parameter("albedo", Color(0.55, 0.5, 0.5))
+		m.set_shader_parameter("emission_boost", 0.0)
 	elif kind == "glow_lamp":
 		m.set_shader_parameter("albedo", Color("fff0c8"))
 		m.set_shader_parameter("emission_boost", 1.6 if lit else 0.0)

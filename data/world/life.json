@@ -1,0 +1,32 @@
+{
+ "_comment": "Живой мир локаций (WorldLife): прохожие по маршрутам route_<n>_a/b, птицы, поезд через переезд, облака, снег. times — при каком времени суток есть. Внешность прохожих — черновая (не канон).",
+ "city_street": {
+  "walkers": [
+   {"model": "resident_a", "route": "route_0", "speed": 1.15, "delay": 2.0, "times": ["day", "evening"],
+    "look": {"upper_body__long": "#b8c9d8", "lower_body__trousers": "#4a4e5a", "footwear__shoes": "#3a3234"}},
+   {"model": "resident_b", "route": "route_1", "speed": 1.0, "delay": 9.0, "times": ["day", "evening"],
+    "look": {"upper_body__tshirt": "#f2d6a0", "lower_body__skirt": "#7a8fb0", "footwear__shoes": "#8a5a4a"}},
+   {"model": "resident_a", "route": "route_2", "speed": 0.8, "delay": 4.0, "times": ["day"],
+    "look": {"upper_body__tshirt": "#9fc29a", "lower_body__trousers": "#6a5a4a", "footwear__shoes": "#2a2a2e"}}
+  ],
+  "birds": [{"center": [-6, 0], "radius": 16, "height": 11, "count": 6, "times": ["day", "evening"]},
+            {"center": [20, -4], "radius": 9, "height": 8, "count": 4, "times": ["day"]}],
+  "train": {"interval": [38, 62], "first": 12, "speed": 13, "cars": 3, "times": ["day", "evening", "night"]},
+  "clouds": {"count": 7, "times": ["day", "evening"]}
+ },
+ "rooftop": {
+  "birds": [{"center": [0, 0], "radius": 18, "height": 7, "count": 7, "times": ["day", "evening"]}],
+  "clouds": {"count": 9, "times": ["day", "evening"]}
+ },
+ "snow_slope": {
+  "snow": {"times": ["day", "evening", "night"]},
+  "birds": [{"center": [0, 10], "radius": 22, "height": 16, "count": 4, "times": ["day"]}],
+  "clouds": {"count": 6, "times": ["day", "evening"]}
+ },
+ "family_hotel": {
+  "birds": [{"center": [0, 0], "radius": 20, "height": 10, "count": 6, "times": ["day", "evening"]}],
+  "clouds": {"count": 6, "times": ["day", "evening"]}
+ },
+ "family_home": {},
+ "hospital": {}
+}

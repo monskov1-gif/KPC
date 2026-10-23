@@ -25,8 +25,11 @@ var _materials: Dictionary = {}    # кэш материалов по ключу
 var _fallback: PlaceholderAppearance
 var _anim: AnimationPlayer
 var _height_cache := 0.0
+## Поворот головы поверх анимации: look.target = точка в мире или null (см. HeadLook).
+var look: HeadLook
 ## Текущая поза отдыха ("sit", "sleep") или "" — обычное движение.
 var _rest := ""
+var _rest_tween: Tween
 
 
 func setup(p_character_id: String, characters: CharacterCatalog) -> void:
@@ -36,6 +39,7 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 		_root = null
 	_anim = null
 	_height_cache = 0.0
+	_rest = ""
 	_garments.clear()
 	_underwear.clear()
 	_materials.clear()   # ключи материалов — по имени: у другого персонажа те же имена, но другие цвета
@@ -54,6 +58,12 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	add_child(_root)
 	_prepare(_root)
 	_anim = _root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	var found := _root.find_children("*", "Skeleton3D", true, false)
+	var sk := found[0] as Skeleton3D if not found.is_empty() else null
+	look = null
+	if sk:
+		look = HeadLook.new()
+		sk.add_child(look)
 	if _anim:
 		for a in ["idle", "walk", "run", "sit", "sleep"]:
 			if _anim.has_animation(a):
@@ -91,6 +101,8 @@ func play_motion(motion: String, speed := 0.0) -> void:
 func set_rest(kind: String, seconds := 0.8) -> void:
 	if _root == null:
 		return
+	if look and kind != "":
+		look.target = null
 	var h := maxf(0.6, _height_cache if _height_cache > 0.0 else height())
 	_height_cache = h
 	_rest = kind
@@ -103,13 +115,22 @@ func set_rest(kind: String, seconds := 0.8) -> void:
 		var clip := kind if kind != "" and _anim.has_animation(kind) else "idle"
 		_anim.speed_scale = 1.0
 		_anim.play(clip, seconds * 0.8)
+	if _rest_tween and _rest_tween.is_valid():
+		_rest_tween.kill()
 	if seconds <= 0.0:
 		_root.rotation = rot
 		_root.position = pos
 		return
-	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(_root, "rotation", rot, seconds)
-	tw.tween_property(_root, "position", pos, seconds)
+	_rest_tween = create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_rest_tween.tween_property(_root, "rotation", rot, seconds)
+	_rest_tween.tween_property(_root, "position", pos, seconds)
+
+
+## Высота глаз (кэш роста): для взглядов, без пересчёта габаритов каждый кадр.
+func eye_height() -> float:
+	if _height_cache <= 0.0:
+		_height_cache = maxf(0.6, height())
+	return _height_cache * 0.92
 
 
 ## Высота модели в метрах (для кадрирования камеры).

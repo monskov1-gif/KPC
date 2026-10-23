@@ -8,8 +8,11 @@ uniform float thickness = 0.0035;
 uniform sampler2D mask_tex : hint_default_white;
 uniform bool use_mask = false;
 
+#include "res://art/shaders/wind.gdshaderinc"
+
 void vertex() {
-	VERTEX += NORMAL * thickness;
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	VERTEX += NORMAL * thickness + (inverse(MODEL_MATRIX) * vec4(wind_offset(wp, TIME), 0.0)).xyz;
 }
 
 uniform float mask_margin = 0.045;   // контур не рисуется и рядом с прорезями глаз (иначе — толстая «подводка»)

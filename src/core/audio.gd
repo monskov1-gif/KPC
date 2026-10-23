@@ -42,7 +42,8 @@ func _ready() -> void:
 	_load_settings()
 	for i in 2:
 		_music.append(_player("Music", true))
-		_amb.append(_player("Ambient", false))
+		# окружение ставим на паузу сами (stream_paused): плеер на паузе дерева не даёт себя заглушить при смене сцены
+		_amb.append(_player("Ambient", true))
 	for i in POOL:
 		_pool.append(_player("SFX", false))
 	for i in 4:
@@ -71,12 +72,24 @@ func _make_buses() -> void:
 
 func set_volume(bus: String, v: float, save := true) -> void:
 	volumes[bus] = clampf(v, 0.0, 1.0)
-	var i := AudioServer.get_bus_index(bus)
-	if i >= 0:
-		AudioServer.set_bus_volume_db(i, linear_to_db(maxf(volumes[bus], 0.0001)))
-		AudioServer.set_bus_mute(i, volumes[bus] <= 0.001)
+	_apply_bus(bus)
 	if save:
 		_save_settings()
+
+
+## Громкость шины из настроек; музыка на паузе — на 8 дБ тише.
+func _apply_bus(bus: String) -> void:
+	var i := AudioServer.get_bus_index(bus)
+	if i < 0:
+		return
+	var db := linear_to_db(maxf(volumes[bus], 0.0001)) - (8.0 if bus == "Music" and _paused else 0.0)
+	AudioServer.set_bus_volume_db(i, db)
+	AudioServer.set_bus_mute(i, volumes[bus] <= 0.001)
+
+
+## Сохранить настройки (ползунок вызывает при отпускании, а не на каждый шаг).
+func save_settings() -> void:
+	_save_settings()
 
 
 func get_volume(bus: String) -> float:
@@ -175,9 +188,9 @@ func _cross(pair: Array[AudioStreamPlayer], cur: int, entry: Dictionary, fade: f
 func _fade(p: AudioStreamPlayer, to_db: float, seconds: float, stop_after: bool) -> void:
 	if _tweens.has(p) and (_tweens[p] as Tween).is_valid():
 		(_tweens[p] as Tween).kill()
-	if not p.playing:
+	if not p.playing and not p.stream_paused:
 		return
-	if seconds <= 0.0:
+	if seconds <= 0.0 or (p.stream_paused and stop_after):
 		p.volume_db = to_db
 		if stop_after:
 			p.stop()
@@ -202,8 +215,10 @@ func sfx(id: String, volume_offset_db := 0.0, pitch := 1.0) -> AudioStreamPlayer
 	var stream := _stream(str(files[_rng.randi() % files.size()]))
 	if stream == null:
 		return null
-	if stream is AudioStreamOggVorbis:
-		(stream as AudioStreamOggVorbis).loop = bool(e.get("loop", false))
+	# петли — только через sfx_at (плеер живёт вместе с локацией); из пула всё звучит один раз
+	if stream is AudioStreamOggVorbis and (stream as AudioStreamOggVorbis).loop:
+		stream = stream.duplicate()
+		(stream as AudioStreamOggVorbis).loop = false
 	var ui_sound: bool = e.get("ui", false)
 	var p := _free_player(_ui_pool if ui_sound else _pool)
 	p.bus = str(e.get("bus", "SFX"))
@@ -273,10 +288,11 @@ func _process(_delta: float) -> void:
 	var paused := get_tree().paused
 	if paused != _paused:
 		_paused = paused
-		# на паузе музыка тише (окружение и эффекты замирают сами — их плееры ставятся на паузу)
-		var i := AudioServer.get_bus_index("Music")
-		if i >= 0:
-			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(volumes["Music"], 0.0001)) - (8.0 if paused else 0.0))
+		# на паузе музыка тише, окружение замирает (игровые эффекты замирают сами — их плееры на паузе дерева)
+		_apply_bus("Music")
+		for p in _amb:
+			if p.playing or p.stream_paused:
+				p.stream_paused = paused
 
 
 func _on_node_added(n: Node) -> void:

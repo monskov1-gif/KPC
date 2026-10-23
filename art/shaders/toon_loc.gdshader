@@ -14,8 +14,12 @@ uniform float emission_boost = 0.0;
 
 varying vec4 vcol;
 
+#include "res://art/shaders/wind.gdshaderinc"
+
 void vertex() {
 	vcol = COLOR;
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	VERTEX += (inverse(MODEL_MATRIX) * vec4(wind_offset(wp, TIME), 0.0)).xyz;
 }
 
 void fragment() {

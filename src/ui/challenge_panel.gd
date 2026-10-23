@@ -81,6 +81,7 @@ func refresh() -> void:
 
 	if show_submit:
 		var submit_btn := UiTheme.secondary(UiTheme.button(tr("ui.submit"), func(): submitted.emit()))
+		submit_btn.set_meta("silent", true)    # звучит результат
 		submit_btn.custom_minimum_size.y = 56
 		add_child(submit_btn)
 

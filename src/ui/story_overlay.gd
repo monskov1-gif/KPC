@@ -25,6 +25,8 @@ var _prompt_key: Label
 var _fragments: VBoxContainer
 var _touch_btn: Button
 var _skip_btn: Button
+var _bars: Array[Control] = []
+var _bars_tween: Tween
 var _touch := false
 var _tweens: Array[Tween] = []
 var _hint: PanelContainer
@@ -60,23 +62,39 @@ func _ready() -> void:
 	menu.offset_left = -82; menu.offset_right = -24; menu.offset_top = 18; menu.offset_bottom = 76
 	_root.add_child(menu)
 	# «Пропустить» — только во время катсцен
-	_skip_btn = Button.new()
-	var skst := UiTheme.chip()
-	skst.content_margin_left = 36       # место под иконку
-	_skip_btn.add_theme_stylebox_override("normal", skst)
-	_skip_btn.add_theme_stylebox_override("hover", skst)
-	_skip_btn.add_theme_stylebox_override("pressed", skst)
-	_skip_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_skip_btn.add_theme_color_override("font_color", UiTheme.TEXT)
-	_skip_btn.add_theme_color_override("font_hover_color", UiTheme.TEXT)
-	_skip_btn.add_theme_constant_override("outline_size", 0)
-	_skip_btn.text = "Пропустить"
+	# кинорамка катсцен: мягкие полосы сверху и снизу
+	for top in [true, false]:
+		var bar := TextureRect.new()
+		var g := Gradient.new()
+		g.set_color(0, Color(0.16, 0.12, 0.18, 0.78 if top else 0.0))
+		g.set_color(1, Color(0.16, 0.12, 0.18, 0.0 if top else 0.78))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill_from = Vector2(0, 0)
+		gt.fill_to = Vector2(0, 1)
+		bar.texture = gt
+		bar.stretch_mode = TextureRect.STRETCH_SCALE
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.anchor_right = 1.0
+		if top:
+			bar.anchor_bottom = 0.1
+		else:
+			bar.anchor_top = 0.9
+			bar.anchor_bottom = 1.0
+		bar.modulate.a = 0.0
+		_root.add_child(bar)
+		_root.move_child(bar, 0)
+		_bars.append(bar)
+	# «Пропустить» — круглая кнопка рядом с меню, только во время катсцен
+	_skip_btn = UiTheme.icon_button("skip", func(): skip_pressed.emit(), 58)
 	_skip_btn.anchor_left = 1.0; _skip_btn.anchor_right = 1.0
-	_skip_btn.offset_left = -250; _skip_btn.offset_right = -96; _skip_btn.offset_top = 26; _skip_btn.offset_bottom = 68
-	_skip_btn.pressed.connect(func(): skip_pressed.emit())
-	var sk := UiTheme.icon("skip", 18, UiTheme.GOLD_DEEP)
-	sk.position = Vector2(14, 12)
-	_skip_btn.add_child(sk)
+	_skip_btn.offset_left = -152; _skip_btn.offset_right = -94; _skip_btn.offset_top = 18; _skip_btn.offset_bottom = 76
+	_skip_btn.tooltip_text = "Пропустить"
+	var skl := UiTheme.tag("Пропустить", 13, UiTheme.TEXT_DIM)
+	skl.position = Vector2(-12, 60)
+	skl.custom_minimum_size.x = 82
+	skl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_skip_btn.add_child(skl)
 	_skip_btn.visible = false
 	_root.add_child(_skip_btn)
 
@@ -230,6 +248,8 @@ func touch_controls() -> bool:
 
 
 func _track(tw: Tween) -> Tween:
+	# оверлей работает и на паузе (меню), но затемнения и титры сюжета на паузе стоят
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_STOP)
 	_tweens = _tweens.filter(func(t): return t.is_valid())
 	_tweens.append(tw)
 	return tw
@@ -314,6 +334,14 @@ func set_skippable(on: bool) -> void:
 
 ## Скрыть игровые подсказки на время катсцены.
 func set_gameplay_ui(on: bool) -> void:
+	# катсцена: кинорамка, цель прячется (вернётся после)
+	if _bars_tween and _bars_tween.is_valid():
+		_bars_tween.kill()
+	_bars_tween = create_tween().set_parallel()
+	for b in _bars:
+		_bars_tween.tween_property(b, "modulate:a", 0.0 if on else 1.0, 0.5)
+	if _objective_text.text != "":
+		_bars_tween.tween_property(_objective, "modulate:a", 1.0 if on else 0.0, 0.4)
 	if stick:
 		stick.visible = on
 		if not on:

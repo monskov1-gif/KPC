@@ -140,7 +140,7 @@ func _on_panel_input(e: InputEvent) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if not visible:
+	if not visible or get_tree().paused:
 		return
 	if e.is_action_pressed("interact") or e.is_action_pressed("ui_accept"):
 		get_viewport().set_input_as_handled()

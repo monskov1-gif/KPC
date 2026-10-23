@@ -108,7 +108,10 @@ func _physics_process(delta: float) -> void:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(velocity.x, velocity.z), clampf(TURN * delta, 0.0, 1.0))
 		var run := flat.length() > walk_speed + 0.3
 		model.play_motion("run" if run else "walk", flat.length())
-		_footsteps(flat.length() * delta, run)
+		if is_on_floor():
+			_footsteps(flat.length() * delta, run)
+		else:
+			_step_acc = 0.0
 	else:
 		model.play_motion("idle")
 		_step_acc = 0.0
