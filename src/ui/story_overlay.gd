@@ -30,6 +30,7 @@ var _bars_tween: Tween
 var _touch := false
 var _tweens: Array[Tween] = []
 var _hint: PanelContainer
+var _hint_keys: HBoxContainer
 var _hint_icon: IconView
 var _hint_title: Label
 var _hint_text: Label
@@ -266,25 +267,39 @@ func finish_tweens() -> void:
 ## Карточка обучения слева: иконка, заголовок, что нажать (под текущее устройство).
 func _build_hint() -> void:
 	_hint = PanelContainer.new()
-	_hint.add_theme_stylebox_override("panel", UiTheme.cloud(Color(1, 0.99, 0.97, 0.95), 22, 16))
+	var hst := UiTheme.panel_light()
+	hst.content_margin_left = 22; hst.content_margin_right = 26; hst.content_margin_top = 18; hst.content_margin_bottom = 18
+	_hint.add_theme_stylebox_override("panel", hst)
 	_hint.anchor_top = 0.5; _hint.anchor_bottom = 0.5
 	_hint.offset_left = 24; _hint.offset_top = -60
 	_hint.custom_minimum_size = Vector2(340, 0)
 	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
+	# золотой медальон с иконкой действия; мягко «дышит», пока подсказка на экране
 	var medal := PanelContainer.new()
-	medal.add_theme_stylebox_override("panel", UiTheme.pill(UiTheme.GOLD_LIGHT, 10))
-	_hint_icon = UiTheme.icon("sparkle", 30, UiTheme.GOLD_DEEP)
+	var mst := UiTheme.cloud(UiTheme.GOLD_LIGHT, 999, 13)
+	mst.border_color = UiTheme.GOLD
+	mst.set_border_width_all(3)
+	medal.add_theme_stylebox_override("panel", mst)
+	_hint_icon = UiTheme.icon("sparkle", 32, UiTheme.GOLD_DEEP)
 	medal.add_child(_hint_icon)
 	medal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	medal.pivot_offset = Vector2(29, 29)
 	h.add_child(medal)
+	medal.ready.connect(func():
+		var pulse := medal.create_tween().set_loops()
+		pulse.tween_property(medal, "scale", Vector2(1.07, 1.07), 0.6).set_trans(Tween.TRANS_SINE)
+		pulse.tween_property(medal, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_SINE))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 2)
 	_hint_title = UiTheme.title("", 22)
 	_hint_text = UiTheme.label("", 18, UiTheme.TEXT)
 	_hint_text.custom_minimum_size.x = 250
+	_hint_keys = HBoxContainer.new()
+	_hint_keys.add_theme_constant_override("separation", 6)
 	v.add_child(_hint_title)
+	v.add_child(_hint_keys)
 	v.add_child(_hint_text)
 	h.add_child(v)
 	_hint.add_child(h)
@@ -292,11 +307,37 @@ func _build_hint() -> void:
 	_root.add_child(_hint)
 
 
+func _keycap(key: String) -> Control:
+	var p := PanelContainer.new()
+	var st := UiTheme.cloud(UiTheme.PANEL_SOLID, 8, 6)
+	st.border_color = UiTheme.GOLD
+	st.set_border_width_all(2)
+	st.border_width_bottom = 4
+	st.content_margin_left = 10; st.content_margin_right = 10
+	p.add_theme_stylebox_override("panel", st)
+	p.custom_minimum_size = Vector2(36, 36)
+	var l := UiTheme.label(key, 16, UiTheme.GOLD_DEEP)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(l)
+	return p
+
+
 func show_hint(icon_name: String, title_text: String, body: String) -> void:
 	_hint_icon.icon = icon_name
 	_hint_icon.queue_redraw()
 	_hint_title.text = title_text
-	_hint_text.text = body
+	# клавиши в тексте пишутся в квадратных скобках: «[W] [A] [S] [D] — идти» → клавиши-колпачки и подпись
+	for c in _hint_keys.get_children():
+		c.queue_free()
+	var rest := body
+	var re := RegEx.create_from_string("\\[([^\\]]+)\\]")
+	var found := re.search_all(body)
+	for m in found:
+		_hint_keys.add_child(_keycap(m.get_string(1)))
+	if not found.is_empty():
+		rest = re.sub(body, "", true).strip_edges().trim_prefix("—").strip_edges()
+	_hint_keys.visible = not found.is_empty()
+	_hint_text.text = rest
 	if not _hint.visible:
 		Audio.ui("ui_hint")
 		_hint.visible = true

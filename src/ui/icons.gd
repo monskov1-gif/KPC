@@ -65,6 +65,20 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 		"pencil":
 			ci.draw_colored_polygon(_poly([[0.22, 0.86], [0.28, 0.64], [0.7, 0.2], [0.84, 0.34], [0.42, 0.78]], r), c)
 			ci.draw_colored_polygon(_poly([[0.22, 0.86], [0.28, 0.64], [0.42, 0.78]], r), Color(1, 0.95, 0.85, 0.9))
+		"steps":
+			# два следа ступней
+			for f in [[0.34, 0.62, -0.25], [0.64, 0.36, 0.2]]:
+				var c0 := _p(r, f[0], f[1])
+				var pts := PackedVector2Array()
+				for k in 16:
+					var a := TAU * k / 16.0
+					pts.append(c0 + Vector2(cos(a) * w * 0.1, sin(a) * w * 0.17).rotated(f[2]))
+				ci.draw_colored_polygon(pts, c)
+				ci.draw_circle(c0 + Vector2(0, -w * 0.24).rotated(f[2]), w * 0.06, c)
+		"rotate":
+			ci.draw_arc(_p(r, 0.5, 0.5), w * 0.3, -2.6, 1.9, 24, c, lw * 0.8, true)
+			var tip := _p(r, 0.5, 0.5) + Vector2(cos(1.9), sin(1.9)) * w * 0.3
+			ci.draw_colored_polygon(PackedVector2Array([tip + Vector2(-w * 0.13, -w * 0.02), tip + Vector2(w * 0.09, -w * 0.1), tip + Vector2(w * 0.04, w * 0.12)]), c)
 		"note":
 			ci.draw_circle(_p(r, 0.32, 0.74), w * 0.13, c)
 			ci.draw_circle(_p(r, 0.72, 0.64), w * 0.13, c)

@@ -216,7 +216,10 @@ func _build_challenge() -> void:
 	_challenge.show_submit = false
 	pad.add_child(_challenge)
 	# Кнопка всегда видна внизу панели, не уезжает при прокрутке условий.
-	var submit := UiTheme.secondary(UiTheme.button(tr("ui.submit"), submit_challenge))
+	# в сюжетном испытании главное действие — «На подиум» (золотая), в обычном гардеробе — «Сохранить»
+	var submit := UiTheme.button(tr("ui.submit"), submit_challenge)
+	submit = UiTheme.primary(submit) if story_mode else UiTheme.secondary(submit)
+	submit.set_meta("silent", true)
 	submit.custom_minimum_size.y = 56
 	v.add_child(submit)
 
@@ -294,7 +297,8 @@ func _build_actions() -> void:
 	_actions = HBoxContainer.new()
 	_actions.add_theme_constant_override("separation", 12)
 	add_child(_actions)
-	_save_btn = UiTheme.primary(UiTheme.button(tr("ui.save"), commit_draft))
+	_save_btn = UiTheme.button(tr("ui.save"), commit_draft)
+	_save_btn = UiTheme.secondary(_save_btn) if story_mode else UiTheme.primary(_save_btn)
 	_save_btn.custom_minimum_size = Vector2(180, 56)
 	_actions.add_child(_save_btn)
 	_undo_btn = UiTheme.icon_button("undo", revert_draft, 52)

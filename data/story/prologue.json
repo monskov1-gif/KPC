@@ -259,7 +259,7 @@
     },
     {
      "type": "sketchbook",
-     "pages": [{"image": "sketch_three", "caption": "Сора, Габриэль и я"}, {"image": "sketch_city", "caption": "Город всё тот же. Мы — нет."}]
+     "pages": [{"image": "sketch_three", "caption": "Сора, Габриэль и я"}, {"image": "sketch_city_later", "caption": "Город всё тот же. Мы — нет."}]
     },
     {"type": "caption", "text": "", "sub": "Прошли годы", "seconds": 2.5},
     {"type": "fade", "to": "black", "seconds": 1.2}

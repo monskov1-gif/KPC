@@ -321,6 +321,29 @@ static func divider() -> TextureRect:
 	return r
 
 
+## Золотая «жемчужина» — ручка ползунка (рисуется один раз и кэшируется).
+static var _pearl_cache: Texture2D
+static func _pearl(size: int) -> Texture2D:
+	if _pearl_cache:
+		return _pearl_cache
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var c := Vector2(size, size) * 0.5
+	for y in size:
+		for x in size:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c) / (size * 0.5)
+			if d > 1.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			var hl := clampf(1.0 - Vector2(x + 0.5, y + 0.5).distance_to(c - Vector2(size, size) * 0.16) / (size * 0.45), 0.0, 1.0)
+			var col := GOLD.lerp(Color("fff6dc"), hl * 0.9)
+			if d > 0.82:
+				col = GOLD_DEEP.lerp(GOLD, (1.0 - d) / 0.18)
+			col.a = clampf((1.0 - d) * size * 0.5, 0.0, 1.0)
+			img.set_pixel(x, y, col)
+	_pearl_cache = ImageTexture.create_from_image(img)
+	return _pearl_cache
+
+
 ## Ползунок 0…1 в облачном стиле (громкость и т. п.): толстая мягкая дорожка, золотая заливка.
 static func slider(value: float, cb: Callable) -> HSlider:
 	var s := HSlider.new()
@@ -336,9 +359,18 @@ static func slider(value: float, cb: Callable) -> HSlider:
 	var fill := pill(GOLD, 0)
 	fill.content_margin_top = 5
 	fill.content_margin_bottom = 5
+	track.content_margin_top = 7
+	track.content_margin_bottom = 7
+	track.border_color = GOLD_LIGHT
+	track.set_border_width_all(2)
+	fill.content_margin_top = 7
+	fill.content_margin_bottom = 7
 	s.add_theme_stylebox_override("slider", track)
 	s.add_theme_stylebox_override("grabber_area", fill)
 	s.add_theme_stylebox_override("grabber_area_highlight", fill)
+	var pearl := _pearl(30)
+	s.add_theme_icon_override("grabber", pearl)
+	s.add_theme_icon_override("grabber_highlight", pearl)
 	s.value_changed.connect(cb)
 	return s
 
