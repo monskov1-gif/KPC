@@ -321,6 +321,28 @@ static func divider() -> TextureRect:
 	return r
 
 
+## Ползунок 0…1 в облачном стиле (громкость и т. п.): толстая мягкая дорожка, золотая заливка.
+static func slider(value: float, cb: Callable) -> HSlider:
+	var s := HSlider.new()
+	s.min_value = 0.0
+	s.max_value = 1.0
+	s.step = 0.05
+	s.value = value
+	s.custom_minimum_size = Vector2(220, 36)
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var track := pill(Color(PANEL_SOLID.darkened(0.08)), 0)
+	track.content_margin_top = 5
+	track.content_margin_bottom = 5
+	var fill := pill(GOLD, 0)
+	fill.content_margin_top = 5
+	fill.content_margin_bottom = 5
+	s.add_theme_stylebox_override("slider", track)
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", fill)
+	s.value_changed.connect(cb)
+	return s
+
+
 static func icon(name: String, size := 24.0, color := TEXT) -> IconView:
 	var iv := IconView.new()
 	iv.icon = name

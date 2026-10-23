@@ -475,6 +475,7 @@ func toggle_item(item_id: String) -> void:
 
 func try_equip(item_id: String) -> void:
 	var res := session.equipment.equip_into(draft, character_id, item_id)
+	Audio.ui("equip" if res.ok else "ui_error")
 	if not res.ok:
 		var key: String = res.get("reason_key", "")
 		show_toast(tr(key if key != "" else res.error_key), "lock")
@@ -484,6 +485,7 @@ func try_equip(item_id: String) -> void:
 
 
 func try_unequip(item_id: String) -> void:
+	Audio.sfx("equip", -3.0, 0.85)
 	draft.remove_item(item_id)
 	_refresh_all()
 
@@ -517,6 +519,7 @@ func submit_challenge() -> void:
 	var report := session.scoring.score(ch, session.outfit_items(character_id))
 	var outcome := session.rewards.submit(ch, report)
 	var advice := FashionAdvisor.suggest(session, ch, character_id, session.equipment.get_outfit(character_id))
+	Audio.ui("ui_reward" if session.rewards.result(str(ch.get("id", ""))).get("cleared", false) else "ui_error")
 	Game.save_game()
 	_refresh_all()
 	ResultPopup.fill(_sheet, self, ch, report, outcome, advice)
@@ -580,7 +583,7 @@ func _refresh_grid() -> void:
 	for c in _grid.get_children():
 		_grid.remove_child(c)
 		c.queue_free()
-	var items := query.run(session, func(it: ClothingItem): return tr(it.name_key))
+	var items: Array = query.run(session, func(it: ClothingItem): return tr(it.name_key)).filter(_shown_in_grid)
 	if items.is_empty():
 		var l := UiTheme.label(tr("ui.empty_list"), UiTheme.FONT_SIZE_SMALL, UiTheme.TEXT_DIM)
 		l.custom_minimum_size.x = 200
@@ -604,6 +607,19 @@ func _refresh_grid() -> void:
 
 
 # ---------- вспомогательное ----------
+
+## В сюжетном испытании — только то, что персонаж может надеть (сумка Кота-ребёнка, а не чужие вещи).
+## В обычном гардеробе не показываем вещи, которые носят лишь сюжетные персонажи (детская одежда пролога).
+func _shown_in_grid(it: ClothingItem) -> bool:
+	if story_mode:
+		return Compatibility.can_wear(it, character_id, session.characters)
+	if it.compatible_character_ids.is_empty():
+		return true
+	for c in it.compatible_character_ids:
+		if not session.characters.get_data(c).get("story_only", false):
+			return true
+	return false
+
 
 func item_name(id: String) -> String:
 	var it := session.catalog.get_item(id)

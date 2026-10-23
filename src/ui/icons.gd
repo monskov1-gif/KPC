@@ -65,6 +65,25 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 		"pencil":
 			ci.draw_colored_polygon(_poly([[0.22, 0.86], [0.28, 0.64], [0.7, 0.2], [0.84, 0.34], [0.42, 0.78]], r), c)
 			ci.draw_colored_polygon(_poly([[0.22, 0.86], [0.28, 0.64], [0.42, 0.78]], r), Color(1, 0.95, 0.85, 0.9))
+		"note":
+			ci.draw_circle(_p(r, 0.32, 0.74), w * 0.13, c)
+			ci.draw_circle(_p(r, 0.72, 0.64), w * 0.13, c)
+			ci.draw_line(_p(r, 0.43, 0.74), _p(r, 0.43, 0.2), c, lw * 0.8, true)
+			ci.draw_line(_p(r, 0.83, 0.64), _p(r, 0.83, 0.12), c, lw * 0.8, true)
+			ci.draw_colored_polygon(_poly([[0.41, 0.18], [0.85, 0.08], [0.85, 0.22], [0.41, 0.32]], r), c)
+		"speaker":
+			ci.draw_colored_polygon(_poly([[0.12, 0.38], [0.30, 0.38], [0.52, 0.18], [0.52, 0.82], [0.30, 0.62], [0.12, 0.62]], r), c)
+			ci.draw_arc(_p(r, 0.52, 0.5), w * 0.18, -0.9, 0.9, 10, c, lw * 0.7, true)
+			ci.draw_arc(_p(r, 0.52, 0.5), w * 0.32, -0.9, 0.9, 12, c, lw * 0.7, true)
+		"wind":
+			ci.draw_polyline(_poly([[0.1, 0.36], [0.62, 0.36], [0.72, 0.30], [0.7, 0.18], [0.58, 0.18]], r), c, lw * 0.75, true)
+			ci.draw_polyline(_poly([[0.1, 0.54], [0.8, 0.54], [0.9, 0.62], [0.86, 0.76], [0.74, 0.76]], r), c, lw * 0.75, true)
+			ci.draw_line(_p(r, 0.1, 0.72), _p(r, 0.5, 0.72), c, lw * 0.75, true)
+		"voice":
+			# облачко реплики с тремя точками
+			ci.draw_colored_polygon(_poly([[0.1, 0.2], [0.9, 0.2], [0.9, 0.66], [0.5, 0.66], [0.24, 0.88], [0.3, 0.66], [0.1, 0.66]], r), c)
+			for x in [0.32, 0.5, 0.68]:
+				ci.draw_circle(_p(r, x, 0.43), w * 0.06, Color(1, 0.98, 0.95, 0.95))
 		"skip":
 			ci.draw_colored_polygon(_poly([[0.18, 0.22], [0.5, 0.5], [0.18, 0.78]], r), c)
 			ci.draw_colored_polygon(_poly([[0.48, 0.22], [0.8, 0.5], [0.48, 0.78]], r), c)

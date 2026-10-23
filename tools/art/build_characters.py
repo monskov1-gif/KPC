@@ -3251,6 +3251,10 @@ def bind(rig, objs, rigid_bone=None):
         # юбка и платье: таз + немного бедра — ткань следует за ногой, но не рвётся
         skirt_like = any(k in o.name for k in ("lower_body__skirt", "full_body__dress"))
         cand = [bb for bb in bones if not (torso_only and bb[0].startswith(("thigh", "shin", "foot")))]
+        # Плечо в T-позе: кожа корпуса у подмышки ближе к кости руки, чем к груди, и при опускании руки уходила
+        # бы вместе с ней (складка, просвет одежды). Вес руки плавно гасится от плечевого сустава внутрь.
+        sh_x = abs(rig.data.bones["upper_arm.L"].head_local.x)
+        band = 0.35 * sh_x
         for v in o.data.vertices:
             p = mw @ v.co
             if skirt_like and p.z < rig.data.bones["hips"].head_local.z + 0.02:
@@ -3263,9 +3267,20 @@ def bind(rig, objs, rigid_bone=None):
             if d[1][0] > d[0][0] * 1.8:
                 w1 = 0.0
             tot = w0 + w1
-            groups[d[0][1]].add([v.index], w0 / tot, "REPLACE")
+            w = {d[0][1]: w0 / tot}
             if w1 > 0:
-                groups[d[1][1]].add([v.index], w1 / tot, "ADD")
+                w[d[1][1]] = w1 / tot
+            arm_w = sum(x for n, x in w.items() if n.startswith(("upper_arm", "forearm", "hand")))
+            if arm_w > 0:
+                f = max(0.0, min(1.0, (abs(p.x) - (sh_x - band)) / band))
+                f = f * f * (3 - 2 * f)
+                if f < 1.0:
+                    w = {n: (x * f if n.startswith(("upper_arm", "forearm", "hand")) else x) for n, x in w.items()}
+                    torso = "upper_chest" if p.z > rig.data.bones["upper_chest"].head_local.z else "chest"
+                    w[torso] = w.get(torso, 0.0) + arm_w * (1 - f)
+            for n, x in w.items():
+                if x > 1e-4:
+                    groups[n].add([v.index], x, "REPLACE")
         if o is _BODY:
             names = {g.index: g.name for g in o.vertex_groups}
             from mathutils.kdtree import KDTree

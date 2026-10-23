@@ -184,6 +184,8 @@ func caption(text: String, sub: String, seconds: float) -> void:
 
 
 func set_objective(text: String) -> void:
+	if text != "" and text.get_slice("  ·  ", 0) != _objective_text.text.get_slice("  ·  ", 0):
+		Audio.sfx("objective")
 	_objective_text.text = text
 	_objective.visible = text != ""
 	_objective.modulate.a = 0.0
@@ -276,6 +278,7 @@ func show_hint(icon_name: String, title_text: String, body: String) -> void:
 	_hint_title.text = title_text
 	_hint_text.text = body
 	if not _hint.visible:
+		Audio.ui("ui_hint")
 		_hint.visible = true
 		_hint.modulate.a = 0.0
 		_hint.position.x = -40

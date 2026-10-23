@@ -177,9 +177,11 @@
     },
     {"type": "act", "do": "stand", "seconds": 1.0},
     {"type": "camera", "release": true, "seconds": 1.0},
+    {"type": "music", "id": "sad", "seconds": 3.0},
     {"type": "say", "lines": [{"who": "gabi", "text": "Маму и папу сбила машина. Сора тоже там. Ему очень плохо."}, {"who": "kot", "text": "…"}]},
     {"type": "fade", "to": "black", "seconds": 1.5}
-   ]
+   ],
+   "music": "night"
   },
   {
    "id": "p5_hospital",
@@ -261,7 +263,8 @@
     },
     {"type": "caption", "text": "", "sub": "Прошли годы", "seconds": 2.5},
     {"type": "fade", "to": "black", "seconds": 1.2}
-   ]
+   ],
+   "music": "time"
   },
   {
    "id": "p8_flood",
@@ -273,6 +276,7 @@
    "npcs": {"resident_a": "npc_resident_a", "resident_b": "npc_resident_b"},
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.0},
+    {"type": "sfx", "id": "splash", "volume_db": 4},
     {"type": "water", "level": 0.35, "seconds": 6.0},
     {"type": "say", "lines": [{"who": "resident", "text": "Вода идёт! Все наверх — на мост, там выше!"}]},
     {"type": "objective", "text": "Уходи от воды — наверх, на мост"},
@@ -316,7 +320,8 @@
     },
     {"type": "flag", "name": "prologue_complete"},
     {"type": "caption", "text": "Конец пролога", "sub": "Том I — жилой комплекс на горе", "seconds": 4.0}
-   ]
+   ],
+   "music": "time"
   }
  ]
 }

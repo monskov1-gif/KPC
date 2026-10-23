@@ -92,6 +92,8 @@ func skip() -> void:
 
 func show_line(speaker: String, text: String) -> void:
 	visible = true
+	if speaker != "":
+		Audio.sfx("dlg_blip", 0.0, 0.85 + float(hash(speaker) % 40) / 100.0)
 	_name.text = speaker
 	_name_tag.visible = speaker != ""
 	_place_tag.call_deferred()

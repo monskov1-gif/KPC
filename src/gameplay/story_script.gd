@@ -20,7 +20,7 @@ const STEP_FIELDS := {
 	"flag": ["name"],
 	"act": ["do"],
 	"camera": [],
-	"wait": ["seconds"],
+	"wait": ["seconds"], "music": [], "sfx": ["id"],
 	"tutorial": ["id"],
 	"challenge": ["id"],
 }

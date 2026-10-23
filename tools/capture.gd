@@ -36,10 +36,11 @@ func _run() -> void:
 		await process_frame
 	if _method != "" and _scene.has_method(_method):
 		_scene.call(_method)
-	# KPC_STOP_AT: снимать, когда режиссёр сюжета дошёл до нужного шага (frames — кадров после него).
+	# KPC_STOP_AT / KPC_SHOT_AT: снимать, когда режиссёр сюжета прошёл нужный шаг (frames — кадров после него).
+	# STOP_AT ещё и останавливает сюжет на этом шаге, SHOT_AT — нет (снимок следующего шага, например гардероба).
 	# Режиссёр создаётся сценой сам — ищем его каждый кадр и подписываемся сразу, как появится.
-	if OS.has_environment("KPC_STOP_AT"):
-		var want := OS.get_environment("KPC_STOP_AT")
+	var want := OS.get_environment("KPC_SHOT_AT") if OS.has_environment("KPC_SHOT_AT") else OS.get_environment("KPC_STOP_AT")
+	if want != "":
 		var director: Node = null
 		for i in 20000:
 			if director == null:

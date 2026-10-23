@@ -15,6 +15,8 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if Game.session == null:
 		await Game.session_ready
+	Audio.set_location("", "day")
+	Audio.override_music("title", 1.0)
 	add_child(SoftBackground.new())
 	(get_child(0) as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_menu = Control.new()
@@ -148,7 +150,9 @@ func _open_wardrobe() -> void:
 	_menu.visible = false
 	_wardrobe = WARDROBE.instantiate()
 	add_child(_wardrobe)
+	Audio.override_music("wardrobe", 1.0)
 	_wardrobe.closed.connect(func():
+		Audio.override_music("title", 1.0)
 		_wardrobe.queue_free()
 		_wardrobe = null
 		_hero_model.apply_items(Game.session.outfit_items("kot"))   # образ из гардероба

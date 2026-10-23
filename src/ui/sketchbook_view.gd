@@ -106,6 +106,8 @@ func open(pages: Array) -> void:
 		return
 	_pages = pages
 	visible = true
+	Audio.ui("ui_page")
+	Audio.sfx("sketch")
 	_fit()
 	_show(0)
 	await closed

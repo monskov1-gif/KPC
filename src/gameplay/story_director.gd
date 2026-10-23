@@ -37,6 +37,8 @@ func _scene(sc: Dictionary) -> void:
 	_end_skip()
 	_objective = ""
 	game.overlay.set_objective("")
+	# музыка сцены (если задана) перекрывает музыку локации до конца сцены
+	Audio.music_override = str(sc.get("music", ""))
 	game.enter_location(str(sc.location), str(sc.player), str(sc.get("spawn", "spawn")), str(sc.get("time", "day")), sc.get("npcs", {}))
 	if sc.has("rest"):
 		# сцена начинается с героем в позе (спит на пледе) — управление вернёт шаг act «stand»
@@ -74,18 +76,25 @@ func _step(st: Dictionary) -> void:
 		"time":
 			game.set_cutscene(true)
 			game.location.apply_time(str(st.to), _t(st.seconds))
+			Audio.set_time(str(st.to))
 			await _wait(st.seconds)
 			game.set_cutscene(false)
 		"montage":
 			game.set_cutscene(true)
 			for fr in st.frames:
 				game.location.apply_time(str(fr.time), _t(0.8))
+				Audio.set_time(str(fr.time))
 				await o.caption("", str(fr.get("caption", "")), _t(st.seconds_each))
 			game.set_cutscene(false)
 		"water":
 			var tw := game.location.set_water(float(st.level), _t(st.seconds))
 			if tw and not st.get("async", false):
 				await tw.finished
+		"music":
+			# "id": "" — вернуть музыку локации
+			Audio.override_music(str(st.get("id", "")), _t(st.get("seconds", 2.0)))
+		"sfx":
+			Audio.sfx(str(st.id), float(st.get("volume_db", 0.0)))
 		"flag":
 			Game.session.flags.set_flag(str(st.name), st.get("value", true))
 		"say":
@@ -120,7 +129,8 @@ func _step(st: Dictionary) -> void:
 			else:
 				await game.tutorial.run(str(st.id), st)
 		"challenge":
-			if autopilot:
+			# KPC_SHOW_CHALLENGE: автопилот открывает настоящий гардероб (для снимков испытания)
+			if autopilot and not OS.has_environment("KPC_SHOW_CHALLENGE"):
 				game.autopilot_challenge(str(st.id), st)
 			else:
 				await game.run_challenge(str(st.id), st)

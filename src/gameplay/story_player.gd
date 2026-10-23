@@ -23,6 +23,8 @@ var water_level := -INF
 ## Постановка: идти к точке без ввода игрока (StoryGame.auto_walk); null — обычное управление.
 var auto_target = null
 var _shape: CollisionShape3D
+var _step_acc := 0.0
+var _height := 0.0
 
 
 func _ready() -> void:
@@ -44,6 +46,7 @@ func set_character(model_id: String, characters: CharacterCatalog, items: Array[
 	model.setup(model_id, characters)
 	model.apply_items(items)
 	var h := clampf(model.height(), 0.8, 2.6)
+	_height = h
 	walk_speed = clampf(h * 1.15, 1.25, 1.9)
 	run_speed = clampf(h * 2.6, 3.0, 4.4)
 	var cap := _shape.shape as CapsuleShape3D
@@ -103,6 +106,26 @@ func _physics_process(delta: float) -> void:
 	var flat := Vector2(velocity.x, velocity.z)
 	if flat.length() > 0.2:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(velocity.x, velocity.z), clampf(TURN * delta, 0.0, 1.0))
-		model.play_motion("run" if flat.length() > walk_speed + 0.3 else "walk", flat.length())
+		var run := flat.length() > walk_speed + 0.3
+		model.play_motion("run" if run else "walk", flat.length())
+		_footsteps(flat.length() * delta, run)
 	else:
 		model.play_motion("idle")
+		_step_acc = 0.0
+
+
+## Шаги: звук на каждый шаг (полцикла клипа: шаг ≈ 0.39 роста, бег ≈ 0.75); поверхность — от локации,
+## в воде — всплески. У ребёнка шаги выше и легче.
+func _footsteps(dist: float, run: bool) -> void:
+	if _height <= 0.0:
+		_height = maxf(0.6, model.height())
+	_step_acc += dist
+	var stride := _height * (0.75 if run else 0.39)
+	if _step_acc < stride:
+		return
+	_step_acc = fmod(_step_acc, stride)
+	var pitch := clampf(1.6 / _height, 0.9, 1.3)
+	if water_level - global_position.y > 0.05:
+		Audio.sfx("splash", -8.0, pitch)
+	else:
+		Audio.sfx("step_" + Audio.surface(), 2.0 if run else 0.0, pitch)

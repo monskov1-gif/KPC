@@ -54,7 +54,7 @@ func _ready() -> void:
 	overlay.skip_pressed.connect(func(): director.skip())
 	overlay.process_mode = Node.PROCESS_MODE_ALWAYS     # меню паузы работает при остановленной сцене
 	_pause = Sheet.new()
-	_pause.max_size = Vector2(520, 420)
+	_pause.max_size = Vector2(560, 480)
 	overlay.add_ui(_pause)
 	_pause.closed.connect(func(): get_tree().paused = false)
 	_beacon = _make_beacon()
@@ -114,6 +114,7 @@ func enter_location(loc_id: String, model_id: String, spawn: String, time: Strin
 	if loc_id != location.location_id:
 		location.load_location(loc_id)
 	location.apply_time(time)
+	Audio.set_location(loc_id, time)
 	if model_id != player_model:
 		player_model = model_id
 		player.set_character(model_id, Game.session.characters, _outfit(model_id))
@@ -210,6 +211,8 @@ func run_challenge(id: String, st: Dictionary) -> bool:
 	set_cutscene(true)
 	overlay.set_skippable(false)
 	tutorial.run("wardrobe", {"async": true})
+	var music_before := Audio.music_override
+	Audio.override_music("wardrobe", 1.0)
 	var passed := false
 	while not passed and is_inside_tree():
 		var w: Control = load("res://scenes/ui/wardrobe.tscn").instantiate()
@@ -223,6 +226,7 @@ func run_challenge(id: String, st: Dictionary) -> bool:
 		if not passed and st.has("retry"):
 			await overlay.dialogue.play(st.retry, story)
 	tutorial.finish()
+	Audio.override_music(music_before, 1.5)
 	player.set_character(model_id, Game.session.characters, _outfit(model_id))
 	set_cutscene(false)
 	return passed
@@ -368,6 +372,17 @@ func open_pause() -> void:
 	get_tree().paused = true
 	_pause.clear()
 	_pause.content.add_child(UiTheme.label("Прогресс сохранён с начала текущей сцены.", 18, UiTheme.TEXT_DIM))
+	_pause.content.add_child(UiTheme.title("Звук", 22))
+	for row in [["Music", "Музыка", "note"], ["Ambient", "Окружение", "wind"], ["SFX", "Эффекты", "speaker"], ["Voice", "Голоса", "voice"]]:
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 12)
+		h.add_child(UiTheme.icon(row[2], 26, UiTheme.GOLD_DEEP))
+		var l := UiTheme.label(row[1], 18)
+		l.custom_minimum_size.x = 120
+		h.add_child(l)
+		var bus: String = row[0]
+		h.add_child(UiTheme.slider(Audio.get_volume(bus), func(v: float): Audio.set_volume(bus, v)))
+		_pause.content.add_child(h)
 	_pause.add_footer(UiTheme.secondary(UiTheme.button("В главное меню", to_title)))
 	_pause.add_footer(UiTheme.primary(UiTheme.button("Продолжить", _pause.close)))
 	_pause.open("Пауза", "menu")

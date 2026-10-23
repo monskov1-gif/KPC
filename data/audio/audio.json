@@ -1,0 +1,60 @@
+{
+ "_comment": "Звук игры. ВРЕМЕННЫЙ: вся музыка и звуки синтезированы tools/audio/gen_audio.py (docs/AUDIO.md) — заменить на записанные. Громкость — в дБ относительно шины.",
+ "buses": ["Music", "Ambient", "SFX", "Voice"],
+ "music": {
+  "title": {"file": "res://audio/music/title.ogg", "volume_db": -4},
+  "city_day": {"file": "res://audio/music/city_day.ogg", "volume_db": -6},
+  "home": {"file": "res://audio/music/home.ogg", "volume_db": -5},
+  "winter": {"file": "res://audio/music/winter.ogg", "volume_db": -5},
+  "evening": {"file": "res://audio/music/evening.ogg", "volume_db": -5},
+  "night": {"file": "res://audio/music/night.ogg", "volume_db": -6},
+  "sad": {"file": "res://audio/music/sad.ogg", "volume_db": -5},
+  "time": {"file": "res://audio/music/time.ogg", "volume_db": -5},
+  "tense": {"file": "res://audio/music/tense.ogg", "volume_db": -4},
+  "wardrobe": {"file": "res://audio/music/wardrobe.ogg", "volume_db": -6}
+ },
+ "ambient": {
+  "amb_city": {"file": "res://audio/ambient/amb_city.ogg", "volume_db": -10},
+  "amb_home": {"file": "res://audio/ambient/amb_home.ogg", "volume_db": -14},
+  "amb_wind": {"file": "res://audio/ambient/amb_wind.ogg", "volume_db": -9},
+  "amb_roof_evening": {"file": "res://audio/ambient/amb_roof_evening.ogg", "volume_db": -11},
+  "amb_roof_night": {"file": "res://audio/ambient/amb_roof_night.ogg", "volume_db": -11},
+  "amb_hospital": {"file": "res://audio/ambient/amb_hospital.ogg", "volume_db": -16},
+  "amb_rain": {"file": "res://audio/ambient/amb_rain.ogg", "volume_db": -6},
+  "amb_sea": {"file": "res://audio/ambient/amb_sea.ogg", "volume_db": -9}
+ },
+ "sfx": {
+  "step_asphalt": {"files": ["res://audio/sfx/step_asphalt_1.ogg", "res://audio/sfx/step_asphalt_2.ogg", "res://audio/sfx/step_asphalt_3.ogg", "res://audio/sfx/step_asphalt_4.ogg"], "volume_db": -16, "pitch_rand": 0.08},
+  "step_wood": {"files": ["res://audio/sfx/step_wood_1.ogg", "res://audio/sfx/step_wood_2.ogg", "res://audio/sfx/step_wood_3.ogg", "res://audio/sfx/step_wood_4.ogg"], "volume_db": -15, "pitch_rand": 0.08},
+  "step_tile": {"files": ["res://audio/sfx/step_tile_1.ogg", "res://audio/sfx/step_tile_2.ogg", "res://audio/sfx/step_tile_3.ogg", "res://audio/sfx/step_tile_4.ogg"], "volume_db": -17, "pitch_rand": 0.08},
+  "step_snow": {"files": ["res://audio/sfx/step_snow_1.ogg", "res://audio/sfx/step_snow_2.ogg", "res://audio/sfx/step_snow_3.ogg", "res://audio/sfx/step_snow_4.ogg"], "volume_db": -13, "pitch_rand": 0.1},
+  "ui_tap": {"files": ["res://audio/sfx/ui_tap.ogg"], "volume_db": -12, "pitch_rand": 0.04, "ui": true},
+  "ui_open": {"files": ["res://audio/sfx/ui_open.ogg"], "volume_db": -12, "ui": true},
+  "ui_close": {"files": ["res://audio/sfx/ui_close.ogg"], "volume_db": -13, "ui": true},
+  "ui_confirm": {"files": ["res://audio/sfx/ui_confirm.ogg"], "volume_db": -10, "ui": true},
+  "ui_error": {"files": ["res://audio/sfx/ui_error.ogg"], "volume_db": -12, "ui": true},
+  "ui_hint": {"files": ["res://audio/sfx/ui_hint.ogg"], "volume_db": -13, "ui": true},
+  "ui_reward": {"files": ["res://audio/sfx/ui_reward.ogg"], "volume_db": -9, "ui": true},
+  "ui_page": {"files": ["res://audio/sfx/ui_page.ogg"], "volume_db": -12, "pitch_rand": 0.1, "ui": true},
+  "equip": {"files": ["res://audio/sfx/equip.ogg"], "volume_db": -12, "pitch_rand": 0.12, "ui": true},
+  "objective": {"files": ["res://audio/sfx/objective.ogg"], "volume_db": -12},
+  "sketch": {"files": ["res://audio/sfx/sketch.ogg"], "volume_db": -14, "pitch_rand": 0.1},
+  "dlg_blip": {"files": ["res://audio/sfx/dlg_blip.ogg"], "volume_db": -16, "bus": "Voice"},
+  "crossing_bell": {"files": ["res://audio/sfx/crossing_bell.ogg"], "volume_db": -6, "loop": true},
+  "train_pass": {"files": ["res://audio/sfx/train_pass.ogg"], "volume_db": -2},
+  "splash": {"files": ["res://audio/sfx/splash.ogg"], "volume_db": -8, "pitch_rand": 0.1},
+  "door": {"files": ["res://audio/sfx/door.ogg"], "volume_db": -10}
+ },
+ "locations": {
+  "city_street": {"surface": "asphalt",
+   "music": {"day": "city_day", "evening": "evening", "night": "night", "storm": "tense"},
+   "ambient": {"day": "amb_city", "evening": "amb_roof_evening", "night": "amb_roof_night", "storm": "amb_rain"}},
+  "family_home": {"surface": "wood", "music": {"*": "home"}, "ambient": {"*": "amb_home"}},
+  "snow_slope": {"surface": "snow", "music": {"*": "winter"}, "ambient": {"*": "amb_wind"}},
+  "rooftop": {"surface": "tile",
+   "music": {"day": "time", "evening": "evening", "night": "night"},
+   "ambient": {"day": "amb_city", "evening": "amb_roof_evening", "night": "amb_roof_night", "storm": "amb_rain"}},
+  "hospital": {"surface": "tile", "music": {"*": "sad"}, "ambient": {"*": "amb_hospital"}},
+  "family_hotel": {"surface": "wood", "music": {"*": "sad"}, "ambient": {"*": "amb_sea"}}
+ }
+}
