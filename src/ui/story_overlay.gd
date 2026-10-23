@@ -27,6 +27,10 @@ var _touch_btn: Button
 var _skip_btn: Button
 var _touch := false
 var _tweens: Array[Tween] = []
+var _hint: PanelContainer
+var _hint_icon: IconView
+var _hint_title: Label
+var _hint_text: Label
 
 
 func _ready() -> void:
@@ -118,6 +122,7 @@ func _ready() -> void:
 		_root.add_child(_touch_btn)
 		_prompt_key.get_parent().visible = false
 
+	_build_hint()
 	dialogue = DialogueBox.new()
 	_root.add_child(dialogue)
 	sketchbook = SketchbookView.new()
@@ -234,6 +239,65 @@ func finish_tweens() -> void:
 		if t.is_valid() and t.is_running():
 			t.custom_step(1000.0)
 	_tweens.clear()
+
+
+## Карточка обучения слева: иконка, заголовок, что нажать (под текущее устройство).
+func _build_hint() -> void:
+	_hint = PanelContainer.new()
+	_hint.add_theme_stylebox_override("panel", UiTheme.cloud(Color(1, 0.99, 0.97, 0.95), 22, 16))
+	_hint.anchor_top = 0.5; _hint.anchor_bottom = 0.5
+	_hint.offset_left = 24; _hint.offset_top = -60
+	_hint.custom_minimum_size = Vector2(340, 0)
+	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	var medal := PanelContainer.new()
+	medal.add_theme_stylebox_override("panel", UiTheme.pill(UiTheme.GOLD_LIGHT, 10))
+	_hint_icon = UiTheme.icon("sparkle", 30, UiTheme.GOLD_DEEP)
+	medal.add_child(_hint_icon)
+	medal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(medal)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	_hint_title = UiTheme.title("", 22)
+	_hint_text = UiTheme.label("", 18, UiTheme.TEXT)
+	_hint_text.custom_minimum_size.x = 250
+	v.add_child(_hint_title)
+	v.add_child(_hint_text)
+	h.add_child(v)
+	_hint.add_child(h)
+	_hint.visible = false
+	_root.add_child(_hint)
+
+
+func show_hint(icon_name: String, title_text: String, body: String) -> void:
+	_hint_icon.icon = icon_name
+	_hint_icon.queue_redraw()
+	_hint_title.text = title_text
+	_hint_text.text = body
+	if not _hint.visible:
+		_hint.visible = true
+		_hint.modulate.a = 0.0
+		_hint.position.x = -40
+		var tw := create_tween().set_parallel()
+		tw.tween_property(_hint, "modulate:a", 1.0, 0.35)
+		tw.tween_property(_hint, "position:x", 24.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Скрыть подсказку; done — с отметкой «выполнено» (зелёная галочка и исчезновение).
+func hide_hint(done := false) -> void:
+	if not _hint.visible:
+		return
+	if done:
+		_hint_icon.icon = "check"
+		_hint_icon.color = UiTheme.OK
+		_hint_icon.queue_redraw()
+	var tw := create_tween()
+	tw.tween_interval(0.6 if done else 0.0)
+	tw.tween_property(_hint, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(func():
+		_hint.visible = false
+		_hint_icon.color = UiTheme.GOLD_DEEP)
 
 
 ## Добавить окно поверх интерфейса сцены (тема и масштаб — общие).

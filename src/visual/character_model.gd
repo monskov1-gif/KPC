@@ -24,6 +24,9 @@ const UNDERWEAR_COVERED_BY := {
 var _materials: Dictionary = {}    # кэш материалов по ключу
 var _fallback: PlaceholderAppearance
 var _anim: AnimationPlayer
+var _height_cache := 0.0
+## Текущая поза отдыха ("sit", "sleep") или "" — обычное движение.
+var _rest := ""
 
 
 func setup(p_character_id: String, characters: CharacterCatalog) -> void:
@@ -32,6 +35,7 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 		_root.queue_free()
 		_root = null
 	_anim = null
+	_height_cache = 0.0
 	_garments.clear()
 	_underwear.clear()
 	_materials.clear()   # ключи материалов — по имени: у другого персонажа те же имена, но другие цвета
@@ -51,28 +55,61 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	_prepare(_root)
 	_anim = _root.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if _anim:
-		for a in ["idle", "walk", "run"]:
+		for a in ["idle", "walk", "run", "sit", "sleep"]:
 			if _anim.has_animation(a):
 				_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 		play_motion("idle")
 
 
-## Анимация движения: «idle», «walk», «run». Если клипа нет — ближайший имеющийся (бег → шаг → покой).
-func play_motion(motion: String, speed_scale := 1.0) -> void:
-	if _anim == null:
+## Анимация движения: «idle», «walk», «run». speed — скорость персонажа (м/с): клип ускоряется так, чтобы
+## ступни не скользили (длина цикла шага ≈ 0.78 роста, бега ≈ 1.5 роста; клипы — 0.75 и 1.2 цикла в секунду).
+## Если клипа нет — ближайший имеющийся (бег → шаг → покой).
+func play_motion(motion: String, speed := 0.0) -> void:
+	# в позе отдыха (сидит, спит) движение не перебивает позу — её снимает set_rest("")
+	if _anim == null or _rest != "":
 		return
 	var clip := motion
 	if clip == "run" and not _anim.has_animation("run"):
 		clip = "walk"
-		speed_scale *= 1.6
 	if not _anim.has_animation(clip):
 		clip = "idle"
-		speed_scale = 1.0
 	if not _anim.has_animation(clip):
 		return
-	_anim.speed_scale = speed_scale
+	var rate := 1.0
+	if clip != "idle" and speed > 0.0:
+		var h := maxf(0.6, _height_cache if _height_cache > 0.0 else height())
+		_height_cache = h
+		var cycle := h * (1.5 if clip == "run" else 0.78)
+		rate = clampf(speed / cycle / (1.2 if clip == "run" else 0.75), 0.4, 3.0)
+	_anim.speed_scale = rate
 	if _anim.current_animation != clip:
-		_anim.play(clip, 0.2)
+		_anim.play(clip, 0.25)
+
+
+## Поза отдыха для постановки: "sit" — сидит на полу, "sleep" — спит на боку (модель укладывается на бок
+## поворотом вокруг направления взгляда), "" — встать. seconds — плавный переход.
+func set_rest(kind: String, seconds := 0.8) -> void:
+	if _root == null:
+		return
+	var h := maxf(0.6, _height_cache if _height_cache > 0.0 else height())
+	_height_cache = h
+	_rest = kind
+	var rot := Vector3.ZERO
+	var pos := Vector3.ZERO
+	if kind == "sleep":
+		rot = Vector3(0, 0, PI / 2)             # на правый бок, лицом по-прежнему вперёд
+		pos = Vector3(0.0, h * 0.11, 0.0)
+	if _anim:
+		var clip := kind if kind != "" and _anim.has_animation(kind) else "idle"
+		_anim.speed_scale = 1.0
+		_anim.play(clip, seconds * 0.8)
+	if seconds <= 0.0:
+		_root.rotation = rot
+		_root.position = pos
+		return
+	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(_root, "rotation", rot, seconds)
+	tw.tween_property(_root, "position", pos, seconds)
 
 
 ## Высота модели в метрах (для кадрирования камеры).

@@ -18,7 +18,14 @@ const STEP_FIELDS := {
 	"montage": ["frames", "seconds_each"],
 	"water": ["level", "seconds"],
 	"flag": ["name"],
+	"act": ["do"],
+	"camera": [],
+	"wait": ["seconds"],
+	"tutorial": ["id"],
+	"challenge": ["id"],
 }
+## Действия персонажа для постановки (шаг «act»).
+const ACTS := ["sit", "sleep", "stand", "walk_to", "face"]
 
 var id := ""
 var speakers: Dictionary = {}
@@ -85,6 +92,11 @@ func required_markers() -> Dictionary:
 						_need(out, loc, "int_" + str(k))
 				"reach":
 					_need(out, loc, "reach_" + str(st.get("target", "")))
+				"act", "camera":
+					if st.has("at"):
+						_need(out, loc, str(st.at))
+					if st.has("look") and str(st.look) != "player":
+						_need(out, loc, str(st.look))
 	return out
 
 
@@ -175,6 +187,12 @@ static func _check_step(st: Dictionary, where: String, spk: Dictionary, errs: Ar
 				errs.append("%s: optional_min больше числа необязательных целей" % where)
 			if inter.is_empty():
 				errs.append("%s: осмотр без целей" % where)
+		"act":
+			if not st.get("do") in ACTS:
+				errs.append("%s: неизвестное действие %s" % [where, st.get("do")])
+		"camera":
+			if not st.get("release", false) and not st.has("at"):
+				errs.append("%s: кадр камеры без точки (at) и без release" % where)
 		"sketchbook":
 			if typeof(st.get("pages")) != TYPE_ARRAY or st.pages.is_empty():
 				errs.append("%s: скетчбук без страниц" % where)

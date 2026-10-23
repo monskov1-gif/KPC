@@ -25,7 +25,15 @@ func _ready() -> void:
 			var m := CharacterModel.new()
 			add_child(m)
 			m.setup(id, Game.session.characters)
-			m.apply_look(looks.get(id, {}))
+			if looks.has(id):
+				m.apply_look(looks[id])
+			else:
+				var sig := Game.session.characters.signature_outfit(id)
+				var items: Array[ClothingItem] = []
+				for slot in sig:
+					if Game.session.catalog.has_item(str(sig[slot])):
+						items.append(Game.session.catalog.get_item(str(sig[slot])))
+				m.apply_items(items)
 			m.position = Vector3(float(p[0]), 0, -float(p[1]))
 			m.rotation.y = float(p[2]) if p.size() > 2 else 0.0
 

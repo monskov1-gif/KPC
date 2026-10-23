@@ -15,6 +15,9 @@ var _next: IconView
 var _typing := false
 ## Пропуск катсцены: оставшиеся реплики проходят без ожидания.
 var skipping := false
+## > 0 — реплики листаются сами через столько секунд после печати (автопилот сюжета).
+var auto_advance := 0.0
+var _auto_t := 0.0
 var _t := 0.0
 
 
@@ -103,14 +106,20 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	if _typing:
-		_t += delta
+		_t += delta * (8.0 if auto_advance > 0.0 else 1.0)
 		var n := maxi(1, _text.get_total_character_count())
 		_text.visible_ratio = minf(1.0, _t * CHARS_PER_SEC / n)
 		if _text.visible_ratio >= 1.0:
 			_typing = false
 			_next.visible = true
+			_auto_t = 0.0
 	else:
 		_next.modulate.a = 0.65 + 0.35 * sin(Time.get_ticks_msec() * 0.006)
+		if auto_advance > 0.0:
+			_auto_t += delta
+			if _auto_t >= auto_advance:
+				_auto_t = 0.0
+				advanced.emit()
 
 
 func _advance() -> void:

@@ -7,6 +7,7 @@ var _out := ""
 var _frames := 30
 var _method := ""
 var _scene: Node
+var _reached := false
 
 
 func _initialize() -> void:
@@ -35,6 +36,22 @@ func _run() -> void:
 		await process_frame
 	if _method != "" and _scene.has_method(_method):
 		_scene.call(_method)
+	# KPC_STOP_AT: снимать, когда режиссёр сюжета дошёл до нужного шага (frames — кадров после него).
+	# Режиссёр создаётся сценой сам — ищем его каждый кадр и подписываемся сразу, как появится.
+	if OS.has_environment("KPC_STOP_AT"):
+		var want := OS.get_environment("KPC_STOP_AT")
+		var director: Node = null
+		for i in 20000:
+			if director == null:
+				director = _scene.find_child("Director", true, false)
+				if director and director.has_signal("step_done"):
+					director.step_done.connect(func(sc, k):
+						if "%s:%d" % [sc, k] == want:
+							_reached = true)
+			if _reached:
+				print("capture: шаг ", want, " пройден")
+				break
+			await process_frame
 	for i in _frames:
 		await process_frame
 	await RenderingServer.frame_post_draw

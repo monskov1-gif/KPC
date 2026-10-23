@@ -16,6 +16,11 @@ var _objective := ""
 var _skipping := false
 ## Поколение обрывков фраз: новый шаг «дойти» отменяет недоигранные обрывки прошлого.
 var _frag_gen := 0
+## Автопилот (KPC_AUTOPILOT): сам листает реплики, подходит к целям, проходит подсказки и испытания —
+## для сквозной проверки пролога и снимков. Остановка KPC_STOP_AT="<сцена>:<шаг>" — после этого шага.
+var autopilot := OS.has_environment("KPC_AUTOPILOT")
+var _stop_at := OS.get_environment("KPC_STOP_AT") if OS.has_environment("KPC_STOP_AT") else ""
+signal step_done(scene_id: String, index: int)
 
 
 func run(from_index: int) -> void:
@@ -33,10 +38,19 @@ func _scene(sc: Dictionary) -> void:
 	_objective = ""
 	game.overlay.set_objective("")
 	game.enter_location(str(sc.location), str(sc.player), str(sc.get("spawn", "spawn")), str(sc.get("time", "day")), sc.get("npcs", {}))
-	for st in sc.steps:
-		await _step(st)
+	if sc.has("rest"):
+		# сцена начинается с героем в позе (спит на пледе) — управление вернёт шаг act «stand»
+		game.player.model.set_rest(str(sc.rest), 0.0)
+		game.set_cutscene(true)
+	if autopilot:
+		game.overlay.dialogue.auto_advance = 0.25 * time_scale + 0.05
+	for i in sc.steps.size():
+		await _step(sc.steps[i])
 		if not is_inside_tree():
 			return
+		step_done.emit(str(sc.id), i)
+		if _stop_at == "%s:%d" % [sc.id, i]:
+			await get_tree().create_timer(3600.0).timeout
 
 
 func _step(st: Dictionary) -> void:
@@ -80,10 +94,36 @@ func _step(st: Dictionary) -> void:
 			game.set_cutscene(false)
 			o.dialogue.skipping = _skipping
 		"sketchbook":
+			if autopilot:
+				get_tree().create_timer(maxf(0.3, 1.5 * time_scale)).timeout.connect(o.sketchbook.close)
 			if not _skipping:
 				game.set_cutscene(true)
 				await o.sketchbook.open(st.pages)
 				game.set_cutscene(false)
+		"act":
+			await _act(st)
+		"camera":
+			if st.get("release", false):
+				game.cam.release(_t(st.get("seconds", 0.9)))
+			else:
+				var look: Vector3 = game.player.global_position + Vector3(0, game.player.model.height() * 0.6, 0) \
+					if str(st.get("look", "player")) == "player" else game.location.marker(str(st.look)).origin
+				game.cam.shot(game.location.marker(str(st.at)).origin, look, _t(st.get("seconds", 1.2)))
+				if not st.get("async", true):
+					await _wait(st.get("seconds", 1.2))
+		"wait":
+			await _wait(st.seconds)
+		"tutorial":
+			if autopilot:
+				game.tutorial.run(str(st.id), {"async": true})
+				game.tutorial.finish()
+			else:
+				await game.tutorial.run(str(st.id), st)
+		"challenge":
+			if autopilot:
+				game.autopilot_challenge(str(st.id), st)
+			else:
+				await game.run_challenge(str(st.id), st)
 		"reach":
 			_end_skip()
 			await _reach(st)
@@ -92,11 +132,40 @@ func _step(st: Dictionary) -> void:
 			await _explore(st)
 
 
+## Постановка: персонаж садится, засыпает, встаёт, подходит к точке, поворачивается.
+func _act(st: Dictionary) -> void:
+	var who := str(st.get("who", "player"))
+	var secs := _t(st.get("seconds", 1.0))
+	var model: CharacterModel = game.player.model if who == "player" else game.npc_model(who)
+	if model == null:
+		push_warning("act: нет персонажа %s" % who)
+		return
+	game.set_cutscene(true)
+	match str(st.do):
+		"walk_to":
+			await game.auto_walk(game.location.marker(str(st.at)).origin, who)
+		"face":
+			var p := game.location.marker(str(st.at)).origin if st.has("at") else game.player.global_position
+			model.rotation.y = atan2(p.x - model.global_position.x, p.z - model.global_position.z)
+		"sit", "sleep":
+			if st.has("at") and who == "player":
+				game.player.place(game.location.marker(str(st.at)))
+			model.set_rest(str(st.do), secs)
+			await _wait(st.get("seconds", 1.0))
+		"stand":
+			model.set_rest("", secs)
+			await _wait(st.get("seconds", 1.0))
+	if not st.get("hold", false):
+		game.set_cutscene(false)
+
+
 func _explore(st: Dictionary) -> void:
 	var state := ExploreState.from_step(st)
 	var lines: Dictionary = st.interactions
 	game.set_interactables(lines.keys(), st.get("verbs", {}))
 	_update_objective(state)
+	if autopilot:
+		_autopilot_explore(st, state)
 	while not state.complete():
 		var id: String = await game.interacted
 		if not lines.has(id):
@@ -109,6 +178,23 @@ func _explore(st: Dictionary) -> void:
 		game.mark_seen(id)
 		_update_objective(state)
 	game.set_interactables([])
+
+
+## Автопилот осмотра: подойти и поговорить с обязательными целями и нужным числом необязательных.
+func _autopilot_explore(st: Dictionary, state: ExploreState) -> void:
+	var order: Array = st.get("required", []).duplicate()
+	for k in st.interactions:
+		if not k in order and order.size() < state.required.size() + state.optional_min:
+			order.append(k)
+	for id in order:
+		await get_tree().create_timer(0.2).timeout
+		var p := game.location.marker("int_" + str(id)).origin
+		# автопилот переносит героя к цели (прямая ходьба застряла бы у изгородей)
+		game.player.place(Transform3D(Basis.IDENTITY, p + Vector3(0.9, 0.05, 0.6)))
+		await get_tree().physics_frame
+		game.debug_interact(str(id))
+		while game._cutscene and is_inside_tree():
+			await get_tree().process_frame
 
 
 func _update_objective(state: ExploreState) -> void:
@@ -125,6 +211,8 @@ func _reach(st: Dictionary) -> void:
 	var frags: Array = st.get("fragments", [])
 	if not frags.is_empty():
 		_play_fragments(frags)
+	if autopilot:
+		game.player.place(Transform3D(Basis.IDENTITY, pos + Vector3(0, 0.1, 0)))
 	while is_inside_tree() and game.player_distance(pos) > StoryGame.REACH_RADIUS:
 		await get_tree().process_frame
 	game.set_beacon(null)

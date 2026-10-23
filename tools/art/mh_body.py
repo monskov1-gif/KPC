@@ -211,7 +211,7 @@ class Skeleton:
 
 
 def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs_in=3.0, clav=0.0, spine_back=0.0,
-              neck_fwd=0.0, knee_back=0.0, legs_back=0.0):
+              neck_fwd=0.0, knee_back=0.0, legs_back=0.0, back_deg=14.0):
     """Руки вдоль тела как на Meshy-листе: плечо опускается, предплечье выпрямляется, кисть — по оси
     предплечья ладонью к бедру. Через скелет и веса MakeHuman (CC0).
     Осанка (градусы): clav — ключицы вниз (покатые плечи), spine_back — грудной отдел назад (грудь не выпячена,
@@ -233,7 +233,8 @@ def pose_arms(vs, groups, down_deg=15.0, elbow_bend=22.0, finger_curl=24.0, legs
         # опускание делим: треть — плечо (shoulder01), две трети — плечевая кость (без сжатия подмышки)
         sk.rotate(f"shoulder01.{S}", _rot([0, 0, 1], -math.radians(down_deg / 6) * sx))
         sk.rotate(ua, _rot([0, 0, 1], -math.radians(down_deg * 5 / 6) * sx))
-        sk.rotate(ua, _rot([1, 0, 0], math.radians(14)))          # рука чуть назад — в профиль не вынесена вперёд
+        if back_deg:
+            sk.rotate(ua, _rot([1, 0, 0], math.radians(back_deg)))   # рука чуть назад — в профиль не вынесена вперёд
         M = sk.world()
         sh = _apply(M[ua], sk.head[ua])
         el = _apply(M[la], sk.head[la])

@@ -26,22 +26,31 @@
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.5},
     {"type": "caption", "text": "Shizunda Taver City", "sub": "Много лет назад", "seconds": 3.0},
+    {"type": "tutorial", "id": "move"},
+    {"type": "tutorial", "id": "camera"},
+    {"type": "tutorial", "id": "zoom", "async": true},
     {"type": "objective", "text": "Прогуляйся по улице"},
-    {"type": "explore", "required": ["girl"], "optional_min": 2,
+    {"type": "wait", "seconds": 4.0},
+    {"type": "tutorial", "id": "interact", "async": true},
+    {
+     "type": "explore",
+     "required": ["girl"],
+     "optional_min": 2,
      "interactions": {
       "shop_window": [{"who": "kot", "text": "В витрине новые кисточки. Целый ряд — от тонких до толстых."}],
       "viewpoint": [{"who": "kot", "text": "Отсюда видно всю улицу и море. Надо запомнить, как ложится свет."}],
-      "passerby_a": [{"who": "passerby_a", "text": "Опять с тетрадкой? Что сегодня рисуешь?"},
-                     {"who": "kot", "text": "Пока смотрю. Потом нарисую."}],
-      "passerby_b": [{"who": "passerby_b", "text": "Осторожнее у фонтана, там скользко."},
-                     {"who": "kot", "text": "Спасибо!"}],
+      "passerby_a": [{"who": "passerby_a", "text": "Опять с тетрадкой? Что сегодня рисуешь?"}, {"who": "kot", "text": "Пока смотрю. Потом нарисую."}],
+      "passerby_b": [{"who": "passerby_b", "text": "Осторожнее у фонтана, там скользко."}, {"who": "kot", "text": "Спасибо!"}],
       "fountain": [{"who": "kot", "text": "Брызги в фонтане блестят, как стеклянные бусины."}],
-      "girl": [{"who": "kot", "text": "Ты тоже рисуешь?"},
-               {"who": "girl", "text": "Угу. Это кот. Только у него не получаются уши."},
-               {"who": "kot", "text": "Можно? Вот так — чуть повыше и острее."},
-               {"who": "girl", "text": "Ой. Теперь он похож на тебя."},
-               {"who": "kot", "text": "Тогда это хороший кот."}]
-     }},
+      "girl": [
+       {"who": "kot", "text": "Ты тоже рисуешь?"},
+       {"who": "girl", "text": "Угу. Это кот. Только у него не получаются уши."},
+       {"who": "kot", "text": "Можно? Вот так — чуть повыше и острее."},
+       {"who": "girl", "text": "Ой. Теперь он похож на тебя."},
+       {"who": "kot", "text": "Тогда это хороший кот."}
+      ]
+     }
+    },
     {"type": "fade", "to": "black", "seconds": 1.2}
    ]
   },
@@ -55,31 +64,63 @@
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.0},
     {"type": "objective", "text": "Побудь с семьёй"},
-    {"type": "explore", "required": ["family_table"], "optional_min": 0,
+    {
+     "type": "explore",
+     "required": ["family_table"],
+     "optional_min": 0,
      "interactions": {
-      "family_table": [{"who": "mama", "text": "Кот, руки мыть. Я вижу краску до самого локтя."},
-                       {"who": "kot", "text": "Это не краска, это закат."},
-                       {"who": "papa", "text": "Закат до локтя — серьёзная работа. Пусть сначала поест."},
-                       {"who": "gabi", "text": "Он вчера нарисовал закат у меня в тетради. Красиво, между прочим."},
-                       {"who": "sora", "text": "Сначала суп, художники. Закаты — после."},
-                       {"who": "mama", "text": "Сора, не командуй за столом."},
-                       {"who": "sora", "text": "Я не командую. Я старший."},
-                       {"who": "papa", "text": "На выходных едем на склон. Все. Даже тот, кто опять забудет перчатки."},
-                       {"who": "gabi", "text": "Это Сора."},
-                       {"who": "sora", "text": "Это было один раз."}],
+      "family_table": [
+       {"who": "mama", "text": "Кот, руки мыть. Я вижу краску до самого локтя."},
+       {"who": "kot", "text": "Это не краска, это закат."},
+       {"who": "papa", "text": "Закат до локтя — серьёзная работа. Пусть сначала поест."},
+       {"who": "gabi", "text": "Он вчера нарисовал закат у меня в тетради. Красиво, между прочим."},
+       {"who": "sora", "text": "Сначала суп, художники. Закаты — после."},
+       {"who": "mama", "text": "Сора, не командуй за столом."},
+       {"who": "sora", "text": "Я не командую. Я старший."},
+       {"who": "papa", "text": "На выходных едем на склон. Все. Даже тот, кто опять забудет перчатки."},
+       {"who": "gabi", "text": "Это Сора."},
+       {"who": "sora", "text": "Это было один раз."}
+      ],
       "window": [{"who": "kot", "text": "С утра обещали снег. Хорошо бы, чтобы правда пошёл."}],
       "sketch_corner": [{"who": "kot", "text": "Мой угол. Мама говорит, что тут скоро вырастет второй город — из бумаги."}]
-     }},
+     }
+    },
     {"type": "fade", "to": "black", "seconds": 1.0},
-    {"type": "location", "id": "snow_slope", "player": "kot_child", "time": "day",
-     "npcs": {"mama": "npc_mama", "papa": "npc_papa", "sora_young": "npc_sora", "gabi_child": "npc_gabi"}},
+    {
+     "type": "location",
+     "id": "snow_slope",
+     "player": "kot_child",
+     "time": "day",
+     "npcs": {"mama": "npc_mama_top", "papa": "npc_papa", "sora_young": "npc_sora", "gabi_child": "npc_gabi"}
+    },
     {"type": "fade", "to": "clear", "seconds": 1.0},
     {"type": "caption", "text": "Выходные", "seconds": 2.0},
+    {"type": "act", "do": "face", "who": "player", "at": "npc_mama_top", "seconds": 0.3},
+    {
+     "type": "say",
+     "lines": [
+      {"who": "mama", "text": "Стой-стой. В толстовке на склон? Там ветер."},
+      {"who": "mama", "text": "Надень куртку и варежки — они в сумке. Посмотрим, что выберешь."}
+     ]
+    },
+    {
+     "type": "challenge",
+     "id": "challenge_prologue_slope_001",
+     "character": "kot_child",
+     "retry": [{"who": "mama", "text": "Так замёрзнешь. Нужны куртка и варежки, а летнее — оставим на море."}]
+    },
+    {"type": "say", "lines": [{"who": "mama", "text": "Вот. Теперь можно и вниз."}]},
     {"type": "objective", "text": "Спустись к семье у подножия"},
+    {"type": "tutorial", "id": "run", "async": true},
     {"type": "reach", "target": "slope_bottom"},
-    {"type": "say", "lines": [{"who": "papa", "text": "Вот это спуск! Сора, ты видел?"},
-                              {"who": "sora", "text": "Видел. Он даже ни разу не упал. Почти."},
-                              {"who": "kot", "text": "Сверху город как на рисунке."}]},
+    {
+     "type": "say",
+     "lines": [
+      {"who": "papa", "text": "Вот это спуск! Сора, ты видел?"},
+      {"who": "sora", "text": "Видел. Он даже ни разу не упал. Почти."},
+      {"who": "kot", "text": "Сверху город как на рисунке."}
+     ]
+    },
     {"type": "fade", "to": "black", "seconds": 1.2}
    ]
   },
@@ -93,13 +134,23 @@
     {"type": "fade", "to": "clear", "seconds": 1.0},
     {"type": "objective", "text": "Порисуй на крыше"},
     {"type": "reach", "target": "roof_spot"},
-    {"type": "sketchbook", "pages": [
-     {"image": "sketch_street", "caption": "Улица у переезда"},
-     {"image": "sketch_family", "caption": "Мама, папа, Сора, Габриэль"},
-     {"image": "sketch_city", "caption": "Город сверху"}]},
+    {"type": "act", "do": "sit", "at": "reach_roof_spot", "seconds": 1.2, "hold": true},
+    {"type": "camera", "at": "cam_roof_side", "look": "player", "seconds": 1.6},
+    {
+     "type": "sketchbook",
+     "pages": [
+      {"image": "sketch_street", "caption": "Улица у переезда"},
+      {"image": "sketch_family", "caption": "Мама, папа, Сора, Габриэль"},
+      {"image": "sketch_city", "caption": "Город сверху"}
+     ]
+    },
+    {"type": "camera", "at": "cam_roof_wide", "look": "look_roof_wide", "seconds": 3.0},
     {"type": "time", "to": "night", "seconds": 4.0},
     {"type": "caption", "text": "", "sub": "Шум города стихает…", "seconds": 2.5},
-    {"type": "fade", "to": "black", "seconds": 1.5}
+    {"type": "act", "do": "sleep", "seconds": 2.2, "hold": true},
+    {"type": "camera", "at": "cam_roof_sleep", "look": "player", "seconds": 2.5},
+    {"type": "wait", "seconds": 2.5},
+    {"type": "fade", "to": "black", "seconds": 1.8}
    ]
   },
   {
@@ -108,14 +159,25 @@
    "location": "rooftop",
    "player": "kot_child",
    "time": "night",
+   "spawn": "spawn_sleep",
+   "rest": "sleep",
    "npcs": {"gabi_child": "npc_gabi"},
    "steps": [
+    {"type": "camera", "at": "cam_roof_sleep", "look": "player", "seconds": 0.0},
     {"type": "fade", "to": "clear", "seconds": 0.8},
-    {"type": "say", "lines": [{"who": "gabi", "text": "Кот! Кот, проснись!"},
-                              {"who": "kot", "text": "Что… Уже ночь?"},
-                              {"who": "gabi", "text": "Надо ехать в больницу. Сейчас же."},
-                              {"who": "gabi", "text": "Маму и папу сбила машина. Сора тоже там. Ему очень плохо."},
-                              {"who": "kot", "text": "…"}]},
+    {"type": "act", "do": "walk_to", "who": "gabi_child", "at": "npc_gabi_near", "hold": true},
+    {"type": "act", "do": "face", "who": "gabi_child", "hold": true},
+    {
+     "type": "say",
+     "lines": [
+      {"who": "gabi", "text": "Кот! Кот, проснись!"},
+      {"who": "kot", "text": "Что… Уже ночь?"},
+      {"who": "gabi", "text": "Надо ехать в больницу. Сейчас же."}
+     ]
+    },
+    {"type": "act", "do": "stand", "seconds": 1.0},
+    {"type": "camera", "release": true, "seconds": 1.0},
+    {"type": "say", "lines": [{"who": "gabi", "text": "Маму и папу сбила машина. Сора тоже там. Ему очень плохо."}, {"who": "kot", "text": "…"}]},
     {"type": "fade", "to": "black", "seconds": 1.5}
    ]
   },
@@ -129,15 +191,24 @@
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.5},
     {"type": "objective", "text": "Иди по коридору"},
-    {"type": "reach", "target": "corridor_mid", "fragments": [
-     {"who": "nurse", "text": "…сюда нельзя, подождите…"},
-     {"who": "doctor", "text": "…мы сделали всё, что могли…"}]},
-    {"type": "reach", "target": "ward_door", "fragments": [
-     {"who": "nurse", "text": "…старший в отделении…"},
-     {"who": "doctor", "text": "…состояние стабильно тяжёлое. Он в коме."}]},
-    {"type": "say", "lines": [{"who": "gabi", "text": "Кот… Мамы и папы больше нет."},
-                              {"who": "gabi", "text": "Сора спит. Врачи не знают, когда он проснётся."},
-                              {"who": "kot", "text": "Я подожду. Я буду ждать сколько надо."}]},
+    {
+     "type": "reach",
+     "target": "corridor_mid",
+     "fragments": [{"who": "nurse", "text": "…сюда нельзя, подождите…"}, {"who": "doctor", "text": "…мы сделали всё, что могли…"}]
+    },
+    {
+     "type": "reach",
+     "target": "ward_door",
+     "fragments": [{"who": "nurse", "text": "…старший в отделении…"}, {"who": "doctor", "text": "…состояние стабильно тяжёлое. Он в коме."}]
+    },
+    {
+     "type": "say",
+     "lines": [
+      {"who": "gabi", "text": "Кот… Мамы и папы больше нет."},
+      {"who": "gabi", "text": "Сора спит. Врачи не знают, когда он проснётся."},
+      {"who": "kot", "text": "Я подожду. Я буду ждать сколько надо."}
+     ]
+    },
     {"type": "fade", "to": "black", "seconds": 2.0}
    ]
   },
@@ -152,12 +223,17 @@
    "steps": [
     {"type": "caption", "text": "", "sub": "Спустя время", "seconds": 2.0},
     {"type": "fade", "to": "clear", "seconds": 1.2},
-    {"type": "say", "lines": [{"who": "sora", "text": "Кот… Габриэль…"},
-                              {"who": "gabi", "text": "Ты проснулся."},
-                              {"who": "sora", "text": "Мне сказали. Про маму и папу."},
-                              {"who": "sora", "text": "Я заберу вас. Обоих. Слышите? Вы будете со мной."},
-                              {"who": "kot", "text": "А ты справишься?"},
-                              {"who": "sora", "text": "Не знаю. Но я не отдам вас никому."}]},
+    {
+     "type": "say",
+     "lines": [
+      {"who": "sora", "text": "Кот… Габриэль…"},
+      {"who": "gabi", "text": "Ты проснулся."},
+      {"who": "sora", "text": "Мне сказали. Про маму и папу."},
+      {"who": "sora", "text": "Я заберу вас. Обоих. Слышите? Вы будете со мной."},
+      {"who": "kot", "text": "А ты справишься?"},
+      {"who": "sora", "text": "Не знаю. Но я не отдам вас никому."}
+     ]
+    },
     {"type": "fade", "to": "black", "seconds": 1.5}
    ]
   },
@@ -169,14 +245,20 @@
    "time": "day",
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.0},
-    {"type": "montage", "frames": [
-     {"time": "day", "caption": "Весна"},
-     {"time": "evening", "caption": "Лето"},
-     {"time": "day", "caption": "Осень"},
-     {"time": "night", "caption": "Зима"}], "seconds_each": 2.2},
-    {"type": "sketchbook", "pages": [
-     {"image": "sketch_three", "caption": "Сора, Габриэль и я"},
-     {"image": "sketch_city", "caption": "Город всё тот же. Мы — нет."}]},
+    {
+     "type": "montage",
+     "frames": [
+      {"time": "day", "caption": "Весна"},
+      {"time": "evening", "caption": "Лето"},
+      {"time": "day", "caption": "Осень"},
+      {"time": "night", "caption": "Зима"}
+     ],
+     "seconds_each": 2.2
+    },
+    {
+     "type": "sketchbook",
+     "pages": [{"image": "sketch_three", "caption": "Сора, Габриэль и я"}, {"image": "sketch_city", "caption": "Город всё тот же. Мы — нет."}]
+    },
     {"type": "caption", "text": "", "sub": "Прошли годы", "seconds": 2.5},
     {"type": "fade", "to": "black", "seconds": 1.2}
    ]
@@ -210,19 +292,28 @@
    "steps": [
     {"type": "fade", "to": "clear", "seconds": 1.2},
     {"type": "objective", "text": "Осмотри дом-отель"},
-    {"type": "explore", "required": [], "optional_min": 1,
+    {
+     "type": "explore",
+     "required": [],
+     "optional_min": 1,
      "interactions": {
       "hotel_sign": [{"who": "kot", "text": "Вывеска выцвела, буквы почти не разобрать. Но я её помню."}],
       "water_line": [{"who": "kot", "text": "Вода дошла и сюда. На стене остался след, внутри — ил и сырость."}]
-     }},
+     }
+    },
     {"type": "objective", "text": "Подойди к Соре"},
     {"type": "reach", "target": "talk_sora"},
-    {"type": "say", "lines": [{"who": "sora", "text": "Кот, тебе нужно кое-что знать."},
-                              {"who": "sora", "text": "Этот дом-отель — мамы и папы. Они оставили его тебе."},
-                              {"who": "kot", "text": "Его столько лет никто не открывал…"},
-                              {"who": "sora", "text": "Вода его задела. Ремонта тут много."},
-                              {"who": "kot", "text": "Я вернусь сюда. И сделаю его снова живым."},
-                              {"who": "sora", "text": "Знаю. Я помогу, когда смогу."}]},
+    {
+     "type": "say",
+     "lines": [
+      {"who": "sora", "text": "Кот, тебе нужно кое-что знать."},
+      {"who": "sora", "text": "Этот дом-отель — мамы и папы. Они оставили его тебе."},
+      {"who": "kot", "text": "Его столько лет никто не открывал…"},
+      {"who": "sora", "text": "Вода его задела. Ремонта тут много."},
+      {"who": "kot", "text": "Я вернусь сюда. И сделаю его снова живым."},
+      {"who": "sora", "text": "Знаю. Я помогу, когда смогу."}
+     ]
+    },
     {"type": "flag", "name": "prologue_complete"},
     {"type": "caption", "text": "Конец пролога", "sub": "Том I — жилой комплекс на горе", "seconds": 4.0}
    ]

@@ -13,4 +13,11 @@ if grep -qE "SCRIPT ERROR|Parse Error|Compile Error" <<<"$OUT"; then
   echo "Обнаружены ошибки скриптов — прогон считается проваленным."
   exit 1
 fi
+if [ "$CODE" = "0" ] && [ -z "${KPC_SKIP_E2E:-}" ]; then
+  echo "Сквозная проверка пролога (автопилот)…"
+  E2E="$(./tools/e2e_prologue.sh)"
+  CODE=$?
+  grep -E "ПРОЙДЕН|ЗАСТРЯЛ|SCRIPT ERROR" <<<"$E2E" || echo "$E2E" | tail -20
+  if grep -q "SCRIPT ERROR" <<<"$E2E"; then CODE=1; fi
+fi
 exit $CODE

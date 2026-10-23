@@ -3,8 +3,9 @@ extends CharacterBody3D
 ## Управляемый персонаж сюжета: ходьба относительно камеры, бег, гравитация, поворот модели по движению.
 ## Ввод — действия move_*/run (клавиатура и геймпад) и виртуальный стик (touch_move) на сенсорном экране.
 
-const WALK := 2.0
-const RUN := 4.2
+## Скорости — от роста персонажа (ребёнок ходит медленнее взрослого): см. set_character.
+var walk_speed := 1.6
+var run_speed := 3.6
 const TURN := 10.0
 const GRAVITY := 18.0
 ## Глубина воды (м), с которой шаг замедляется.
@@ -19,6 +20,8 @@ var touch_move := Vector2.ZERO
 var touch_run := false
 ## Уровень воды локации (м); −INF — воды нет.
 var water_level := -INF
+## Постановка: идти к точке без ввода игрока (StoryGame.auto_walk); null — обычное управление.
+var auto_target = null
 var _shape: CollisionShape3D
 
 
@@ -41,6 +44,8 @@ func set_character(model_id: String, characters: CharacterCatalog, items: Array[
 	model.setup(model_id, characters)
 	model.apply_items(items)
 	var h := clampf(model.height(), 0.8, 2.6)
+	walk_speed = clampf(h * 1.15, 1.25, 1.9)
+	run_speed = clampf(h * 2.6, 3.0, 4.4)
 	var cap := _shape.shape as CapsuleShape3D
 	cap.height = h * 0.95
 	cap.radius = clampf(h * 0.17, 0.2, 0.34)
@@ -50,6 +55,7 @@ func set_character(model_id: String, characters: CharacterCatalog, items: Array[
 func place(t: Transform3D) -> void:
 	global_position = t.origin
 	velocity = Vector3.ZERO
+	reset_physics_interpolation()     # телепорт без «пролёта» камеры
 	var f := -t.basis.z
 	if f.length() > 0.01:
 		model.rotation.y = atan2(f.x, f.z)
@@ -76,13 +82,19 @@ func _physics_process(delta: float) -> void:
 	var fwd := Vector3(-sin(camera_yaw), 0, -cos(camera_yaw))
 	var right := Vector3(cos(camera_yaw), 0, -sin(camera_yaw))
 	var dir := fwd * inp.y + right * inp.x
+	if auto_target != null:
+		var to: Vector3 = auto_target - global_position
+		to.y = 0
+		dir = to.normalized() if to.length() > 0.3 else Vector3.ZERO
+		inp = Vector2(0, 0.7 if to.length() > 0.3 else 0.0)
 	var running := input_enabled and (Input.is_action_pressed("run") or touch_run)
-	var speed := (RUN if running else WALK) * inp.length()
+	var speed := (run_speed if running else walk_speed) * inp.length()
 	if water_level - global_position.y > WADE_DEPTH:
 		speed *= 0.6
 	var target := dir.normalized() * speed if dir.length() > 0.05 else Vector3.ZERO
-	velocity.x = move_toward(velocity.x, target.x, 20.0 * delta)
-	velocity.z = move_toward(velocity.z, target.z, 20.0 * delta)
+	# разгон и торможение плавные, не зависят от FPS
+	velocity.x = move_toward(velocity.x, target.x, 12.0 * delta)
+	velocity.z = move_toward(velocity.z, target.z, 12.0 * delta)
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	else:
@@ -91,6 +103,6 @@ func _physics_process(delta: float) -> void:
 	var flat := Vector2(velocity.x, velocity.z)
 	if flat.length() > 0.2:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(velocity.x, velocity.z), clampf(TURN * delta, 0.0, 1.0))
-		model.play_motion("run" if speed > WALK + 0.1 else "walk", flat.length() / WALK)
+		model.play_motion("run" if flat.length() > walk_speed + 0.3 else "walk", flat.length())
 	else:
 		model.play_motion("idle")

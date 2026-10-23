@@ -405,6 +405,7 @@ def snow_slope():
     S.marker("reach_slope_bottom", (8.5, 0, 0.05), face=(1, 0))
     S.marker("npc_papa", (11.0, 1.2, 0.0), face=(-1, 0))
     S.marker("npc_mama", (11.6, -0.6, 0.0), face=(-1, 0.3))
+    S.marker("npc_mama_top", (-29.4, 1.6, zf(-29.4) + 0.05), face=(-0.6, -1))
     S.marker("npc_sora", (10.4, 2.6, 0.0), face=(-1, -0.4))
     S.marker("npc_gabi", (10.6, -1.8, 0.0), face=(-1, 0.5))
     water(S, 40, 400, -400, 400, 0)

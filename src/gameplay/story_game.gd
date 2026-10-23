@@ -31,6 +31,8 @@ var _cutscene := false
 var _looks: Dictionary = {}
 var _verbs: Dictionary = {}
 var _pause: Sheet
+var tutorial: StoryTutorial
+var _npc_by_model: Dictionary = {}  # модель -> CharacterModel (для постановки «act»)
 
 
 func _ready() -> void:
@@ -58,7 +60,11 @@ func _ready() -> void:
 	_beacon = _make_beacon()
 	add_child(_beacon)
 	_beacon.visible = false
+	tutorial = StoryTutorial.new()
+	tutorial.game = self
+	add_child(tutorial)
 	director = StoryDirector.new()
+	director.name = "Director"
 	director.game = self
 	director.story = story
 	if OS.has_environment("KPC_STORY_FAST"):
@@ -102,6 +108,9 @@ func enter_location(loc_id: String, model_id: String, spawn: String, time: Strin
 	for n in _npcs.values():
 		n.get_parent().queue_free()
 	_npcs.clear()
+	_npc_by_model.clear()
+	player.model.set_rest("", 0.0)
+	cam.release(0.0)
 	if loc_id != location.location_id:
 		location.load_location(loc_id)
 	location.apply_time(time)
@@ -163,9 +172,86 @@ func _spawn_npc(model_id: String, marker_name: String) -> void:
 		m.rotation.y = PI
 		m.play_motion("idle", 0.4)
 	_npcs[marker_name] = m
+	_npc_by_model[model_id] = m
 
 
 ## Цели осмотра: точки int_<id> текущей локации; verbs — действие у цели из данных шага.
+func npc_model(model_id: String) -> CharacterModel:
+	return _npc_by_model.get(model_id)
+
+
+## Постановка: персонаж сам идёт к точке (игрок — через контроллер, без ввода; NPC — по прямой).
+func auto_walk(pos: Vector3, who := "player") -> void:
+	if who == "player":
+		player.auto_target = pos
+		while is_inside_tree() and player_distance(pos) > 0.35:
+			await get_tree().physics_frame
+		player.auto_target = null
+		return
+	var m := npc_model(who)
+	if m == null:
+		return
+	var body := m.get_parent() as Node3D
+	var from := body.global_position
+	var d := Vector2(pos.x - from.x, pos.z - from.z)
+	m.rotation.y = atan2(d.x, d.y)
+	var speed := 1.3
+	m.play_motion("walk", speed)
+	var tw := create_tween()
+	tw.tween_property(body, "global_position", Vector3(pos.x, from.y, pos.z), d.length() / speed)
+	await tw.finished
+	m.play_motion("idle")
+
+
+## Испытание-переодевание в гардеробе прямо посреди сцены (челлендж на склоне): открыть гардероб персонажа
+## с темой испытания; после закрытия — образ на модели в мире. Возвращает true, если испытание пройдено.
+func run_challenge(id: String, st: Dictionary) -> bool:
+	var model_id := str(st.get("character", player_model))
+	set_cutscene(true)
+	overlay.set_skippable(false)
+	tutorial.run("wardrobe", {"async": true})
+	var passed := false
+	while not passed and is_inside_tree():
+		var w: Control = load("res://scenes/ui/wardrobe.tscn").instantiate()
+		w.set("start_character", model_id)
+		w.set("start_challenge", id)
+		w.set("story_mode", true)
+		overlay.add_ui(w)
+		await w.closed
+		w.queue_free()
+		passed = bool(Game.session.rewards.result(id).get("cleared", false))
+		if not passed and st.has("retry"):
+			await overlay.dialogue.play(st.retry, story)
+	tutorial.finish()
+	player.set_character(model_id, Game.session.characters, _outfit(model_id))
+	set_cutscene(false)
+	return passed
+
+
+## Автопилот испытания: надеть подходящие по теме вещи и сдать испытание (как сделал бы игрок).
+func autopilot_challenge(id: String, st: Dictionary) -> void:
+	var s := Game.session
+	var model_id := str(st.get("character", player_model))
+	var ch := s.challenges.get_challenge(id)
+	var o := s.equipment.get_outfit(model_id).duplicate_outfit()
+	for it in s.catalog.all_items():
+		if model_id in it.compatible_character_ids and ("warm" in it.style_tags or "cold_weather" in it.style_tags):
+			s.equipment.equip_into(o, model_id, it.id)
+	s.equipment.set_outfit(model_id, o)
+	var report := s.scoring.score(ch, s.outfit_items(model_id))
+	s.rewards.submit(ch, report)
+	player.set_character(model_id, s.characters, _outfit(model_id))
+
+
+## Взаимодействие с целью без нажатия (автопилот и снимки).
+func debug_interact(id: String) -> void:
+	if not _interactables.has(id):
+		return
+	_focus = id
+	_cutscene = false
+	_try_interact()
+
+
 func set_interactables(ids: Array, verbs: Dictionary = {}) -> void:
 	_interactables.clear()
 	_verbs = verbs
@@ -248,6 +334,7 @@ func _try_interact() -> void:
 	overlay.set_prompt("")
 	var id := _focus
 	_focus = ""
+	tutorial.notify("interacted")
 	interacted.emit(id)
 
 

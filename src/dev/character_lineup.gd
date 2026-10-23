@@ -245,3 +245,47 @@ func debug_prologue() -> void:
 	var cam := get_viewport().get_camera_3d()
 	cam.position = Vector3(0, 1.0, 9.5)
 	cam.fov = 32
+
+
+## Кадры анимации: KPC_POSE_ID=<модель> KPC_ANIM=walk|run|idle; 4 копии в разных фазах цикла, вид сбоку и спереди.
+func debug_anim() -> void:
+	for id in IDS:
+		get_node(id).visible = false
+	var id := OS.get_environment("KPC_POSE_ID") if OS.has_environment("KPC_POSE_ID") else "kot_child"
+	var anim := OS.get_environment("KPC_ANIM") if OS.has_environment("KPC_ANIM") else "walk"
+	var looks := DataLoader.load_json(StoryGame.LOOKS_PATH)
+	for i in 5:
+		var m := CharacterModel.new()
+		add_child(m)
+		m.setup(id, Game.session.characters)
+		m.apply_look(looks.get(id, {}))
+		m.position = Vector3(-1.6 + i * 0.8, 0, 0)
+		m.rotation.y = PI / 2 if i < 4 else 0.0
+		var ap := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		if ap and ap.has_animation(anim):
+			ap.play(anim)
+			ap.seek(ap.current_animation_length * (i % 4) / 4.0, true)
+			ap.pause()
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 0.75, 5.2)
+	cam.fov = 30
+
+
+## Позы отдыха: сидит и спит (KPC_POSE_ID — модель).
+func debug_rest() -> void:
+	for id in IDS:
+		get_node(id).visible = false
+	var id := OS.get_environment("KPC_POSE_ID") if OS.has_environment("KPC_POSE_ID") else "kot_child"
+	var looks := DataLoader.load_json(StoryGame.LOOKS_PATH)
+	var kinds := ["sit", "sit", "sleep", "sleep"]
+	for i in 4:
+		var m := CharacterModel.new()
+		add_child(m)
+		m.setup(id, Game.session.characters)
+		m.apply_look(looks.get(id, {}))
+		m.position = Vector3(-1.5 + i * 1.0, 0, 0)
+		m.rotation.y = PI / 2 if i % 2 == 0 else 0.0
+		m.set_rest(kinds[i], 0.0)
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 0.9, 4.6)
+	cam.fov = 32

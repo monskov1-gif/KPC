@@ -243,6 +243,11 @@ MH_J = {}                # суставы MakeHuman текущего тела (�
 BODY_EXTRA = []           # «наклейки» на теле (соски, линии рельефа) — привязываются к скелету вместе с телом
 
 
+BIND_DOWN = -45.0          # от А-позы базы MakeHuman (рука ≈43° от вертикали) вверх до горизонтали
+ARM_HANG = math.radians(80)   # насколько опустить руку из T-позы в анимациях (почти вдоль тела)
+ARM_LOWER = {"L": -ARM_HANG, "R": -ARM_HANG}   # уточняется по скелету в build_armature
+
+
 def build_mh_body(p, sex, skin_mat):
     """Тело на базовой модели MakeHuman (CC0): см. tools/art/mh_body.py. Возвращает (объект, J)."""
     sys.path.insert(0, os.path.dirname(__file__))
@@ -251,9 +256,11 @@ def build_mh_body(p, sex, skin_mat):
     mh = p["mh"]
     vs, faces, groups = mh_body.shape(sex, teen=mh.get("teen", 0.45), thin=mh.get("thin", 0.7), bust=mh.get("bust", 0.0),
                                       muscle=mh.get("muscle", 0.0), heavy=mh.get("heavy", 0.0))
-    sk = mh_body.pose_arms(vs, groups, mh.get("arms_down", 15), clav=mh.get("clav", 0.0), spine_back=mh.get("spine_back", 0.0),
+    # Исходная поза — T-поза (руки горизонтально, ладони вниз): одежда и веса строятся без касания рук и таза,
+    # руки опускают анимации (idle/walk/run/sit/sleep). arms_down остаётся параметром старых витринных снимков.
+    sk = mh_body.pose_arms(vs, groups, BIND_DOWN, elbow_bend=4.0, clav=mh.get("clav", 0.0), spine_back=mh.get("spine_back", 0.0),
                            neck_fwd=mh.get("neck_fwd", 0.0), knee_back=mh.get("knee_back", 0.0),
-                           legs_back=mh.get("legs_back", 0.0))
+                           legs_back=mh.get("legs_back", 0.0), back_deg=0.0)
     mh_body.lengthen(vs, groups, sk, arm=mh.get("arm_len", 1.2), foot=mh.get("foot_len", 1.12))
     verts, fcs, M = mh_body.to_character(vs, faces, groups, neck_z=mh["neck_z"] * s, pelvis_z=mh["pelvis_z"] * s,
                                           slim=mh.get("slim", 1.0), legw=mh_body.leg_weights(sk), leg_xs=mh.get("leg_xs"),
@@ -2340,6 +2347,10 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     bm = bmesh.new()
     bm.from_mesh(me)
     bm.normal_update()
+    # номер исходной вершины тела: при привязке к скелету вещь берёт веса тела (не расходится с ним на шаге)
+    src = bm.verts.layers.int.new("src")
+    for v in bm.verts:
+        v[src] = v.index
     kill, moves = [], []
     for v in bm.verts:
         bone, t = _nearest_bone(v.co)
@@ -2511,6 +2522,29 @@ def top(J, p, name, m, sleeve="long", neck=False, loose=0.0, cover_hand=False, h
     return shell(name, m, spec, smooth=(2 if loose > 0.01 else 1) + p.get("garment_smooth", 0))
 
 
+def top_oversize(J, p, name, m):
+    """Оверсайз-толстовка: висит от плеч и расширяется книзу (не повторяет торс), рукава широкие к манжетам,
+    подол ниже пояса, ворот-круг. Сглаживание сильнее — складки мягкие."""
+    s = p["s"]
+    hem_z = J["pelvis"].z - 0.055 * s
+    chest_z = J["chest"].z
+    base = 0.016 * s
+
+    def spec(b, t, co):
+        if b in ("spine", "chest", "upper_chest", "hips") or b.startswith("thigh"):
+            if co.z < hem_z:
+                return None
+            return base + max(0.0, chest_z - co.z) * 0.22 + (0.006 * s if b == "hips" or b.startswith("thigh") else 0.0)
+        if b == "neck":
+            return base * 0.8 if co.z <= J["neck"].z - 0.01 * s else None
+        if b.startswith("upper_arm"):
+            return base + 0.006 * s + 0.01 * t * s
+        if b.startswith("forearm"):
+            return base + (0.016 + 0.022 * t) * s if t < 0.95 else None
+        return None
+    return shell(name, m, spec, smooth=3)
+
+
 def legs(J, p, name, m, kind):
     s = p["s"]
     waist_z = J["pelvis"].lerp(J["spine"], 0.6).z
@@ -2529,6 +2563,18 @@ def legs(J, p, name, m, kind):
             tuck = 0.006 * s if co.z > J["pelvis"].z - 0.06 * s else 0.0
             return (0.01 + 0.01 * k) * s + tuck
         return shell(name, m, spec, smooth=1 + p.get("garment_smooth", 0))
+    if kind == "wide":
+        # широкие штаны: свободно у бедра, сильно расширяются к низу; низ чуть выше щиколотки
+        hem_z = J["an_l"].z + 0.03 * s
+
+        def spec(b, t, co):
+            if b.startswith(("upper_arm", "forearm", "hand")):
+                return None
+            if not hem_z <= co.z <= waist_z:
+                return None
+            k = max(0.0, min(1.0, (J["hip_l"].z - co.z) / (J["hip_l"].z - hem_z)))
+            return (0.012 + 0.03 * k ** 1.3) * s + (0.006 * s if co.z > J["pelvis"].z - 0.06 * s else 0.0)
+        return shell(name, m, spec, smooth=2)
     if kind == "socks":
         def spec(b, t, co):
             if b.startswith("shin"):
@@ -3158,7 +3204,25 @@ def build_armature(J, head_top):
         if parent:
             bone.parent = eb[parent]
     bpy.ops.object.mode_set(mode="OBJECT")
+    # насколько опускать руки в анимациях: из фактического наклона плечевой кости (рука вдоль тела ≈ 10° от вертикали)
+    for side in ("L", "R"):
+        b = rig.data.bones[f"upper_arm.{side}"]
+        d = (b.tail_local - b.head_local).normalized()
+        ARM_LOWER[side] = -(ARM_HANG + math.asin(max(-1.0, min(1.0, d.z))))
     return rig
+
+
+def arm_rot(side, swing=0.0, out=0.0):
+    """Поворот плечевой кости из T-позы: опустить вдоль тела (ось X кости — вперёд), swing > 0 — рука назад,
+    out > 0 — отвести от тела. Порядок XYZ: сначала опускание, затем качание вокруг поперечной оси."""
+    sx = 1 if side == "L" else -1
+    return (ARM_LOWER[side] + out, sx * swing, 0.0)
+
+
+def elbow_rot(side, bend):
+    """Сгиб локтя вперёд (рука опущена): вокруг оси Z кости предплечья."""
+    sx = 1 if side == "L" else -1
+    return (0.0, 0.0, -sx * bend)
 
 
 def _seg_dist(p, a, b):
@@ -3170,7 +3234,11 @@ def _seg_dist(p, a, b):
 def bind(rig, objs, rigid_bone=None):
     """Веса: две ближайшие кости (обратный квадрат расстояния); голова и всё на ней — жёстко к кости head."""
     bones = [(b.name, b.head_local.copy(), b.tail_local.copy()) for b in rig.data.bones if b.name != "head"]
+    body_w = None
     for o in objs:
+        if body_w is not None and not rigid_bone:
+            _copy_body_weights(rig, o, body_w)
+            continue
         o.parent = rig
         o.modifiers.new("rig", "ARMATURE").object = rig
         if rigid_bone:
@@ -3178,9 +3246,19 @@ def bind(rig, objs, rigid_bone=None):
             continue
         groups = {name: o.vertex_groups.new(name=name) for name, _, _ in bones}
         mw = o.matrix_world
+        # верх одежды висит на корпусе: подол не цепляется за бёдра (иначе рвётся на шаге)
+        torso_only = any(k in o.name for k in ("upper_body", "outerwear"))
+        # юбка и платье: таз + немного бедра — ткань следует за ногой, но не рвётся
+        skirt_like = any(k in o.name for k in ("lower_body__skirt", "full_body__dress"))
+        cand = [bb for bb in bones if not (torso_only and bb[0].startswith(("thigh", "shin", "foot")))]
         for v in o.data.vertices:
             p = mw @ v.co
-            d = sorted((_seg_dist(p, h, t), name) for name, h, t in bones)[:2]
+            if skirt_like and p.z < rig.data.bones["hips"].head_local.z + 0.02:
+                legs = sorted((_seg_dist(p, h, t), name) for name, h, t in bones if name.startswith("thigh"))
+                groups["hips"].add([v.index], 0.65, "REPLACE")
+                groups[legs[0][1]].add([v.index], 0.35, "ADD")
+                continue
+            d = sorted((_seg_dist(p, h, t), name) for name, h, t in cand)[:2]
             w0, w1 = 1.0 / max(d[0][0], 1e-4) ** 2, 1.0 / max(d[1][0], 1e-4) ** 2
             if d[1][0] > d[0][0] * 1.8:
                 w1 = 0.0
@@ -3188,6 +3266,45 @@ def bind(rig, objs, rigid_bone=None):
             groups[d[0][1]].add([v.index], w0 / tot, "REPLACE")
             if w1 > 0:
                 groups[d[1][1]].add([v.index], w1 / tot, "ADD")
+        if o is _BODY:
+            names = {g.index: g.name for g in o.vertex_groups}
+            from mathutils.kdtree import KDTree
+            kd = KDTree(len(o.data.vertices))
+            for v in o.data.vertices:
+                kd.insert(o.matrix_world @ v.co, v.index)
+            kd.balance()
+            body_w = (kd, [[(names[g.group], g.weight) for g in v.groups if g.weight > 0] for v in o.data.vertices])
+
+
+def _copy_body_weights(rig, o, body_w):
+    """Одежда и детали на теле берут веса ближайшей точки тела (усреднение по 3 соседям): ткань движется вместе
+    с кожей и не рвётся. Верх одежды — без костей ног (подол висит на корпусе)."""
+    kd, weights = body_w
+    o.parent = rig
+    o.modifiers.new("rig", "ARMATURE").object = rig
+    names = [b.name for b in rig.data.bones if b.name != "head"]
+    groups = {n: o.vertex_groups.new(name=n) for n in names}
+    torso_only = any(k in o.name for k in ("upper_body", "outerwear"))
+    skirt_like = any(k in o.name for k in ("lower_body__skirt", "full_body__dress"))
+    mw = o.matrix_world
+    for v in o.data.vertices:
+        acc = {}
+        near = kd.find_n(mw @ v.co, 3)
+        tot_d = 0.0
+        for _co, i, dist in near:
+            k = 1.0 / max(dist, 1e-4)
+            tot_d += k
+            for n, x in weights[i]:
+                acc[n] = acc.get(n, 0.0) + x * k
+        w = [(n, x / tot_d) for n, x in acc.items()] if tot_d else [("hips", 1.0)]
+        if skirt_like and (mw @ v.co).z < rig.data.bones["hips"].head_local.z + 0.02:
+            # юбка ниже таза висит на тазе и лишь частично следует за ногой
+            w = [(n, x * 0.35) for n, x in w] + [("hips", 0.65)]
+        if torso_only:
+            w = [(n, x) for n, x in w if not n.startswith(("thigh", "shin", "foot"))] or [("hips", 1.0)]
+        tot = sum(x for _n, x in w) or 1.0
+        for n, x in w:
+            groups[n].add([v.index], x / tot, "ADD")
 
 
 def idle_animation(rig, frames=96):
@@ -3203,9 +3320,11 @@ def idle_animation(rig, frames=96):
         pb["chest"].rotation_euler = (math.sin(t) * 0.02, 0, 0)
         pb["chest"].scale = (1 + math.sin(t) * 0.006,) * 3
         pb["head"].rotation_euler = (math.sin(t + 0.6) * 0.025, math.sin(t * 0.5) * 0.035, 0)
-        pb["upper_arm.L"].rotation_euler = (0, 0, math.sin(t) * 0.015)
-        pb["upper_arm.R"].rotation_euler = (0, 0, -math.sin(t) * 0.015)
-        for n in ("chest", "head", "upper_arm.L", "upper_arm.R"):
+        pb["upper_arm.L"].rotation_euler = arm_rot("L", swing=math.sin(t) * 0.02, out=0.04)
+        pb["upper_arm.R"].rotation_euler = arm_rot("R", swing=math.sin(t) * 0.02, out=0.04)
+        pb["forearm.L"].rotation_euler = elbow_rot("L", 0.22)
+        pb["forearm.R"].rotation_euler = elbow_rot("R", 0.22)
+        for n in ("chest", "head", "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R"):
             pb[n].keyframe_insert("rotation_euler", frame=f)
         pb["chest"].keyframe_insert("scale", frame=f)
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -3224,38 +3343,100 @@ def _stash(rig):
     rig.animation_data.action = None
 
 
-def walk_animation(rig, frames=32):
-    """Шаг: бёдра вперёд-назад, колени сгибаются на переносе ноги, руки — навстречу ногам, корпус покачивается.
-    Цикл 32 кадра (24 к/с); игра подгоняет скорость клипа под скорость персонажа (CharacterModel.play_motion)."""
+def _gait(rig, name, frames, amp, knee, lift, lean, arm, elbow, bob, twist, arm_out=0.05):
+    """Цикл шага/бега. Оси костей (см. build_armature): у ног и рук локальная X ≈ мировая X, поворот +X уводит
+    кость НАЗАД (лицо смотрит в −Y). Фазы: опорная нога выпрямлена, стопа плоско; на переносе колено сгибается
+    сильнее всего в середине переноса; пятка → носок (перекат стопы); таз качается вверх-вниз (дважды за цикл)
+    и поворачивается навстречу плечам; руки — в противофазе ногам, локти чуть согнуты."""
     rig.animation_data_create()
-    rig.animation_data.action = bpy.data.actions.new("walk")
+    rig.animation_data.action = bpy.data.actions.new(name)
     bpy.context.view_layer.objects.active = rig
     bpy.ops.object.mode_set(mode="POSE")
     pb = rig.pose.bones
     for b in pb:
         b.rotation_mode = "XYZ"
-    for f in range(0, frames + 1, 2):
+    for f in range(0, frames + 1, 1 if frames <= 24 else 2):
         t = f / frames * 2 * math.pi
         for side, ph in (("L", 0.0), ("R", math.pi)):
-            sw = math.sin(t + ph)
-            pb[f"thigh.{side}"].rotation_euler = (-sw * 0.42, 0, 0)
-            # колено сгибается, когда нога идёт вперёд по воздуху
-            pb[f"shin.{side}"].rotation_euler = (max(0.0, math.sin(t + ph + 1.1)) * 0.75 + 0.05, 0, 0)
-            pb[f"foot.{side}"].rotation_euler = (sw * 0.15, 0, 0)
-            pb[f"upper_arm.{side}"].rotation_euler = (sw * 0.35, 0, 0)
-            pb[f"forearm.{side}"].rotation_euler = (-0.18 - max(0.0, sw) * 0.2, 0, 0)
+            a = t + ph
+            th = -amp * math.sin(a)                       # бедро: <0 — вперёд
+            # перенос ноги — когда бедро идёт вперёд (cos > 0); колено сгибается к середине переноса
+            swing = max(0.0, math.cos(a - 0.35))
+            kn = knee * swing ** 1.4 + 0.06 + (0.12 * max(0.0, -math.cos(a + 0.9)) if lift else 0.0)
+            # стопа: в опоре — плоско (компенсация бедра и голени), при отрыве — носок вниз, при постановке — носок вверх
+            ft = -(th + kn) * 0.85 + 0.25 * max(0.0, math.sin(a + 0.6)) * (1 if math.cos(a) < 0 else 0) - 0.18 * max(0.0, -math.sin(a - 0.3)) * swing
+            pb[f"thigh.{side}"].rotation_euler = (th, 0, 0)
+            pb[f"shin.{side}"].rotation_euler = (kn, 0, 0)
+            pb[f"foot.{side}"].rotation_euler = (ft, 0, 0)
+            sx = 1 if side == "L" else -1
+            pb[f"upper_arm.{side}"].rotation_euler = arm_rot(side, swing=arm * math.sin(a), out=arm_out)
+            pb[f"forearm.{side}"].rotation_euler = elbow_rot(side, elbow + elbow * 0.6 * max(0.0, -math.sin(a)))
             for n in (f"thigh.{side}", f"shin.{side}", f"foot.{side}", f"upper_arm.{side}", f"forearm.{side}"):
                 pb[n].keyframe_insert("rotation_euler", frame=f)
-        pb["hips"].location = (0, abs(math.sin(t)) * 0.012 - 0.006, 0)
+        pb["hips"].location = (0, bob * (math.cos(2 * t) * -0.5 + 0.5) - bob, 0)
+        pb["hips"].rotation_euler = (0, twist * math.sin(t), 0.02 * math.sin(t))
         pb["hips"].keyframe_insert("location", frame=f)
-        pb["spine"].rotation_euler = (0.04, 0, math.sin(t) * 0.05)
-        pb["chest"].rotation_euler = (0, 0, -math.sin(t) * 0.07)
-        pb["head"].rotation_euler = (0, 0, math.sin(t) * 0.03)
+        pb["hips"].keyframe_insert("rotation_euler", frame=f)
+        pb["spine"].rotation_euler = (-lean, -twist * 0.5 * math.sin(t), 0)
+        pb["chest"].rotation_euler = (-lean * 0.5, -twist * 0.9 * math.sin(t), -0.015 * math.sin(t))
+        pb["head"].rotation_euler = (lean * 0.8, twist * 0.6 * math.sin(t), 0)
         for n in ("spine", "chest", "head"):
             pb[n].keyframe_insert("rotation_euler", frame=f)
+    for fc in rig.animation_data.action.fcurves if hasattr(rig.animation_data.action, "fcurves") else []:
+        fc.modifiers.new("CYCLES")
     bpy.ops.object.mode_set(mode="OBJECT")
     _stash(rig)
 
+
+def pose_animation(rig, name, pose, drop=0.0, frames=48, breathe=0.02):
+    """Статичная поза с лёгким дыханием (сидит / спит). pose: {кость: (rx, ry, rz)}; drop — насколько опустить таз (м)."""
+    rig.animation_data_create()
+    rig.animation_data.action = bpy.data.actions.new(name)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="POSE")
+    pb = rig.pose.bones
+    for b in pb:
+        b.rotation_mode = "XYZ"
+    for f in range(0, frames + 1, 12):
+        t = f / frames * 2 * math.pi
+        for bn, rot in pose.items():
+            if bn.startswith("upper_arm"):
+                rot = arm_rot(bn[-1], swing=rot[0], out=rot[2])      # (качание, -, отведение)
+            elif bn.startswith("forearm"):
+                rot = elbow_rot(bn[-1], rot[0])                     # (сгиб, -, -)
+            pb[bn].rotation_euler = rot
+            if bn == "chest":
+                pb[bn].rotation_euler = (rot[0] + math.sin(t) * breathe, rot[1], rot[2])
+            pb[bn].keyframe_insert("rotation_euler", frame=f)
+        # таз: локальная Y кости ≈ вверх
+        pb["hips"].location = (0, -drop, 0)
+        pb["hips"].keyframe_insert("location", frame=f)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    _stash(rig)
+
+
+def rest_animations(rig):
+    """Позы для постановки: сидит на полу (обняв колени) и спит на боку, свернувшись. Укладывание на бок
+    делает игра (поворот всей модели), здесь — только сгибы."""
+    hip_z = rig.data.bones["thigh.L"].head_local.z
+    sit = {"thigh.L": (-2.15, 0, 0.14), "thigh.R": (-2.15, 0, -0.14), "shin.L": (2.45, 0, 0), "shin.R": (2.45, 0, 0),
+           "foot.L": (-0.25, 0, 0), "foot.R": (-0.25, 0, 0), "spine": (0.18, 0, 0), "chest": (0.12, 0, 0), "head": (0.1, 0, 0),
+           "upper_arm.L": (-0.95, 0, 0.12), "upper_arm.R": (-0.95, 0, 0.12), "forearm.L": (1.1, 0, 0), "forearm.R": (1.1, 0, 0)}
+    pose_animation(rig, "sit", sit, drop=hip_z * 0.9)
+    sleep = {"thigh.L": (-1.0, 0, 0.05), "thigh.R": (-0.85, 0, -0.05), "shin.L": (1.5, 0, 0), "shin.R": (1.35, 0, 0),
+             "foot.L": (0.2, 0, 0), "foot.R": (0.2, 0, 0), "spine": (0.2, 0, 0), "chest": (0.15, 0, 0), "head": (0.25, 0.2, 0),
+             "upper_arm.L": (-1.2, 0, 0.3), "upper_arm.R": (-1.0, 0, 0.1), "forearm.L": (1.4, 0, 0), "forearm.R": (1.2, 0, 0)}
+    pose_animation(rig, "sleep", sleep, drop=0.0, breathe=0.035)
+
+
+def walk_animation(rig):
+    """Шаг: 32 кадра (24 к/с) — 0.75 цикла в секунду; длина цикла ≈ 0.77 роста (CharacterModel подгоняет скорость)."""
+    _gait(rig, "walk", 32, amp=0.42, knee=0.95, lift=False, lean=0.03, arm=0.32, elbow=0.18, bob=0.012, twist=0.07)
+
+
+def run_animation(rig):
+    """Бег: 20 кадров — 1.2 цикла в секунду; размах больше, колено выше, корпус наклонён, локти согнуты."""
+    _gait(rig, "run", 20, amp=0.68, knee=1.6, lift=True, lean=0.16, arm=0.5, elbow=1.3, bob=0.03, twist=0.11, arm_out=0.16)
 
 # ------------------------------------------------------------------ персонажи
 
@@ -3468,7 +3649,7 @@ CHARACTERS.update({
     # Кот в 6 лет: та же копна, уши и глаза; детская база, крупная голова; без рисунка рельефа тела.
     "kot_child": _variant("kot", body={"s": 116 / 163, "head": 1.42, "shoulder": 0.128, "neck": 0.034, "hem_drop": 0.1},
                           mh={"teen": 1.0, "thin": 0.35, "arm_len": 1.0, "clav": 10, "spine_back": 4, "anat": {}, "arms_down": 24},
-                          garments=list(NPC_GARMENTS)),
+                          garments=list(NPC_GARMENTS) + ["top_oversize", "legs_wide", "gloves"]),
     # Габриэль в 12 лет: два пучка и те же цвета, детская база.
     "gabi_child": _variant("gabi", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07},
                            mh={"teen": 0.9, "bust": 0.0, "thin": 0.55, "arms_down": 26},
@@ -3595,6 +3776,10 @@ def build(cid):
                            mat("badge_red", (0.82, 0.2, 0.24, 1)), mat("badge_dot", (0.25, 0.55, 0.3, 1))], belt_z)
         elif g == "kot_boots":
             o = kot_boots(J, p, plain, mat("sole", (0.16, 0.15, 0.16, 1), rough=0.5))
+        elif g == "top_oversize":
+            o = top_oversize(J, p, "garment__upper_body__oversize", cloth)
+        elif g == "legs_wide":
+            o = legs(J, p, "garment__lower_body__wide", cloth, "wide")
         elif g == "top_long":
             o = top(J, p, "garment__upper_body__long", cloth, "long", hem_drop=p.get("hem_drop", 0.035))
         elif g == "top_tshirt":
@@ -3752,6 +3937,8 @@ def build(cid):
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
     walk_animation(rig)
+    run_animation(rig)
+    rest_animations(rig)
 
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{cid}.glb")

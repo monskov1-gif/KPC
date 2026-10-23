@@ -62,6 +62,11 @@ var _trophy_rank: RankBadge
 var _toast: PanelContainer
 var _sheet: Sheet
 var _pending_character := ""
+## Открытие из сюжета (испытание-переодевание): чей гардероб, какое испытание; story_mode — только этот
+## персонаж (сюжетные персонажи вроде Кота в 6 лет в обычном гардеробе не показываются).
+var start_character := ""
+var start_challenge := ""
+var story_mode := false
 
 
 func _ready() -> void:
@@ -71,6 +76,12 @@ func _ready() -> void:
 	query.sort = WardrobeQuery.Sort.CATALOG
 	_build()
 	var first: String = session.unlocked_characters[0] if not session.unlocked_characters.is_empty() else session.characters.ids()[0]
+	if start_character != "":
+		first = start_character
+		if session.equipment.get_outfit(first).items.is_empty():
+			session.equipment.equip_signature(first)
+	if start_challenge != "":
+		_challenge.challenge_id = start_challenge
 	_set_character(first)
 	resized.connect(_layout)
 	_layout()
@@ -109,6 +120,9 @@ func _build_top_bar() -> void:
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_top.add_child(title)
 	for c in session.characters.ids():
+		var story_only: bool = session.characters.get_data(c).get("story_only", false)
+		if story_mode != story_only or (story_mode and c != start_character):
+			continue
 		var b := Button.new()
 		b.flat = true
 		b.custom_minimum_size = Vector2(60, 60)

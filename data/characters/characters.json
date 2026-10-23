@@ -58,6 +58,21 @@
     "lower_body": "clothing_hotto_black_trousers_001"
    },
    "placeholder_color": "#e8dcc8"
+  },
+  {
+   "id": "kot_child",
+   "name_key": "character.kot_child.name",
+   "body_type": "child",
+   "height_cm": 116,
+   "unlocked_by_default": false,
+   "story_only": true,
+   "signature_outfit": {
+    "upper_body": "clothing_kotc_yellow_hoodie_001",
+    "lower_body": "clothing_kotc_wide_pants_001",
+    "socks": "clothing_kotc_house_socks_001",
+    "footwear": "clothing_kotc_sneakers_001"
+   },
+   "placeholder_color": "#7ccfb6"
   }
  ]
 }

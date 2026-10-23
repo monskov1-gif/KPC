@@ -1029,6 +1029,388 @@
    "model_template": "lower_body__trousers",
    "placeholder_color": "#1b1b20",
    "sort_order": 62
+  },
+  {
+   "id": "clothing_kotc_yellow_hoodie_001",
+   "name_key": "item.kotc_yellow_hoodie.name",
+   "description_key": "item.kotc_yellow_hoodie.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "common",
+   "style_tags": [
+    "cozy",
+    "casual",
+    "cute"
+   ],
+   "attributes": {
+    "casualness": 60,
+    "cuteness": 50,
+    "simplicity": 40
+   },
+   "color_tags": [
+    "light"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#f4d98c",
+   "sort_order": 900,
+   "model_template": "upper_body__oversize"
+  },
+  {
+   "id": "clothing_kotc_wide_pants_001",
+   "name_key": "item.kotc_wide_pants.name",
+   "description_key": "item.kotc_wide_pants.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "common",
+   "style_tags": [
+    "casual",
+    "cozy"
+   ],
+   "attributes": {
+    "casualness": 55,
+    "simplicity": 45,
+    "practicality": 30
+   },
+   "color_tags": [
+    "blue"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#5d6f96",
+   "sort_order": 901,
+   "model_template": "lower_body__wide"
+  },
+  {
+   "id": "clothing_kotc_house_socks_001",
+   "name_key": "item.kotc_house_socks.name",
+   "description_key": "item.kotc_house_socks.description",
+   "category": "socks",
+   "slot": "socks",
+   "rarity": "common",
+   "style_tags": [
+    "cozy"
+   ],
+   "attributes": {
+    "cuteness": 30,
+    "casualness": 40
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#f6f2ea",
+   "sort_order": 902,
+   "model_template": "socks__knee"
+  },
+  {
+   "id": "clothing_kotc_sneakers_001",
+   "name_key": "item.kotc_sneakers.name",
+   "description_key": "item.kotc_sneakers.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "common",
+   "style_tags": [
+    "casual",
+    "sporty"
+   ],
+   "attributes": {
+    "sportiness": 40,
+    "casualness": 50
+   },
+   "color_tags": [
+    "red"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#d9776a",
+   "sort_order": 903,
+   "model_template": "footwear__shoes"
+  },
+  {
+   "id": "clothing_kotc_puffer_jacket_001",
+   "name_key": "item.kotc_puffer_jacket.name",
+   "description_key": "item.kotc_puffer_jacket.description",
+   "category": "outerwear",
+   "slot": "outerwear",
+   "rarity": "common",
+   "style_tags": [
+    "warm",
+    "cold_weather",
+    "sporty",
+    "cute"
+   ],
+   "attributes": {
+    "practicality": 80,
+    "sportiness": 60,
+    "cuteness": 40
+   },
+   "color_tags": [
+    "teal"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#5fb7b0",
+   "sort_order": 904,
+   "model_template": "outerwear__jacket"
+  },
+  {
+   "id": "clothing_kotc_ski_pants_001",
+   "name_key": "item.kotc_ski_pants.name",
+   "description_key": "item.kotc_ski_pants.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "common",
+   "style_tags": [
+    "warm",
+    "cold_weather",
+    "sporty"
+   ],
+   "attributes": {
+    "practicality": 75,
+    "sportiness": 65
+   },
+   "color_tags": [
+    "dark",
+    "blue"
+   ],
+   "material_tags": [
+    "synthetic"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#3d4a6a",
+   "sort_order": 905,
+   "model_template": "lower_body__trousers"
+  },
+  {
+   "id": "clothing_kotc_mittens_001",
+   "name_key": "item.kotc_mittens.name",
+   "description_key": "item.kotc_mittens.description",
+   "category": "gloves",
+   "slot": "gloves",
+   "rarity": "common",
+   "style_tags": [
+    "warm",
+    "cold_weather",
+    "cute"
+   ],
+   "attributes": {
+    "cuteness": 60,
+    "practicality": 50
+   },
+   "color_tags": [
+    "red"
+   ],
+   "material_tags": [
+    "wool",
+    "knit"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#d8564a",
+   "sort_order": 906,
+   "model_template": "gloves__gloves"
+  },
+  {
+   "id": "clothing_kotc_wool_socks_001",
+   "name_key": "item.kotc_wool_socks.name",
+   "description_key": "item.kotc_wool_socks.description",
+   "category": "socks",
+   "slot": "socks",
+   "rarity": "common",
+   "style_tags": [
+    "warm",
+    "cozy",
+    "cold_weather"
+   ],
+   "attributes": {
+    "practicality": 45,
+    "cuteness": 35
+   },
+   "color_tags": [
+    "beige"
+   ],
+   "material_tags": [
+    "wool",
+    "knit"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#e8d8b8",
+   "sort_order": 907,
+   "model_template": "socks__knee"
+  },
+  {
+   "id": "clothing_kotc_snow_boots_001",
+   "name_key": "item.kotc_snow_boots.name",
+   "description_key": "item.kotc_snow_boots.description",
+   "category": "shoes",
+   "slot": "footwear",
+   "rarity": "common",
+   "style_tags": [
+    "warm",
+    "cold_weather",
+    "sporty"
+   ],
+   "attributes": {
+    "practicality": 80,
+    "sportiness": 40
+   },
+   "color_tags": [
+    "brown"
+   ],
+   "material_tags": [
+    "leather"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#7a5a42",
+   "sort_order": 908,
+   "model_template": "footwear__shoes"
+  },
+  {
+   "id": "clothing_kotc_summer_tee_001",
+   "name_key": "item.kotc_summer_tee.name",
+   "description_key": "item.kotc_summer_tee.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "common",
+   "style_tags": [
+    "beach",
+    "casual"
+   ],
+   "attributes": {
+    "casualness": 70,
+    "sportiness": 20
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "child"
+   ],
+   "acquisition_sources": [
+    "story"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [
+    "kot_child"
+   ],
+   "placeholder_color": "#f6f6f0",
+   "sort_order": 909,
+   "model_template": "upper_body__tshirt"
   }
  ]
 }

@@ -21,7 +21,17 @@
   "clothing_sora_dark_shoes_001",
   "clothing_hotto_white_shirt_001",
   "clothing_hotto_black_tie_001",
-  "clothing_hotto_black_trousers_001"
+  "clothing_hotto_black_trousers_001",
+  "clothing_kotc_yellow_hoodie_001",
+  "clothing_kotc_wide_pants_001",
+  "clothing_kotc_house_socks_001",
+  "clothing_kotc_sneakers_001",
+  "clothing_kotc_puffer_jacket_001",
+  "clothing_kotc_ski_pants_001",
+  "clothing_kotc_mittens_001",
+  "clothing_kotc_wool_socks_001",
+  "clothing_kotc_snow_boots_001",
+  "clothing_kotc_summer_tee_001"
  ],
  "resources": {
   "coins": 1500,
