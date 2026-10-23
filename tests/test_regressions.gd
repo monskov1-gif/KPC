@@ -142,3 +142,23 @@ func test_non_dict_attributes_rejected_not_crash() -> void:
 	c.load_from_array([{"id": "x", "name_key": "k", "category": "top", "slot": "upper_body", "rarity": "common", "attributes": [1, 2]}])
 	eq(c.size(), 0)
 	check(c.errors.size() == 1 and c.errors[0].contains("[x]"), str(c.errors))
+
+
+## Сохранение из прошлой версии (без одежды Кота-ребёнка): после загрузки вещи для испытания на склоне есть.
+func test_old_save_gets_story_items_for_slope_challenge() -> void:
+	var s := GameSession.create()
+	s.new_game()
+	var d := s.to_save_dict()
+	var owned: Dictionary = d.wardrobe.owned
+	for id in owned.keys():
+		if str(id).begins_with("clothing_kotc_"):
+			owned.erase(id)
+	var s2 := GameSession.create()
+	s2.load_save_dict(d)
+	for id in ["clothing_kotc_puffer_jacket_001", "clothing_kotc_mittens_001", "clothing_kotc_yellow_hoodie_001"]:
+		check(s2.inventory.owns(id), "после загрузки старого сохранения нет %s" % id)
+	# даже при пустом гардеробе перед испытанием сюжетные вещи выдаёт ensure_story_items
+	var s3 := GameSession.create()
+	s3.load_save_dict({})
+	s3.ensure_story_items("kot_child")
+	check(s3.inventory.owns("clothing_kotc_mittens_001"), "перед испытанием варежки в сумке")

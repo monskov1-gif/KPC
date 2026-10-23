@@ -26,5 +26,10 @@ if [ "$CODE" = "0" ] && [ -z "${KPC_SKIP_E2E:-}" ]; then
     grep -E "^  |Проходимость|SCRIPT ERROR" <<<"$WALK"
     if grep -q "SCRIPT ERROR" <<<"$WALK"; then CODE=1; fi
   fi
+  # прохождение «как игрок»: ходьба, обучение, кнопки, гардероб — с новой игры и со старого сохранения
+  if [ "$CODE" = "0" ]; then
+    ./tools/playtest.sh
+    CODE=$?
+  fi
 fi
 exit $CODE

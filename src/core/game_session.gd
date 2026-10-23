@@ -152,7 +152,26 @@ func load_save_dict(d: Dictionary) -> Array[String]:
 	shops.load_dict(_section(d, "shops"))
 	rewards.load_dict(_section(d, "challenge_results"))
 	flags.load_dict(_section(d, "flags"))
+	# Сохранение из прошлой версии: стартовых вещей, добавленных обновлением (одежда Кота-ребёнка для пролога),
+	# в нём нет — выдать их, иначе сюжетное испытание нечем пройти.
+	if inventory.count() > 0:
+		for id in _starting_state.get("items", []):
+			var it := catalog.get_item(str(id))
+			if it and it.acquisition_sources.has("story") and not inventory.owns(it.id):
+				grants.grant_item(it.id, "update")
+				notes.append("Добавлена сюжетная вещь из обновления: %s" % it.id)
 	return notes
+
+
+## Сюжетные вещи персонажа (только для него, источник «story») — выдать недостающие. Вызывается перед
+## сюжетным испытанием: в сумке персонажа должно быть всё, из чего сценарий предлагает выбирать.
+func ensure_story_items(character_id: String) -> Array[String]:
+	var given: Array[String] = []
+	for it in catalog.all_items():
+		if it.compatible_character_ids.has(character_id) and it.acquisition_sources.has("story") and not inventory.owns(it.id):
+			grants.grant_item(it.id, "story")
+			given.append(it.id)
+	return given
 
 
 static func _section(d: Dictionary, key: String) -> Dictionary:

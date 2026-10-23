@@ -24,6 +24,16 @@ static func fill(sheet: Sheet, screen: WardrobeScreen, ch: Dictionary, report: D
 		hv.add_child(nb)
 	head.add_child(hv)
 	sheet.content.add_child(head)
+	# сюжетное испытание: пройдено — «Продолжить» возвращает в историю; нет — «Переодеться» закрывает окно
+	if screen.story_mode:
+		if outcome.get("passed", false):
+			var go := UiTheme.primary(UiTheme.button("Продолжить", func():
+				sheet.close()
+				screen.closed.emit()))
+			go.custom_minimum_size = Vector2(220, 54)
+			sheet.add_footer(go)
+		else:
+			sheet.add_footer(UiTheme.secondary(UiTheme.button("Переодеться", sheet.close)))
 
 	# Награды — сразу под результатом, карточками с иконками.
 	var rewards: Array = outcome.get("rewards", [])

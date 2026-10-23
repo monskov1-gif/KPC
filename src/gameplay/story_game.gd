@@ -218,6 +218,9 @@ func run_challenge(id: String, st: Dictionary) -> bool:
 	set_cutscene(true)
 	overlay.set_skippable(false)
 	tutorial.run("wardrobe", {"async": true})
+	# в сумке персонажа — все его сюжетные вещи (старое сохранение могло их не содержать)
+	if not Game.session.ensure_story_items(model_id).is_empty():
+		Game.save_game()
 	var music_before := Audio.music_override
 	Audio.override_music("wardrobe", 1.0)
 	var passed := false
