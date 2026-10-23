@@ -724,7 +724,9 @@ def build_head(cid, J, p):
             # Глаз лежит почти на ровной поверхности (как на арте): лицо вокруг глаза выравнивается к плоскости
             # центра глаза, внешний угол не уходит вглубь по изгибу головы.
             ef = FP["eye_flat"]
-            w = FP["eye_shape"]["width_m"]
+            sys.path.insert(0, os.path.dirname(__file__))
+            import eye_shape
+            w = eye_shape.unit_m(FP)
             for sd in (-1, 1):
                 ex, ez = sd * FP["eye_u"] * 2 * rx, cz - (FP["eye_v"] - 0.5) * 2 * rz
                 ref = min((v for v in me.vertices if v.co.y < 0), key=lambda v: (v.co.x - ex) ** 2 + (v.co.z - ez) ** 2)
@@ -832,8 +834,8 @@ def landmarks_head(head_obj, hd, hair):
         sys.path.insert(0, os.path.dirname(__file__))
         import eye_shape
         cu = 0.5 + vis * FP["eye_u"]
-        a = tex(*eye_shape.to_uv(eye_shape.UPPER[0], FP["eye_shape"], vis, cu, FP["eye_v"]))
-        b = tex(*eye_shape.to_uv(eye_shape.UPPER[-1], FP["eye_shape"], vis, cu, FP["eye_v"]))
+        a = tex(*eye_shape.to_uv(eye_shape.UPPER[0], FP, vis, cu, FP["eye_v"]))
+        b = tex(*eye_shape.to_uv(eye_shape.UPPER[-1], FP, vis, cu, FP["eye_v"]))
     else:
         pts = almond(0.5 + vis * FP["eye_u"], FP["eye_v"], FP["eye_w"], FP["eye_h"], lift=-FP["eye_lift"] * vis)
         a, b = tex(*pts[0]), tex(*pts[40])
@@ -996,38 +998,38 @@ def build_lashes(head_obj, hd, c):
 
 
 def _eye_frame(head_obj, hd, side):
-    """Помощники нового глаза (face_params → eye_shape): точка контура (доли ширины) → точка на лице и нормаль."""
+    """Помощники нового глаза (face_params → eye_shape): точка в U (от центра радужки) → точка на лице и нормаль."""
     sys.path.insert(0, os.path.dirname(__file__))
     import eye_shape
     rx, ry, rz, cz = hd
-    es = FP["eye_shape"]
     tree = BVHTree.FromObject(head_obj, bpy.context.evaluated_depsgraph_get())
     cu, cv = 0.5 + side * FP["eye_u"], FP["eye_v"]
 
     def on_face(p):
-        u, v = eye_shape.to_uv(p, es, side, cu, cv)
+        u, v = eye_shape.to_uv(p, FP, side, cu, cv)
         x, z = (u - 0.5) * 2 * rx, cz - (v - 0.5) * 2 * rz
         hit = tree.ray_cast(Vector((x, -1, z)), Vector((0, 1, 0)))
         if hit[0] is None:                       # за краем лица — глубоко внутрь головы, не наружу
             return Vector((x, ry * 0.2, z)), Vector((0, -1, 0))
         n = hit[1] if hit[1].y < 0 else -hit[1]
         return hit[0], n
-    return eye_shape, es, on_face
+    return eye_shape, eye_shape.unit_m(FP), on_face
 
 
 def build_eyes_v2(cid, head_obj, hd):
-    """Глаз по образцу изученной модели-подростка (docs/MODEL_STUDY.md), форма — по арту Кота:
+    """Глаз по образцу изученной модели-подростка (docs/MODEL_STUDY.md) — её отношения в U (глаз–подбородок):
     прорезь в лице (текстура лица, gen_faces) → за ней вогнутая склера с тенью века → перед склерой
-    выпуклый диск радужки с крупным зрачком (своя текстура iris_<id>.png) → блики отдельными дисками."""
+    выпуклый диск радужки 0.27×0.30 U (срезан веками) с крупным зрачком → блики отдельными дисками."""
+    es = FP["eye_shape"]
     m_scl = mat(f"eye_sclera_{cid}", (1, 1, 1, 1), tex=os.path.join(TEX, f"sclera_{cid}.png"), rough=0.3)
     m_iris = mat(f"eye_iris_{cid}", (1, 1, 1, 1), tex=os.path.join(TEX, f"iris_{cid}.png"), rough=0.2)
     m_hl = mat("eye_hl", (1, 1, 1, 1), rough=0.1)
     out = []
     for side in (-1, 1):
-        es_mod, es, on_face = _eye_frame(head_obj, hd, side)
-        w = es["width_m"]
-        # Склера: сетка над прорезью с запасом, повторяет лицо и утоплена на sclera_depth вглубь (+Y).
-        X0, X1, Z0, Z1, NX, NZ = -0.52, 0.6, -0.28, 0.32, 26, 14
+        E, um, on_face = _eye_frame(head_obj, hd, side)
+        # Склера: сетка над прорезью с запасом, повторяет лицо и утоплена вглубь (+Y).
+        X0, X1, Z0, Z1 = E.SCLERA
+        NX, NZ = 26, 16
         bm = bmesh.new()
         uvl = bm.loops.layers.uv.new("UVMap")
         grid = []
@@ -1036,7 +1038,7 @@ def build_eyes_v2(cid, head_obj, hd):
             for i in range(NX + 1):
                 p = (X0 + (X1 - X0) * i / NX, Z0 + (Z1 - Z0) * j / NZ)
                 q, n = on_face(p)
-                row.append((bm.verts.new(q + Vector((0, es["sclera_depth"], 0))), p))
+                row.append((bm.verts.new(q + Vector((0, es["sclera_depth"] * um, 0))), p))
             grid.append(row)
         for j in range(NZ):
             for i in range(NX):
@@ -1052,25 +1054,26 @@ def build_eyes_v2(cid, head_obj, hd):
         shade_smooth(o)
         me.materials.append(m_scl)
         out.append(o)
-        # Радужка: диск в плоскости лица у центра глаза, чуть выпуклый (как линза у образцов).
+        # Радужка: эллиптический диск у центра глаза, чуть выпуклый (как линза у образцов).
         P0, n0 = on_face((0.0, 0.0))
         n0 = (n0 * 0.5 + Vector((0, -1, 0)) * 0.5).normalized()
-        c0 = P0 + Vector((0, es["iris_depth"], 0))
+        c0 = P0 + Vector((0, es["iris_depth"] * um, 0))
         M = basis_at(c0, n0)
-        r = es["iris_r"] * w
+        ax, az = E.IRIS[0] * um, E.IRIS[1] * um
+        dome_h = es["iris_dome"] * um
         NR, NA = 10, 64
         bm = bmesh.new()
         uvl = bm.loops.layers.uv.new("UVMap")
-        ctr = bm.verts.new(M @ Vector((0, 0, es["iris_dome"])))
+        ctr = bm.verts.new(M @ Vector((0, 0, dome_h)))
         rings = []
         for k in range(1, NR + 1):
-            rr = r * k / NR
+            f = k / NR
             ring = []
             for a in range(NA):
                 ang = 2 * math.pi * a / NA
-                lx, lz = rr * math.cos(ang), rr * math.sin(ang)
-                dome = es["iris_dome"] * (1 - (rr / r) ** 2)
-                ring.append((bm.verts.new(M @ Vector((lx, lz, dome))), (0.5 + lx / (2 * r), 0.5 + lz / (2 * r))))
+                lx, lz = ax * f * math.cos(ang), az * f * math.sin(ang)
+                ring.append((bm.verts.new(M @ Vector((lx, lz, dome_h * (1 - f * f)))),
+                             (0.5 + 0.5 * f * math.cos(ang), 0.5 + 0.5 * f * math.sin(ang))))
             rings.append(ring)
 
         def face_uv(vs_uv):
@@ -1089,14 +1092,14 @@ def build_eyes_v2(cid, head_obj, hd):
         shade_smooth(o)
         me.materials.append(m_iris)
         out.append(o)
-        # Блики: крупный круг и мелкие точки перед радужкой (свет с одной стороны — не зеркалим).
+        # Блики (в U): свет с одной стороны — не зеркалим.
         for hx, hz, hr in es["highlights"]:
             bm = bmesh.new()
             ring = []
             for a in range(20):
                 ang = 2 * math.pi * a / 20
-                lx, lz = hx * w + hr * w * math.cos(ang), hz * w + hr * w * math.sin(ang)
-                ring.append(bm.verts.new(M @ Vector((lx, lz, es["iris_dome"] + 0.0007))))
+                lx, lz = (hx + hr * math.cos(ang)) * um, (hz + hr * math.sin(ang)) * um
+                ring.append(bm.verts.new(M @ Vector((lx, lz, dome_h + 0.0006))))
             bm.faces.new(ring)
             me = bpy.data.meshes.new("eye_hl")
             bm.to_mesh(me)
@@ -1108,9 +1111,10 @@ def build_eyes_v2(cid, head_obj, hd):
 
 
 def build_lashes_v2(head_obj, hd, c, cid):
-    """Ресницы по образцу Silver Palace (изучено, не скопировано): плотная тёмная кромка верхнего века,
-    к внешнему углу толще и с «крылом», над ней пучки острых ресниц вверх-наружу разной длины; нижнее веко —
-    тонкая линия с короткими ресничками вниз и тёплая полоска под ней; складка века; бровь."""
+    """Ресницы по образцу Silver Palace (изучено, не скопировано), размеры — по модели-подростку (в U):
+    плотная тёмная кромка верхнего века (~0.045 U), к внешнему углу толще, «крыло» на 0.11 U за угол и вниз,
+    над кромкой острые ресницы вверх-наружу; нижнее веко — тонкая линия с короткими ресничками и тёплая
+    полоска; складка века ~0.07 U над веком; бровь 0.2–0.3 U над центром глаза."""
     m_lash = mat("lash", c["lash"] + (1,), rough=0.4)
     m_brow = mat("brow", c["brow"] + (1,), rough=0.6)
     m_crease = mat("crease", (0.66, 0.44, 0.46, 1), rough=0.7)
@@ -1118,8 +1122,7 @@ def build_lashes_v2(head_obj, hd, c, cid):
     rnd = random.Random(31)
     out = []
     for side in (-1, 1):
-        es_mod, es, on_face = _eye_frame(head_obj, hd, side)
-        w = es["width_m"]
+        E, um, on_face = _eye_frame(head_obj, hd, side)
         lift = 0.0004
 
         def lid(pts, outward_up):
@@ -1132,84 +1135,80 @@ def build_lashes_v2(head_obj, hd, c, cid):
                     o = -o
                 res.append((q, n, T, o))
             return res
-        U = lid(es_mod.upper_lid(10), True)            # от внутреннего угла к внешнему
-        m = len(U)
-        # Кромка: нижний край чуть заходит в прорезь (шов не виден), к внешнему углу толще.
+        Up = lid(E.upper_lid(8), True)
+        m = len(Up)
         rows, top_edge = [], []
-        for i, (q, n, T, o) in enumerate(U):
+        for i, (q, n, T, o) in enumerate(Up):
             t = i / (m - 1)
-            th = w * (0.04 + 0.07 * t ** 1.3)
-            base = q - o * w * 0.012 + n * lift
+            th = um * (0.026 + 0.03 * t ** 1.3)
+            base = q - o * um * 0.008 + n * lift
             top = q + o * th + n * (lift + th * 0.25)
             rows.append((base, top))
             top_edge.append((top, n, T, o, t))
-        # «Крыло» за внешним углом: продолжает веко наружу и чуть вниз, сужаясь.
-        q, n, T, o = U[-1]
-        th0 = w * 0.11
+        # «Крыло»: за внешним углом наружу и вниз, сужаясь.
+        q, n, T, o = Up[-1]
+        th0 = um * 0.058
         for j in range(1, 7):
             f = j / 6
-            cpt = q + T * w * 0.03 * j - o * w * 0.004 * j * j * 0.5 + n * (lift + 0.0003 * j)
-            th = th0 * (1 - f) ** 1.1 + w * 0.002
-            rows.append((cpt - o * w * 0.006 * (1 - f), cpt + o * th))
+            cpt = q + T * um * E.LASH_WING * f - o * um * 0.05 * f * f + n * (lift + 0.0002 * j)
+            th = th0 * (1 - f) ** 1.1 + um * 0.002
+            rows.append((cpt - o * um * 0.004 * (1 - f), cpt + o * th))
         out.append(_strip(rows, m_lash, "lash_upper"))
-        # Пучки острых ресниц над кромкой: к внешнему углу длиннее и наклон наружу сильнее.
-        for k in range(24):
-            t = 0.06 + 0.94 * (k + rnd.uniform(-0.3, 0.3)) / 23
-            t = min(1.0, max(0.0, t))
+        for k in range(22):
+            t = min(1.0, max(0.0, 0.08 + 0.92 * (k + rnd.uniform(-0.3, 0.3)) / 21))
             top, n, T, o, _ = top_edge[int(t * (m - 1))]
             d = (o * (1.0 - 0.45 * t) + T * (0.1 + 0.85 * t) + n * 0.45).normalized()
-            L = w * (0.07 + 0.15 * t ** 1.2) * rnd.uniform(0.7, 1.2)
-            bw = w * rnd.uniform(0.018, 0.028)
-            side_v = d.cross(n).normalized()
-            base = top - o * w * 0.01
+            L = um * (0.035 + 0.075 * t ** 1.2) * rnd.uniform(0.7, 1.2)
+            bw = um * rnd.uniform(0.009, 0.014)
+            sv = d.cross(n).normalized()
+            base = top - o * um * 0.006
             mid = base + d * L * 0.55 + n * L * 0.12
             tip = base + d * L + n * L * 0.08 + T * L * 0.12 * t
-            out.append(_strip([(base - side_v * bw, base + side_v * bw), (mid - side_v * bw * 0.45, mid + side_v * bw * 0.45),
-                                (tip, tip + side_v * 0.00004)], m_lash, "lash_spike"))
-        # Нижнее веко: тонкая линия по внешним двум третям + короткие реснички вниз-наружу; тёплая полоска.
-        Lw = lid(es_mod.lower_lid(10), False)
+            out.append(_strip([(base - sv * bw, base + sv * bw), (mid - sv * bw * 0.45, mid + sv * bw * 0.45),
+                                (tip, tip + sv * 0.00004)], m_lash, "lash_spike"))
+        Lw = lid(E.lower_lid(8), False)
         ml = len(Lw)
         rows, warm = [], []
         for i, (q, n, T, o) in enumerate(Lw):
             t = i / (ml - 1)
             if t < 0.22:
                 continue
-            th = w * (0.006 + 0.014 * t)
-            rows.append((q - o * w * 0.006 + n * lift, q + o * th + n * lift))
+            th = um * (0.004 + 0.008 * t)
+            rows.append((q - o * um * 0.008 + n * lift, q + o * th * 0.6 + n * lift))
             if t < 0.95:
-                warm.append((q + o * w * 0.03 + n * lift, q + o * w * (0.03 + 0.016 * math.sin(math.pi * t)) + n * lift))
+                warm.append((q + o * th * 0.6 + n * lift, q + o * (th * 0.6 + um * 0.008 * math.sin(math.pi * t)) + n * lift))
             if i % 5 == 2 and t > 0.35:
                 d = (o * 0.8 + T * 0.5 + n * 0.35).normalized()
-                L = w * rnd.uniform(0.03, 0.055) * (0.7 + 0.5 * t)
+                L = um * rnd.uniform(0.02, 0.035) * (0.7 + 0.5 * t)
                 sv = d.cross(n).normalized()
                 b = q + o * th
-                out.append(_strip([(b - sv * w * 0.008, b + sv * w * 0.008), (b + d * L, b + d * L + sv * 0.00004)],
+                out.append(_strip([(b - sv * um * 0.005, b + sv * um * 0.005), (b + d * L, b + d * L + sv * 0.00004)],
                                   m_lash, "lash_low"))
         out.append(_strip(rows, m_lash, "lash_lower"))
         if len(warm) > 2:
             out.append(_strip(warm, m_warm, "lid_warm"))
-        # Складка века над кромкой.
         rows = []
-        for i, (q, n, T, o) in enumerate(U):
+        for i, (q, n, T, o) in enumerate(Up):
             t = i / (m - 1)
             if not 0.1 < t < 0.88:
                 continue
-            cq = q + o * w * (0.13 + 0.03 * math.sin(math.pi * t)) + n * lift
-            wd = w * (0.003 + 0.006 * math.sin(math.pi * (t - 0.1) / 0.78))
+            cq = q + o * um * (0.065 + 0.015 * math.sin(math.pi * t)) + n * lift
+            wd = um * (0.002 + 0.004 * math.sin(math.pi * (t - 0.1) / 0.78))
             rows.append((cq - o * wd, cq + o * wd))
         out.append(_strip(rows, m_crease, "crease"))
-        # Бровь: дуга над глазом, от переносицы толще, к виску тоньше и ниже.
+        # Бровь: дуга 0.2–0.3 U над центром глаза, от переносицы толще, к виску тоньше и ниже.
         rows = []
+        b0, b1 = E.BROW_Z
         for j in range(17):
             t = j / 16                                   # 0 — у переносицы, 1 — у виска
-            px = -0.42 + 1.2 * t
-            pz = 0.62 + 0.1 * math.sin(math.pi * min(1.0, t * 1.15)) - 0.12 * t * t + FP.get("brow_lift", 0.0)
+            px = -0.28 + 0.62 * t
+            pz = b0 + (b1 - b0) * math.sin(math.pi * min(1.0, t * 1.1)) * 0.8 - 0.05 * t * t + FP.get("brow_lift", 0.0)
             q, n = on_face((px, pz))
             T = (on_face((px + 0.02, pz))[0] - q).normalized()
             o = n.cross(T).normalized()
             if o.z < 0:
                 o = -o
-            wd = w * (0.012 + 0.022 * (1 - t))
+            wd = um * (0.008 + 0.014 * (1 - t))
             rows.append((q - o * wd + n * 0.0005, q + o * wd + n * 0.0005))
         out.append(_strip(rows, m_brow, "brow"))
     return out

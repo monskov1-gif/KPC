@@ -100,8 +100,8 @@ def face(cid, c):
         if es:
             # Прорезь по контуру век с арта (tools/art/eye_shape.py); центр — центр радужки.
             cu, cv = 0.5 + side * EYE_U, EYE_V
-            pts = [(S * u, S * v) for u, v in (eye_shape.to_uv(q, es, side, cu, cv) for q in eye_shape.contour())]
-            n_up = (len(eye_shape.UPPER) - 1) * 8 + 1
+            pts = [(S * u, S * v) for u, v in (eye_shape.to_uv(q, fp, side, cu, cv) for q in eye_shape.contour())]
+            n_up = (len(eye_shape.UPPER) - 1) * 6 + 1
             hd.polygon(pts, fill=0)
             # Тень века на коже над прорезью и розоватое нижнее веко (как у образца-подростка).
             img.alpha_composite(soft((S, S), (206, 150, 150), 0.55, S * 0.006,
@@ -229,8 +229,8 @@ def eye(cid, c, size=512):
     img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"eye_{cid}.png"))
 
 
-# Радужка, присланная пользователем (23.10): если есть — берётся она (круг вырезается по центру и радиусу).
-USER_IRIS = {"kot": ("art/references/eye/kot_iris_user.png", (506, 577), 490)}
+# Радужка, присланная пользователем (23.10): круг вырезается по центру и радиусу.
+USER_IRIS = {"kot": ("art/characters/textures/src/iris_kot_user.png", (506, 577), 490)}
 
 
 def iris_from_user(cid, size=1024):
@@ -240,6 +240,11 @@ def iris_from_user(cid, size=1024):
     ys = np.linspace(-1, 1, size)[:, None]
     xs = np.linspace(-1, 1, size)[None, :]
     rr = np.sqrt(xs ** 2 + ys ** 2)
+    # Тень верхнего века и ресниц на радужке (как у образца-подростка): верх темнее, мягкий переход.
+    a = np.asarray(im).astype(np.float32)
+    shade = 1 - 0.6 * np.clip((0.25 - ys) / 0.85, 0, 1) ** 1.4
+    a[..., :3] *= shade[..., None] * np.ones_like(xs)[..., None]
+    im = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
     im.putalpha(Image.fromarray((np.clip((1.0 - rr) * 120, 0, 1) * 255).astype(np.uint8)))
     im.save(os.path.join(OUT, f"iris_{cid}.png"))
 
