@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Location Kit Preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0a0a12; overflow: hidden; font: 13px system-ui, sans-serif; }
+    #wrap { position: relative; width: 100%; height: 100%; }
+    canvas#view { display: block; width: 100%; height: 100%; }
+    #ui { position: fixed; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+    #ui button { background: #222c; color: #eee; border: 1px solid #555; padding: 4px 10px; cursor: pointer; }
+    #ui button.on { border-color: #e8c070; }
+    #hint { position: fixed; left: 12px; bottom: 10px; color: #aaa; z-index: 2; }
+  </style>
+  <!-- three from a CDN; swap for your project's copy if it already vendors three -->
+  <script type="importmap">
+  { "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  } }
+  </script>
+</head>
+<body>
+<div id="wrap"><canvas id="view"></canvas></div>
+<div id="ui">
+  <button data-scene="room">room</button><button data-scene="corridor">corridor</button><button data-scene="forest">forest</button>
+  <span style="width:12px"></span>
+  <button data-s="evening">evening</button><button data-s="night">night</button><button data-s="day">day</button>
+</div>
+<div id="hint">← → walk the marker past windows and lamps · drag orbit · wheel zoom</div>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { roundedBox } from './location-kit.js';
+import { WindowLight, LookLayers } from './window-light.js';
+import { buildRoom } from './example-room.js';
+import { buildCorridor } from './example-corridor.js';
+import { buildForest } from './example-forest.js';
+
+/*
+ * Preview / screenshot bench. URL params:
+ *   ?scene=room|corridor|forest   &state=evening|night|day
+ *   &cam=x,y,z&look=x,y,z         camera (default: the scene's own side-on framing)
+ *   &px=x,z                       the player marker (window light / flares react to it)
+ *   &low=1                        Lambert materials, no bloom (fast on swiftshader)
+ * window.__ready turns true after the first frames (for shoot.mjs).
+ */
+const q = new URLSearchParams(location.search);
+const vec = (s) => (s ? s.split(',').map(Number) : null);
+const low = q.get('low') === '1';
+const sceneName = q.get('scene') || 'room';
+for (const b of document.querySelectorAll('[data-scene]')) {
+  b.classList.toggle('on', b.dataset.scene === sceneName);
+  b.onclick = () => { q.set('scene', b.dataset.scene); q.delete('cam'); q.delete('look'); q.delete('px'); location.search = q; };
+}
+
+const canvas = document.getElementById('view');
+const gl = new THREE.WebGLRenderer({ canvas, antialias: !low });
+gl.outputColorSpace = THREE.SRGBColorSpace;
+gl.toneMapping = THREE.ACESFilmicToneMapping;
+gl.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 120);
+
+const kit = ({ room: buildRoom, corridor: buildCorridor, forest: buildForest }[sceneName])(scene, { low });
+const look = new THREE.Vector3(...(vec(q.get('look')) || kit.camera.look));
+camera.position.set(...(vec(q.get('cam')) || kit.camera.pos));
+
+// the player marker: a soft capsule-ish figure, 1.8 m
+const player = new THREE.Group();
+const body = new THREE.Mesh(roundedBox(0.42, 1.5, 0.3, 0.15, 3), new THREE.MeshStandardMaterial({ color: 0x3a2a2a, roughness: 0.8 }));
+body.position.y = 0.75;
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 14), new THREE.MeshStandardMaterial({ color: 0xc89a80, roughness: 0.7 }));
+head.position.y = 1.65;
+player.add(body, head);
+const [px, pz] = vec(q.get('px')) || [kit.camera.look[0], -0.6];
+player.position.set(px, 0, pz);
+player.root = player;
+scene.add(player);
+
+// post: bloom (glows and lamp shades rely on it) + window light / lens flare overlay
+let composer = null, bloom = null;
+if (!low) {
+  composer = new EffectComposer(gl);
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.55, 0.78);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+}
+const lookL = new LookLayers(gl, { bloomPass: bloom });
+const windowLight = new WindowLight({ renderer: lookL, canvas, low });
+
+const setState = (s) => {
+  kit.setState(s);
+  scene.background = new THREE.Color(kit.background);
+  scene.fog = kit.fog || null;
+  for (const b of document.querySelectorAll('[data-s]')) b.classList.toggle('on', b.dataset.s === s);
+};
+setState(q.get('state') || (sceneName === 'corridor' || sceneName === 'forest' ? 'day' : 'evening'));
+for (const b of document.querySelectorAll('[data-s]')) b.onclick = () => setState(b.dataset.s);
+
+// input: arrows walk the marker (camera follows in x), drag orbits, wheel zooms
+const keys = new Set();
+addEventListener('keydown', (e) => keys.add(e.key));
+addEventListener('keyup', (e) => keys.delete(e.key));
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointerup', () => { drag = null; });
+addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const off = camera.position.clone().sub(look), sph = new THREE.Spherical().setFromVector3(off);
+  sph.theta -= (e.clientX - drag.x) * 0.005; sph.phi = THREE.MathUtils.clamp(sph.phi - (e.clientY - drag.y) * 0.005, 0.2, 1.55);
+  camera.position.copy(look).add(new THREE.Vector3().setFromSpherical(sph));
+  drag = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener('wheel', (e) => { camera.position.sub(look).multiplyScalar(e.deltaY > 0 ? 1.1 : 0.9).add(look); }, { passive: true });
+
+const resize = () => {
+  gl.setPixelRatio(Math.min(devicePixelRatio, low ? 1 : 1.75));
+  gl.setSize(innerWidth, innerHeight, false); composer?.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+};
+addEventListener('resize', resize); resize();
+const clock = new THREE.Clock();
+let frames = 0;
+gl.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const dir = (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0);
+  if (dir) { player.position.x += dir * dt * 1.6; camera.position.x += dir * dt * 1.6; look.x += dir * dt * 1.6; }
+  player.position.y = kit.groundAt?.(player.position.x, player.position.z) ?? 0;
+  kit.update(dt);
+  camera.lookAt(look);
+  windowLight.update(dt, { world: kit, player, camera });
+  lookL.apply();
+  if (composer) composer.render(dt); else gl.render(scene, camera);
+  if (++frames === 3) window.__ready = true;
+});
+Object.assign(window, { __kit: kit, __setState: setState, __player: player, __camera: camera, __windowLight: windowLight });
+</script>
+</body>
+</html>

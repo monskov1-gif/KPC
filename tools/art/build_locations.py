@@ -681,6 +681,13 @@ BUILDERS = {"city_street": city_street, "family_home": family_home, "snow_slope"
             "hospital": hospital, "family_hotel": family_hotel}
 
 
+# Локации, перестроенные по location-kit (tools/art/locs/<id>.py), заменяют старые строители.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "locs"))
+for _id in ("family_home", "city_street", "snow_slope", "rooftop", "hospital", "family_hotel"):
+    if os.path.exists(os.path.join(os.path.dirname(__file__), "locs", _id + ".py")):
+        BUILDERS[_id] = (lambda m=_id: __import__(m).build())
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     ids = [a for a in sys.argv[1:] if a in BUILDERS] or list(BUILDERS)

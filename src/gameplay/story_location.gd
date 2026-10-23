@@ -5,7 +5,11 @@ extends Node3D
 ## Столкновения — меши с суффиксом «-col»/«-colonly» (их создаёт импорт glTF в Godot).
 
 const DIR := "res://art/locations/"
-const TOON := preload("res://art/shaders/toon.gdshader")
+const TOON := preload("res://art/shaders/toon_loc.gdshader")
+const ADDITIVE := preload("res://art/shaders/loc_additive.gdshader")
+const VIEW := preload("res://art/shaders/loc_view.gdshader")
+## Состояния света для объектов с суффиксом «__day» / «__evening» / «__night» (location-kit: statePool, brightWindow).
+const STATE_OF_TIME := {"day": "day", "evening": "evening", "night": "night", "storm": "evening"}
 const OUTLINE := preload("res://art/shaders/outline.gdshader")
 const WATER := preload("res://art/shaders/water.gdshader")
 
@@ -35,6 +39,9 @@ var _sky: ProceduralSkyMaterial
 var _lamps: Array[OmniLight3D] = []
 var _materials := {}
 var _glow: Array[ShaderMaterial] = []
+var _state_nodes: Array[Node3D] = []     # видимы только в своём состоянии света
+var _fills: Array[OmniLight3D] = []      # дневная подсветка интерьера (fill_*)
+var _moons: Array[OmniLight3D] = []      # лунный свет из окон (moon_*)
 var _tween: Tween
 var _water_tween: Tween
 ## Дождь (время «storm»): частицы-штрихи; StoryGame держит его над игроком.
@@ -98,6 +105,9 @@ func load_location(id: String) -> bool:
 	_lamps.clear()
 	_glow.clear()
 	_materials.clear()
+	_state_nodes.clear()
+	_fills.clear()
+	_moons.clear()
 	location_id = id
 	var path := DIR + id + ".glb"
 	if not ResourceLoader.exists(path):
@@ -134,6 +144,13 @@ func apply_time(t: String, seconds := 0.0) -> void:
 	var lamps_on := t in ["night", "storm", "evening"]
 	for l in _lamps:
 		l.visible = lamps_on
+	for l in _fills:
+		l.visible = t == "day"
+	for l in _moons:
+		l.visible = t == "night"
+	var st: String = STATE_OF_TIME.get(t, "day")
+	for n in _state_nodes:
+		n.visible = (String(n.name).get_slice("__", 1)).split("_").has(st)
 	for g in _glow:
 		_set_glow(g, t)
 	var rot := Vector3(deg_to_rad(p.pitch), deg_to_rad(p.yaw), 0)
@@ -192,13 +209,16 @@ func water_level() -> float:
 func _stylize(root: Node) -> void:
 	for n in root.find_children("*", "Node3D", true, false):
 		var nm := String(n.name)
-		if nm.begins_with("lamp_") and not n is MeshInstance3D:
-			var l := OmniLight3D.new()
-			l.light_color = Color("ffd59a")
-			l.light_energy = 0.7
-			l.omni_range = 5.0
-			n.add_child(l)
-			_lamps.append(l)
+		if "__" in nm:
+			_state_nodes.append(n)
+		if n is MeshInstance3D:
+			continue
+		if nm.begins_with("lamp_"):
+			_lamps.append(_omni(n, Color("ffd59a"), 0.7, 5.0))
+		elif nm.begins_with("fill_"):
+			_fills.append(_omni(n, Color("e6eef6"), 0.45, 7.0))
+		elif nm.begins_with("moon_"):
+			_moons.append(_omni(n, Color("7f96d6"), 0.5, 6.0))
 	for mi in root.find_children("*", "MeshInstance3D", true, false):
 		var m := mi as MeshInstance3D
 		var nm := String(m.name)
@@ -214,7 +234,11 @@ func _stylize(root: Node) -> void:
 			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		for i in m.mesh.get_surface_count():
 			var vcol: bool = (m.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) != 0
-			m.set_surface_override_material(i, _toon(m.mesh.surface_get_material(i), nm.begins_with("prop_"), vcol))
+			var src := m.mesh.surface_get_material(i)
+			var sname := src.resource_name if src else ""
+			if sname.begins_with("add_") or sname.begins_with("view_"):
+				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			m.set_surface_override_material(i, _toon(src, nm.begins_with("prop_"), vcol))
 
 
 func _toon(src: Material, outline: bool, vcol: bool) -> ShaderMaterial:
@@ -222,7 +246,22 @@ func _toon(src: Material, outline: bool, vcol: bool) -> ShaderMaterial:
 	if _materials.has(key):
 		return _materials[key]
 	var m := ShaderMaterial.new()
+	var sname := src.resource_name if src else ""
+	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
+	if sname.begins_with("add_"):
+		# лучи и пятна света: аддитивно; без текстуры (блик на стекле) — сплошная заливка
+		m.shader = ADDITIVE
+		m.set_shader_parameter("tex", tex)
+		_materials[key] = m
+		return m
+	if sname.begins_with("view_"):
+		m.shader = VIEW
+		m.set_shader_parameter("tex", tex)
+		_materials[key] = m
+		return m
 	m.shader = TOON
+	if sname.begins_with("alpha_"):
+		m.set_shader_parameter("use_alpha_scissor", true)
 	if src is BaseMaterial3D:
 		var b := src as BaseMaterial3D
 		m.set_shader_parameter("albedo", b.albedo_color.srgb_to_linear())
@@ -263,3 +302,13 @@ func _set_glow(m: ShaderMaterial, t: String) -> void:
 	else:
 		m.set_shader_parameter("albedo", Color("ffd99a") if lit else Color("c4d9ea"))
 		m.set_shader_parameter("emission_boost", (0.85 if dark else 0.45) if lit else 0.05)
+
+
+func _omni(parent: Node3D, color: Color, energy: float, rng: float) -> OmniLight3D:
+	var l := OmniLight3D.new()
+	l.light_color = color
+	l.light_energy = energy
+	l.omni_range = rng
+	l.shadow_enabled = false
+	parent.add_child(l)
+	return l
