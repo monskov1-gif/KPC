@@ -23,6 +23,7 @@ const UNDERWEAR_COVERED_BY := {
 }
 var _materials: Dictionary = {}    # кэш материалов по ключу
 var _fallback: PlaceholderAppearance
+var _anim: AnimationPlayer
 
 
 func setup(p_character_id: String, characters: CharacterCatalog) -> void:
@@ -30,6 +31,7 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	if _root:
 		_root.queue_free()
 		_root = null
+	_anim = null
 	_garments.clear()
 	_underwear.clear()
 	_materials.clear()   # ключи материалов — по имени: у другого персонажа те же имена, но другие цвета
@@ -47,10 +49,30 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	_root = (load(path) as PackedScene).instantiate()
 	add_child(_root)
 	_prepare(_root)
-	var anim := _root.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if anim and anim.has_animation("idle"):
-		anim.get_animation("idle").loop_mode = Animation.LOOP_LINEAR
-		anim.play("idle")
+	_anim = _root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if _anim:
+		for a in ["idle", "walk", "run"]:
+			if _anim.has_animation(a):
+				_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
+		play_motion("idle")
+
+
+## Анимация движения: «idle», «walk», «run». Если клипа нет — ближайший имеющийся (бег → шаг → покой).
+func play_motion(motion: String, speed_scale := 1.0) -> void:
+	if _anim == null:
+		return
+	var clip := motion
+	if clip == "run" and not _anim.has_animation("run"):
+		clip = "walk"
+		speed_scale *= 1.6
+	if not _anim.has_animation(clip):
+		clip = "idle"
+		speed_scale = 1.0
+	if not _anim.has_animation(clip):
+		return
+	_anim.speed_scale = speed_scale
+	if _anim.current_animation != clip:
+		_anim.play(clip, 0.2)
 
 
 ## Высота модели в метрах (для кадрирования камеры).

@@ -10,6 +10,7 @@ uniform float shade_threshold = 0.42;
 uniform float shade_softness = 0.06;
 uniform vec4 rim_color : source_color = vec4(1.0, 0.9, 0.88, 1.0);
 uniform float rim_strength = 0.28;
+uniform float emission_boost = 0.0;   // самосвечение (окна, фонари локаций)
 
 varying vec4 vcol;
 
@@ -27,7 +28,7 @@ void fragment() {
 		discard;
 	}
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
-	EMISSION = rim_color.rgb * rim * rim_strength * base.rgb;
+	EMISSION = rim_color.rgb * rim * rim_strength * base.rgb + base.rgb * emission_boost;
 }
 
 void light() {

@@ -24,6 +24,7 @@
    "time": "day",
    "npcs": {"girl": "int_girl", "passerby_a": "int_passerby_a", "passerby_b": "int_passerby_b"},
    "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.5},
     {"type": "caption", "text": "Shizunda Taver City", "sub": "Много лет назад", "seconds": 3.0},
     {"type": "objective", "text": "Прогуляйся по улице"},
     {"type": "explore", "required": ["girl"], "optional_min": 2,
@@ -169,6 +170,7 @@
    "player": "kot_child",
    "time": "day",
    "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.0},
     {"type": "montage", "frames": [
      {"time": "day", "caption": "Весна"},
      {"time": "evening", "caption": "Лето"},

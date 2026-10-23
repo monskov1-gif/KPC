@@ -59,6 +59,10 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 			_sparkle(ci, _p(r, 0.5, 0.5), w * 0.5, c)
 		"back":
 			ci.draw_polyline(_poly([[0.62, 0.18], [0.30, 0.50], [0.62, 0.82]], r), c, lw, true)
+		"next":
+			ci.draw_polyline(_poly([[0.38, 0.18], [0.70, 0.50], [0.38, 0.82]], r), c, lw, true)
+		"down":
+			ci.draw_polyline(_poly([[0.18, 0.36], [0.50, 0.68], [0.82, 0.36]], r), c, lw, true)
 		"check":
 			ci.draw_polyline(_poly([[0.18, 0.52], [0.42, 0.76], [0.84, 0.26]], r), c, lw, true)
 		"plus":
