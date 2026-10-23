@@ -924,6 +924,111 @@
    "model_template": "footwear__shoes",
    "placeholder_color": "#1d1c22",
    "sort_order": 54
+  },
+  {
+   "id": "clothing_hotto_white_shirt_001",
+   "name_key": "item.hotto_white_shirt.name",
+   "description_key": "item.hotto_white_shirt.description",
+   "category": "top",
+   "slot": "upper_body",
+   "rarity": "common",
+   "style_tags": [
+    "formal",
+    "casual"
+   ],
+   "attributes": {
+    "formality": 45,
+    "simplicity": 40,
+    "elegance": 30
+   },
+   "color_tags": [
+    "white"
+   ],
+   "material_tags": [
+    "cotton"
+   ],
+   "compatible_body_types": [
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "model_template": "upper_body__long",
+   "placeholder_color": "#f4f1ea",
+   "sort_order": 60
+  },
+  {
+   "id": "clothing_hotto_black_tie_001",
+   "name_key": "item.hotto_black_tie.name",
+   "description_key": "item.hotto_black_tie.description",
+   "category": "jewelry",
+   "slot": "neck_accessory",
+   "rarity": "common",
+   "style_tags": [
+    "formal",
+    "casual"
+   ],
+   "attributes": {
+    "formality": 45,
+    "simplicity": 40,
+    "elegance": 30
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "silk"
+   ],
+   "compatible_body_types": [
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "model_template": "neck_accessory__tie",
+   "placeholder_color": "#141418",
+   "sort_order": 61
+  },
+  {
+   "id": "clothing_hotto_black_trousers_001",
+   "name_key": "item.hotto_black_trousers.name",
+   "description_key": "item.hotto_black_trousers.description",
+   "category": "bottom",
+   "slot": "lower_body",
+   "rarity": "common",
+   "style_tags": [
+    "formal",
+    "casual"
+   ],
+   "attributes": {
+    "formality": 45,
+    "simplicity": 40,
+    "elegance": 30
+   },
+   "color_tags": [
+    "black"
+   ],
+   "material_tags": [
+    "wool"
+   ],
+   "compatible_body_types": [
+    "tall"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": true,
+   "model_template": "lower_body__trousers",
+   "placeholder_color": "#1b1b20",
+   "sort_order": 62
   }
  ]
 }

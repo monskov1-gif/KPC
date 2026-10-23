@@ -29,7 +29,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "art", "characters")
 TEX = os.path.join(OUT, "textures")
 
-SKIN = (0.98, 0.88, 0.83, 1)
+SKIN_DEFAULT = (0.98, 0.88, 0.83, 1)
+SKIN = SKIN_DEFAULT          # текущий цвет кожи/меха (у Хотто — мех; задаётся в build())
 import json  # noqa: E402
 _FACE = json.load(open(os.path.join(os.path.dirname(__file__), "face_params.json"), encoding="utf-8"))
 FP = dict(_FACE["default"])   # параметры лица текущего персонажа (face_params.json; задаются в build())
@@ -237,6 +238,8 @@ def body_joints(p):
     return J
 
 
+HEAD_CY = 0.0             # центр черепа по y у готовой базы (у своих голов — 0)
+MH_J = {}                # суставы MakeHuman текущего тела (кончики пальцев — для когтей)
 BODY_EXTRA = []           # «наклейки» на теле (соски, линии рельефа) — привязываются к скелету вместе с телом
 
 
@@ -246,7 +249,8 @@ def build_mh_body(p, sex, skin_mat):
     import mh_body
     s = p["s"]
     mh = p["mh"]
-    vs, faces, groups = mh_body.shape(sex, teen=mh.get("teen", 0.45), thin=mh.get("thin", 0.7), bust=mh.get("bust", 0.0))
+    vs, faces, groups = mh_body.shape(sex, teen=mh.get("teen", 0.45), thin=mh.get("thin", 0.7), bust=mh.get("bust", 0.0),
+                                      muscle=mh.get("muscle", 0.0), heavy=mh.get("heavy", 0.0))
     sk = mh_body.pose_arms(vs, groups, mh.get("arms_down", 15), clav=mh.get("clav", 0.0), spine_back=mh.get("spine_back", 0.0),
                            neck_fwd=mh.get("neck_fwd", 0.0), knee_back=mh.get("knee_back", 0.0),
                            legs_back=mh.get("legs_back", 0.0))
@@ -305,7 +309,8 @@ def build_mh_body(p, sex, skin_mat):
     shade_smooth(o)
     me.materials.append(skin_mat)
     paint_skin(o, M, s, mh.get("anat"))
-    global BODY_EXTRA
+    global BODY_EXTRA, MH_J
+    MH_J = M
     BODY_EXTRA = []
     if mh.get("anat", {}).get("marks"):
         mk = skin_marks(o, M, s, mh["anat"])
@@ -698,6 +703,279 @@ def loft_head_mesh(rx, ry, rz, cz, L):
         faces.append(((k + 1) % n_a, k, bc))
     chin_z = cz - rz
     return [(x / rx, y / ry, (z + chin_z - cz) / rz) for x, y, z in verts], faces
+
+
+def load_base_body(base, skin_mat):
+    """Тело из подготовленной чужой базы (tools/art/prep_base.py): меш + суставы из <base>.joints.json."""
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "art", "characters", "src", base)
+    bpy.ops.import_scene.gltf(filepath=path)
+    o = next(ob for ob in bpy.context.selected_objects if ob.type == "MESH")
+    for ob in list(bpy.context.selected_objects):
+        if ob is not o:
+            bpy.data.objects.remove(ob)
+    o.parent = None
+    o.name = "body"
+    me = o.data
+    me.materials.clear()
+    me.materials.append(skin_mat)
+    J = {k: Vector(v) for k, v in json.load(open(path + ".joints.json")).items()}
+    # цвет меха в вершинах: кончики ушей и пальцев темнее, впадины чуть темнее (иначе мех — плоская заливка)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.normal_update()
+    zt = max(v.co.z for v in bm.verts)
+    cav = []
+    for v in bm.verts:
+        nb = [e.other_vert(v).co for e in v.link_edges]
+        if not nb:
+            cav.append(0.0)
+            continue
+        avg = sum(nb, Vector()) / len(nb)
+        el = sum((q - v.co).length for q in nb) / len(nb)
+        cav.append(max(0.0, min(0.25, v.normal.dot(avg - v.co) / max(el, 1e-6) * 1.4)))
+    bm.free()
+    if not me.color_attributes.get("Col"):
+        me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    col = me.color_attributes["Col"]
+    vc = []
+    me.calc_loop_triangles()
+    head_z = J["head"].z
+    head_v = [v.co for v in me.vertices if v.co.z > head_z]
+    nose_y = min(q.y for q in head_v)
+    dark = Vector((0.16, 0.14, 0.15))
+    pad = Vector((0.42, 0.3, 0.3))
+    inner = Vector((0.5, 0.38, 0.36))
+    hands = {sd: min((v.co.z for v in me.vertices if v.co.x * sd > abs(J["sh_l"].x) * 0.8), default=0.0) for sd in (1, -1)}
+    toe_y = {sd: min((v.co.y for v in me.vertices if v.co.x * sd > 0 and v.co.z < 0.06), default=0.0) for sd in (1, -1)}
+    for i, v in enumerate(me.vertices):
+        q, n = v.co, v.normal
+        k = 1.0 - cav[i]
+        c = Vector((k, k, k))
+        tip = max(0.0, (q.z - (zt - 0.07)) / 0.07)                  # кончики ушей — тёмные (реф.)
+        c = c.lerp(Vector((0.32, 0.25, 0.24)), min(1.0, tip) ** 0.8)
+        if q.z > head_z and q.z > zt - 0.2 and n.y < -0.35 and abs(q.x) > 0.04:
+            c = c.lerp(inner, 0.6)                                   # внутренняя сторона ушей
+        if q.z > head_z - 0.05 and q.y < nose_y + 0.035:
+            c = c.lerp(dark, min(1.0, (nose_y + 0.035 - q.y) / 0.02))  # нос
+        sd = 1 if q.x > 0 else -1
+        if abs(q.x) > abs(J["sh_l"].x) * 0.8 and q.z < hands[sd] + 0.035 and q.z < J["wr_l"].z:
+            c = c.lerp(dark, min(1.0, (hands[sd] + 0.035 - q.z) / 0.02))   # когти на пальцах рук
+        if q.z < 0.05 and q.y < toe_y[sd] + 0.03:
+            c = c.lerp(dark, min(1.0, (toe_y[sd] + 0.03 - q.y) / 0.02))    # когти на пальцах ног
+        if q.z < 0.02 and n.z < -0.5:
+            c = c.lerp(pad, 0.8)                                     # подушечки лап
+        vc.append(c)
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            c = vc[me.loops[li].vertex_index]
+            col.data[li].color = (c.x, c.y, c.z, 1.0)
+    return o, J
+
+
+def base_head_hd(body, J):
+    """Эллипсоид черепа по готовой голове базы (без ушей и морды): для гривы и скелета."""
+    pts = [v.co for v in body.data.vertices if v.co.z > J["head"].z]
+    zt = max(p.z for p in pts)
+    core = [p for p in pts if p.z < zt - (zt - J["head"].z) * 0.25]
+    xs = sorted(abs(p.x) for p in core)
+    rx = xs[int(len(xs) * 0.96)]
+    ys = sorted(p.y for p in core)
+    ry = (ys[int(len(ys) * 0.97)] - ys[int(len(ys) * 0.3)]) / 2
+    rz = (zt - J["head"].z) * 0.42
+    cz = J["head"].z + rz * 1.05
+    # череп без ушей и морды: центр по y смещён назад (у базы морда спереди), сохраняем для гривы
+    skull = [p for p in core if p.y > (min(q.y for q in core) + max(q.y for q in core)) / 2 - 0.02 and abs(p.x) < 0.16]
+    global HEAD_CY
+    HEAD_CY = sum(p.y for p in skull) / len(skull) if skull else 0.0
+    rx = min(rx, 0.12)
+    ry = 0.135 if skull else ry
+    return (rx, ry, rz, cz)
+
+
+def base_hair(hd, hp, m):
+    """Грива на готовой голове: только веер прядей (mane_strands), цвет по высоте."""
+    rnd = random.Random(7)
+    objs = mane_strands(hd, hp, m, rnd)
+    o = join(objs, "hair_cards")
+    rx, ry, rz, cz = hd
+    paint_gradient(o, cz + rz * 1.2, cz - rz * 5.0, hp["c_root"], hp["c_tip"], strand_jitter=0.05)
+    return o
+
+
+def base_tail(J, p, w):
+    """Пушистый хвост от крестца (как у реф.): толстая трубка с «зубчатым» сечением, конец острый."""
+    s = 1.0
+    fur = mat("tail_fur", w["fur"] + (1,), rough=0.7)
+    pel = J["pelvis"]
+    back_y = max(v.co.y for v in bpy.data.objects["body"].data.vertices if abs(v.co.z - pel.z) < 0.04 and abs(v.co.x) < 0.06)
+    base = Vector((0, back_y - 0.03, pel.z + 0.08))
+    path = []
+    for k in range(16):
+        f = k / 15
+        path.append(base + Vector((0, (0.04 + 0.32 * f - 0.06 * f * f) * s, (-0.04 - 1.05 * f + 0.2 * f * f) * s)))
+    R = [w["tail_r"] * (0.35 + 1.65 * math.sin(math.pi * min(1.0, f * 0.92 + 0.08)) ** 0.7) for f in (k / 15 for k in range(16))]
+    bm = bmesh.new()
+    rings = []
+    for i, c in enumerate(path):
+        T = (path[min(i + 1, 15)] - path[max(i - 1, 0)]).normalized()
+        a = T.cross(Vector((1, 0, 0))).normalized()
+        b = T.cross(a).normalized()
+        ring = []
+        for k in range(20):
+            ang = 2 * math.pi * k / 20
+            jag = 1.0 + 0.3 * abs(math.sin(ang * 4.5 + i * 1.3)) ** 3 + 0.08 * math.sin(ang * 3 - i)   # острые пучки
+            ring.append(bm.verts.new(c + (a * math.cos(ang) + b * math.sin(ang)) * R[i] * jag * (0.08 if i == 15 else 1)))
+        rings.append(ring)
+    for i in range(15):
+        for k in range(20):
+            bm.faces.new((rings[i][k], rings[i][(k + 1) % 20], rings[i + 1][(k + 1) % 20], rings[i + 1][k]))
+    bm.faces.new(rings[0][::-1])
+    me = bpy.data.meshes.new("tail")
+    bm.to_mesh(me)
+    bm.free()
+    tail = new_obj("tail", me)
+    sub = tail.modifiers.new("sub", "SUBSURF")
+    sub.levels = 1
+    apply_mods(tail)
+    shade_smooth(tail)
+    tail.data.materials.append(fur)
+    return [tail]
+
+
+def build_wolf_head(cid, J, p, w):
+    """Голова антропоморфного волка (Хотто, реф. hotto_*): череп-эллипсоид + вытянутая морда, сужающаяся к носу,
+    со «стопом» между глаз; лицо — фронтальная текстура (глаза-прорези, как у остальных). Пропорции морды —
+    по изученной модели волка-атлета (только замеры, геометрия своя). Возвращает (объект, hd)."""
+    s = p["s"]
+    rx, ry, rz = 0.08 * s * p["head"], 0.094 * s * p["head"], 0.106 * s * p["head"]
+    cz = J["head"].z + rz * FP.get("head_lift", 1.12)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=96, ring_count=72, radius=1)
+    o = bpy.context.active_object
+    o.name = "head"
+    me = o.data
+    g = math.exp
+    for v in me.vertices:
+        x, y, z = v.co
+        # череп: затылок полнее, лоб покатый
+        y *= 1.0 + 0.08 * max(0.0, y)
+        front = max(0.0, -y)
+        # морда: ниже «стопа», вперёд на mz_len·ry, сужается к носу, верх опускается к носу
+        t = g(-((z - w["mz_z"]) / w["mz_h"]) ** 2) * g(-(x / w["mz_w"]) ** 2) * front ** 1.3
+        y -= w["mz_len"] * t
+        x *= 1 - 0.38 * t
+        z -= w["mz_drop"] * t * t
+        # нижняя челюсть чуть уже и короче верхней
+        if z < w["mz_z"] - 0.25:
+            y += 0.12 * t
+        # скулы и щёки шире (под гриву)
+        x *= 1 + 0.08 * g(-((z + 0.25) / 0.3) ** 2) * (1 - t)
+        v.co = Vector((x * rx, y * ry, z * rz + cz))
+    sub = o.modifiers.new("sub", "SUBSURF")
+    sub.levels = 1
+    apply_mods(o)
+    me = o.data
+    uv = me.uv_layers.active or me.uv_layers.new(name="UVMap")
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            uv.data[li].uv = ((0.5 + co.x / (2 * rx), 0.5 + (co.z - cz) / (2 * rz)) if co.y < -0.15 * ry else (0.02, 0.02))
+    shade_smooth(o)
+    me.materials.append(mat(f"face_{cid}", SKIN, tex=os.path.join(TEX, f"face_{cid}.png"), clip=True))
+    return o, (rx, ry, rz, cz)
+
+
+def wolf_details(head, hd, J, p, w):
+    """Нос-«пуговица», линия пасти (на голове), хвост и когти (на теле)."""
+    rx, ry, rz, cz = hd
+    s = p["s"]
+    tree = BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get())
+    on_head, on_body = [], []
+    dark = mat("nose", (0.1, 0.09, 0.1, 1), rough=0.3)
+    # Нос: самая передняя точка морды.
+    hit = tree.ray_cast(Vector((0, -2, cz + rz * (w["mz_z"] - w["mz_drop"] * 0.6 + 0.1))), Vector((0, 1, 0)))
+    tip = hit[0] if hit[0] else Vector((0, -ry * (1 + w["mz_len"]), cz))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=16, radius=1, location=tip + Vector((0, 0.004 * s, 0.006 * s)))
+    nose = bpy.context.active_object
+    nose.name = "wolf_nose"
+    nose.scale = (rx * 0.22, rx * 0.16, rx * 0.14)
+    bpy.ops.object.transform_apply(scale=True)
+    shade_smooth(nose)
+    nose.data.materials.append(dark)
+    on_head.append(nose)
+    # Линия пасти: от-под носа назад вдоль морды по обе стороны.
+    m_line = mat("crease", (0.4, 0.3, 0.32, 1), rough=0.7)
+    for sd in (-1, 1):
+        pts = []
+        for k in range(12):
+            f = k / 11
+            x = sd * rx * (0.05 + 0.32 * f)
+            z = cz + rz * (w["mz_z"] - 0.32 + 0.08 * f * f)
+            hh = tree.ray_cast(Vector((x, -2, z)), Vector((0, 1, 0)))
+            if hh[0] is not None:
+                pts.append(hh[0] + hh[1] * 0.0008)
+        if len(pts) > 2:
+            on_head.append(curve_tube(pts, 0.0022 * s, m_line, taper=0.5))
+    # Хвост: от крестца назад-вниз, пушистый: толстая трубка + острые пучки по краям.
+    fur = mat("tail_fur", w["fur"] + (1,), rough=0.7)
+    fur_dark = mat("tail_tip", w["fur_tip"] + (1,), rough=0.7)
+    base = J["pelvis"] + Vector((0, 0.11 * s, 0.06 * s))
+    path = []
+    for k in range(14):
+        f = k / 13
+        path.append(base + Vector((0, (0.06 + 0.22 * f) * s, (-0.05 - 0.55 * f + 0.12 * f * f) * s)))
+    R = [w["tail_r"] * s * (0.45 + 1.4 * math.sin(math.pi * min(1.0, f * 0.95 + 0.05)) ** 0.8) for f in (k / 13 for k in range(14))]
+    bm = bmesh.new()
+    rings = []
+    for i, c in enumerate(path):
+        T = (path[min(i + 1, 13)] - path[max(i - 1, 0)]).normalized()
+        a = T.cross(Vector((1, 0, 0))).normalized()
+        b = T.cross(a).normalized()
+        ring = []
+        for k in range(16):
+            ang = 2 * math.pi * k / 16
+            jag = 1.0 + 0.18 * math.sin(ang * 5 + i * 1.7)
+            ring.append(bm.verts.new(c + (a * math.cos(ang) + b * math.sin(ang)) * R[i] * jag * (0.12 if i == 13 else 1)))
+        rings.append(ring)
+    for i in range(13):
+        for k in range(16):
+            bm.faces.new((rings[i][k], rings[i][(k + 1) % 16], rings[i + 1][(k + 1) % 16], rings[i + 1][k]))
+    bm.faces.new(rings[0][::-1])
+    me = bpy.data.meshes.new("tail")
+    bm.to_mesh(me)
+    bm.free()
+    tail = new_obj("tail", me)
+    sub = tail.modifiers.new("sub", "SUBSURF")
+    sub.levels = 1
+    apply_mods(tail)
+    shade_smooth(tail)
+    tail.data.materials.append(fur)
+    on_body.append(tail)
+    # Когти: чёрные острые конусы на кончиках пальцев рук и ног.
+    claw = mat("claw", (0.08, 0.07, 0.08, 1), rough=0.3)
+    body = bpy.data.objects["body"]
+    bt = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
+    tips = []
+    for sd in ("l", "r"):
+        for k in range(1, 6):
+            for part in ("finger", "toe"):
+                nm = next((f"{sd}-{part}-{k}-{j}" for j in (4, 3) if f"{sd}-{part}-{k}-{j}" in MH_J), None)
+                if nm:
+                    tips.append((Vector(MH_J[nm]), part == "toe"))
+    for q, is_toe in tips:
+        loc, n, _, _ = bt.find_nearest(q)
+        if loc is None:
+            continue
+        d = (Vector((0, -1, -0.6)) if is_toe else Vector((0, -0.3, -1))).normalized()
+        L = (0.022 if is_toe else 0.016) * s
+        bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=0.0045 * s, radius2=0.0, depth=L, location=loc + d * L * 0.35)
+        cl = bpy.context.active_object
+        cl.rotation_mode = "QUATERNION"
+        cl.rotation_quaternion = d.to_track_quat("Z", "Y")
+        bpy.ops.object.transform_apply(rotation=True)
+        cl.name = "claw"
+        cl.data.materials.append(claw)
+        on_body.append(cl)
+    return on_head, on_body
 
 
 def build_head(cid, J, p):
@@ -1539,6 +1817,52 @@ def envelope_pts(pts, hd, env, margin=0.008, rigid=False):
     return out
 
 
+def mane_strands(hd, hp, m, rnd):
+    """Длинная грива (Хотто, реф. hotto_*): широкий веер прядей от головы наружу и вниз — на плечи и до
+    середины спины; пряди ложатся на тело (не уходят внутрь), концы острые, слегка разведены зубцами."""
+    rx, ry, rz, cz = hd
+    mn = hp["mane"]
+    t_body = BVHTree.FromObject(bpy.data.objects["body"], bpy.context.evaluated_depsgraph_get())
+    out = []
+    for k in range(mn["count"]):
+        theta = rnd.uniform(-math.pi, math.pi)
+        phi = rnd.uniform(*mn["phi"])
+        # лицо открыто: спереди пряди только от макушки (чёлка набок), щёки и морду не закрывают
+        if abs(theta) < mn.get("skip_front", 0.7) or (abs(theta) < mn.get("face_clear", 0.0) and phi > 0.35):
+            continue
+        o = Vector((math.sin(theta), -math.cos(theta), 0))
+        root = Vector((rx * math.sin(phi) * math.sin(theta), -ry * math.sin(phi) * math.cos(theta), cz + rz * math.cos(phi))) * 1.0
+        root = Vector((root.x * 1.02, root.y * 1.02 + HEAD_CY, root.z))
+        back = (1 - math.cos(theta)) / 2                      # 0 — спереди, 1 — сзади
+        drop = rz * (mn["drop"][0] + (mn["drop"][1] - mn["drop"][0]) * back ** 1.3) * rnd.uniform(0.85, 1.15)
+        spread = rx * (mn["spread"][0] + (mn["spread"][1] - mn["spread"][0]) * abs(math.sin(theta)))
+        E = Vector((o.x * spread, o.y * spread * 0.8 + ry * 0.35 * back + HEAD_CY, root.z - drop))
+        C1 = root + o * rx * mn.get("puff", 0.55) + Vector((0, 0, rz * 0.15))
+        C2 = E + Vector((0, 0, drop * 0.45)) + o * rx * 0.2
+        pts = []
+        N = 34
+        for i in range(N + 1):
+            t = i / N
+            a, b, c_, d = (1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t * t * (1 - t), t ** 3
+            P = root * a + C1 * b + C2 * c_ + E * d
+            P += Vector((math.sin(t * 7 + k), math.cos(t * 5 + k * 0.7), 0)) * rx * 0.04 * t
+            loc, nb, _, dist = t_body.find_nearest(P)
+            if loc is not None and ((P - loc).dot(nb) < 0 or dist < mn["gap"]):
+                P = loc + nb * mn["gap"]
+            pts.append(P)
+        ups, sides = [], []
+        for i, P in enumerate(pts):
+            T = (pts[min(i + 1, N)] - pts[max(i - 1, 0)]).normalized()
+            up = Vector((P.x, P.y - ry * 0.2, 0)).normalized() if Vector((P.x, P.y, 0)).length > 1e-4 else o
+            up = (up - T * up.dot(T)).normalized()
+            ups.append(up)
+            sides.append(T.cross(up).normalized())
+        w0 = rnd.uniform(*mn["w"])
+        widths = [w0 * (0.55 + 0.45 * min(1.0, i / (N * 0.25))) * (1 - max(0.0, (i / N - 0.6) / 0.4)) ** 1.2 for i in range(N + 1)]
+        out.append(ribbon(pts, ups, sides, widths, 0.002, m, thick=hp.get("thick", 0.18)))
+    return out
+
+
 def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
     """Причёска по принципу игровых аниме-моделей (изучено на референсах art/references/3d и Lyney):
     1) «шлем» — масса волос вокруг черепа (копия головы, отодвинутая наружу; задаёт объём и форму);
@@ -1596,6 +1920,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
             # ниже края шлема на лбу ближе лицо — чёлка ложится на лоб, а не застревает на кромке шлема
             return a if a[3] <= b[3] + 0.01 else b
     t_snap = _Outer()
+    t_body = (BVHTree.FromObject(bpy.data.objects["body"], bpy.context.evaluated_depsgraph_get())
+              if hp.get("drape") and "body" in bpy.data.objects else None)
     CONFORM = (t_helm, Vector((0, 0, cz)), rx, cz, rz)          # уши, заколки, хохолок — на шлеме
     bottom = cz - rz * nape
     whorl_dir = Vector((0, hp["whorl"][0], hp["whorl"][1])).normalized()
@@ -1645,6 +1971,14 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                 d = (d * 0.75 + Vector((0, 0, -1)) * 0.25).normalized()
                 P = P + d * step
                 up = N
+                if t_body is not None:
+                    # длинная грива ложится на спину и плечи, а не уходит внутрь тела
+                    loc, nb, _, dist = t_body.find_nearest(P)
+                    gap = hp.get("drape", 0.0)
+                    if loc is not None and ((P - loc).dot(nb) < 0 or dist < gap):
+                        P = loc + nb * gap
+                        d = (d - nb * d.dot(nb)).normalized() if (d - nb * d.dot(nb)).length > 1e-6 else d
+                        up = nb
             else:
                 P = P + d * step
                 loc, N2, _, _ = t_snap.find_nearest(P)
@@ -1726,6 +2060,8 @@ def build_hair_ribbons(cid, head_obj, hd, hp, mat_cap, mat_strand):
                        el["w"], 0.004 + 0.002 * k, 0.15, el["curl"], 0.25, 0.65, k * 1.3)
             if o is not None:
                 objs.append(o)
+    if hp.get("mane"):
+        objs += mane_strands(hd, hp, mat_strand, rnd)
     hair_obj = join(objs, "hair_cards")
     # Цвет по высоте (Meshy-лист): мятный сверху → голубой к низу копны; каждая прядь чуть своего оттенка.
     paint_gradient(hair_obj, cz + rz * 0.75, cz - rz * 0.35, hp["c_root"], hp["c_tip"], strand_jitter=hp.get("strand_jitter", 0.0))
@@ -2047,13 +2383,111 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     return o
 
 
+def _front_hit(x, z, off):
+    """Точка на передней поверхности тела (луч спереди) + отступ по нормали."""
+    tree = BVHTree.FromObject(_BODY, bpy.context.evaluated_depsgraph_get())
+    hit = tree.ray_cast(Vector((x, -3, z)), Vector((0, 1, 0)))
+    if hit[0] is None:
+        return None, None
+    return hit[0] + hit[1] * off, hit[1]
+
+
+def band(name, z0, z1, off, m, smooth=2):
+    """Полоса-оболочка тела между высотами (ремень, чокер): без рук."""
+    def spec(b, t, co):
+        if b.startswith(("upper_arm", "forearm", "hand")):
+            return None
+        return off if z0 <= co.z <= z1 else None
+    return shell(name, m, spec, smooth=smooth)
+
+
+def belt_on_body(J, p, leather, metal, chain_m):
+    """Ремень поверх брюк (оболочка тела у пояса), квадратная пряжка спереди, цепочка от пряжки к заднему карману."""
+    bz = J["pelvis"].lerp(J["spine"], 0.45).z
+    out = [band("belt", bz - 0.024, bz + 0.024, 0.028, leather)]
+    c, n = _front_hit(0.0, bz, 0.034)
+    if c is not None:
+        bpy.ops.mesh.primitive_cube_add(size=1, location=c)
+        b = bpy.context.active_object
+        b.scale = (0.055, 0.012, 0.048)
+        bpy.ops.object.transform_apply(scale=True)
+        b.data.materials.append(metal)
+        out.append(b)
+    a, _n = _front_hit(0.11, bz - 0.01, 0.034)
+    if a is not None:
+        tree = BVHTree.FromObject(_BODY, bpy.context.evaluated_depsgraph_get())
+        pts = []
+        for k in range(16):
+            f = k / 15
+            ang = math.radians(-60 + 140 * f)               # от бедра спереди к заднему карману
+            q = Vector((math.sin(ang) * 0.32 + 0.04, -math.cos(ang) * 0.3 + J["pelvis"].y, bz - 0.05 - 0.14 * math.sin(math.pi * f)))
+            loc, nn, _i, _d = tree.find_nearest(q)
+            pts.append(loc + nn * 0.04 if loc is not None else q)
+        out.append(curve_tube(pts, 0.006, chain_m, taper=1.0))
+    return out
+
+
+def tie_on_body(J, p, m, choker_m, metal):
+    """Ослабленный галстук поверх рубашки (узел ниже ворота, расширяется к ремню) + чокер на шее + крестик."""
+    out = []
+    nz = J["neck"].z
+    top_z, bot_z = nz - 0.09, J["pelvis"].lerp(J["spine"], 0.55).z + 0.02
+    rows = []
+    for k in range(18):
+        f = k / 17
+        z = top_z + (bot_z - top_z) * f
+        hw = 0.026 + 0.022 * f
+        if f > 0.93:
+            hw *= (1 - f) / 0.07 * 0.9 + 0.1                # острый конец
+        a, _n = _front_hit(-hw + 0.01 * math.sin(f * 2.5), z, 0.022)
+        b, _n = _front_hit(hw + 0.01 * math.sin(f * 2.5), z, 0.022)
+        if a is not None and b is not None:
+            rows.append((a, b))
+    if len(rows) > 2:
+        out.append(_strip(rows, m, "tie", thick=0.004))
+    c, _n = _front_hit(0.0, top_z + 0.012, 0.03)
+    if c is not None:                                         # узел
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=1, location=c)
+        kn = bpy.context.active_object
+        kn.scale = (0.03, 0.016, 0.026)
+        bpy.ops.object.transform_apply(scale=True)
+        kn.data.materials.append(m)
+        out.append(kn)
+    out.append(band("choker", nz + 0.03, nz + 0.07, 0.012, choker_m, smooth=1))
+    c, _n = _front_hit(0.035, nz - 0.13, 0.02)
+    if c is not None:                                         # крестик на цепочке
+        for sx, sz in ((0.008, 0.03), (0.022, 0.008)):
+            bpy.ops.mesh.primitive_cube_add(size=1, location=c + Vector((0, 0, -0.004 if sx < 0.01 else 0.004)))
+            cr = bpy.context.active_object
+            cr.scale = (sx, 0.004, sz)
+            bpy.ops.object.transform_apply(scale=True)
+            cr.data.materials.append(metal)
+            out.append(cr)
+    return out
+
+
 def top(J, p, name, m, sleeve="long", neck=False, loose=0.0, cover_hand=False, hem_drop=0.035):
     s = p["s"]
+    sh = p.get("shirt", {})            # рубашка персонажа: заправлена, рукава закатаны, ворот расстёгнут (Хотто)
+    hem_drop = sh.get("hem_drop", hem_drop)
     hem_z = J["pelvis"].z - hem_drop * s
     collar_z = J["neck"].z + 0.05 * s
     base = 0.006 * s + loose * s
+    vd, vw = sh.get("v_depth", 0.0), sh.get("v_width", 0.0)
+    front_y = J["upchest"].y
 
     def spec(b, t, co):
+        if vd and co.y < front_y and co.z > J["neck"].z - vd and \
+                abs(co.x) < vw * (co.z - (J["neck"].z - vd)) / vd + 0.004:
+            return None                                       # расстёгнутый ворот: V-вырез, виден мех груди
+        if sh.get("sleeve_t") and b.startswith("forearm"):
+            st = sh["sleeve_t"]
+            if t > st:
+                return None                                   # рукав закатан до локтя
+            return base + (0.004 + (0.012 if t > st - 0.12 else 0.0)) * s   # валик закатанного рукава
+        return _spec0(b, t, co)
+
+    def _spec0(b, t, co):
         if b in ("spine", "chest", "upper_chest"):
             return base
         if b == "hips" or b.startswith("thigh"):
@@ -2074,7 +2508,7 @@ def top(J, p, name, m, sleeve="long", neck=False, loose=0.0, cover_hand=False, h
         if b.startswith("hand"):
             return base + 0.02 * s if (cover_hand and sleeve == "long" and t < 0.45) else None
         return None
-    return shell(name, m, spec, smooth=2 if loose > 0.01 else 1)
+    return shell(name, m, spec, smooth=(2 if loose > 0.01 else 1) + p.get("garment_smooth", 0))
 
 
 def legs(J, p, name, m, kind):
@@ -2091,8 +2525,10 @@ def legs(J, p, name, m, kind):
             if not hem_z <= co.z <= waist_z:
                 return None
             k = max(0.0, min(1.0, (J["kn_l"].z - co.z) / (J["kn_l"].z - hem_z)))
-            return (0.01 + 0.01 * k) * s
-        return shell(name, m, spec, smooth=1)
+            # у пояса брюки поверх заправленной рубашки (иначе рубашка и брюки мерцают друг сквозь друга)
+            tuck = 0.006 * s if co.z > J["pelvis"].z - 0.06 * s else 0.0
+            return (0.01 + 0.01 * k) * s + tuck
+        return shell(name, m, spec, smooth=1 + p.get("garment_smooth", 0))
     if kind == "socks":
         def spec(b, t, co):
             if b.startswith("shin"):
@@ -2756,6 +3192,37 @@ def idle_animation(rig, frames=96):
 # ------------------------------------------------------------------ персонажи
 
 CHARACTERS = {
+    # Хотто Дарака (реф. hotto_sheet / hotto_outfit, 23.10): антропоморфный волк 235 см, очень мускулистый; кремовый мех,
+    # длинная светлая грива, уши с тёмными кончиками, серо-голубые прищуренные глаза, чёрные когти, пушистый хвост.
+    # Канон: навязчивый поклонник Соры, живёт на 4-м этаже (docs/source/story_and_chapter1_script.txt, сцены 10–11).
+    "hotto": {
+        "sex": "male",
+        "skin": (0.92, 0.84, 0.8, 1),                  # мех тёплый кремово-розовый (реф.)
+        # Тело — готовая мускулистая модель волка (автор — art/characters/src/CREDITS.md), подготовлена
+        # tools/art/prep_base.py: 235 см, руки опущены, суставы по геометрии.
+        "body": {"s": 1.0, "base": "hotto_base.glb", "shoulder": 0.2, "hip": 0.1, "head": 1.0, "garment_smooth": 6,
+                 "shirt": {"hem_drop": -0.08, "sleeve_t": 0.38, "v_depth": 0.2, "v_width": 0.07},
+                 "waist": 0.13, "chest": 0.17, "hip_r": 0.14},
+        "wolf": {"mz_z": -0.38, "mz_h": 0.36, "mz_w": 0.42, "mz_len": 1.5, "mz_drop": 0.22,
+                 "fur": (0.88, 0.8, 0.76), "fur_tip": (0.74, 0.62, 0.58), "tail_r": 0.055},
+        "hair": {"ribbons": True, "solid": True, "hairline": 0.3, "nape": 1.0, "thick_top": 0.035, "thick_side": 0.025,
+                 "cheek_puff": 0.2, "face_open_x": 0.5, "thick": 1.0, "whorl": (0.05, 1.0),
+                 # грива: веер прядей от головы на плечи и до середины спины (mane_strands)
+                 "mane": {"count": 320, "phi": (0.1, 1.45), "drop": (4.2, 6.2), "spread": (1.3, 2.3), "w": (0.07, 0.13),
+                          "gap": 0.035, "puff": 0.65, "skip_front": 0.75, "face_clear": 1.35},
+                 "groups": [
+                     # верх головы — короткие пряди от вихра (под гривой)
+                     {"count": 40, "theta": (-3.14, 3.14), "phi": (0.15, 0.9), "length": (0.18, 0.3), "w": (0.05, 0.08),
+                      "sway": 0.2, "curl": (10, 40), "curl_frac": 0.15, "bias": 0.7, "lift": 0.006, "skip_front": 0.75},
+                     # чёлка, разобранная набок
+                     {"count": 12, "theta": (-0.85, 0.85), "phi": (0.12, 0.4), "length": (0.2, 0.32), "w": (0.03, 0.045),
+                      "sway": 0.3, "curl": (10, 30), "curl_frac": 0.2, "bias": 0.5, "lift": 0.007},
+                 ],
+                 "c_root": (0.9, 0.84, 0.8), "c_tip": (0.78, 0.68, 0.63), "cap_shade": 0.85},
+        "ears": (0.95, 0.9, 0.84), "ear_inner": (0.36, 0.28, 0.26),
+        "ear": {"theta": 0.72, "phi": 0.42, "lift": 1.18, "w": 0.55, "h": 1.15, "d": 0.3, "tilt": 8, "yaw": 0},
+        "garments": ["top_long", "neck_tie", "legs_trousers"],
+    },
     # Кот (реф. 04, разворот — реф. 16): 163 см, стройный юноша. Кудрявые бирюзовые волосы → синие кончики, чёлка на правый глаз,
     # кошачьи уши, хохолок. Свитер с высоким воротом и цветами — оверсайз, рукава до костяшек.
     "kot": {
@@ -2879,8 +3346,14 @@ def build(cid):
     c = CHARACTERS[cid]
     p = c["body"]
     s = p["s"]
+    global SKIN
+    SKIN = c.get("skin", SKIN_DEFAULT)
     skin = mat("skin", SKIN, rough=0.6, vcol=True)
-    if p.get("mh"):
+    if p.get("base"):
+        # мех: плиточная фактура × цвет меха × раскраска в вершинах (нос, когти, подушечки, уши)
+        skin = mat("skin", SKIN, rough=0.6, vcol=True, tex=os.path.join(TEX, "fur.png"))
+        body, J = load_base_body(p["base"], skin)
+    elif p.get("mh"):
         body, J = build_mh_body(p, c["sex"], skin)
     else:
         J = body_joints(p)
@@ -2897,44 +3370,62 @@ def build(cid):
     # Без текстуры: при экспорте с текстурой цвет материала теряется (становится белым, сливается с кожей).
     under = mat("underwear", (0.92, 0.6, 0.7, 1) if c["sex"] == "female" else (0.2, 0.25, 0.4, 1), rough=0.6)
 
-    if not p.get("mh"):
+    if not p.get("mh") and not p.get("base"):
         R = body_radii(p)
         body = build_part("body", J, list(J.keys()), body_edges(), lambda j: _rs(R[j], s), skin)
         if c["sex"] == "female":
             add_bust(body, J, p)
     set_body(body, J)
-    head, hd = build_head(cid, J, p)
-    if FP.get("eye_shape"):
-        eyes = build_eyes_v2(cid, head, hd) + build_lashes_v2(head, hd, c["geo_lashes"], cid)
+    if p.get("base"):
+        # Готовое тело с головой (чужая база, см. art/characters/src/CREDITS.md): своя только грива, хвост, одежда.
+        global CONFORM
+        hd = base_head_hd(body, J)
+        hair_mat = mat("hair_solid_light", (1, 1, 1, 1), vcol=True, rough=0.5, tex=os.path.join(TEX, "strand_lines.png"))
+        hair = [base_hair(hd, c["hair"], hair_mat)]
+        head_parts = list(hair)
+        MARKS.clear()
+        marks = MARKS
+        BODY_EXTRA.extend(base_tail(J, p, c["wolf"]))
     else:
-        eyes = build_eyes(cid, head, hd)
-        if c.get("geo_lashes"):
-            eyes += build_lashes(head, hd, c["geo_lashes"])
-    hair_mat = (mat("hair_solid", (1, 1, 1, 1), vcol=True, rough=0.5) if c["hair"].get("solid") else
-                mat("hair", (1, 1, 1, 1), tex=os.path.join(TEX, "hair_strands.png"), vcol=True, clip=True, double=True))
-    # Объём причёски: волосы строятся на увеличенной «сфере» hd_h (у Кота по реф. 16 — пышная копна шире головы).
-    global CONFORM
-    hv = c["hair"].get("volume")
-    hd_h = (hd[0] * hv[0], hd[1] * hv[1], hd[2] * hv[2], hd[3] + hd[2] * hv[3]) if hv else hd
-    if c["hair"].get("conform"):
-        # Волосы «рисуются поверх» вылепленной головы: направления — по сфере черепа, расстояние — от кожи.
-        sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
-        hd_h = (hd[0] * sx, hd[1] * sy, hd[2] * sz, hd[3])
-        CONFORM = (BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get()), Vector((0, 0, hd[3])), hd[0], hd[3], hd[2])
-    if c["hair"].get("ribbons"):
-        hair = build_hair_ribbons(cid, head, hd, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat)
-        hd_h = (hd[0] * 1.15, hd[1] * 1.15, hd[2] * 1.1, hd[3])
-    else:
-        hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
-                          hd_head=hd if hv else None)
-    head_parts = [head] + eyes + hair
-    marks = landmarks_head(head, hd, hair)
-    if c.get("ears"):
-        ear = dict(EAR_DEFAULT)
-        ear.update(c.get("ear", {}))
-        ear_objs, tips = build_ears(hd_h, mat("ear", c["ears"] + (1,)), mat("ear_inner", c["ear_inner"] + (1,)), ear)
-        head_parts += ear_objs
-        marks["ear_tip_vl"], marks["ear_tip_vr"] = tips
+        if c.get("wolf"):
+            head, hd = build_wolf_head(cid, J, p, c["wolf"])
+        else:
+            head, hd = build_head(cid, J, p)
+        if FP.get("eye_shape"):
+            eyes = build_eyes_v2(cid, head, hd) + build_lashes_v2(head, hd, c["geo_lashes"], cid)
+        else:
+            eyes = build_eyes(cid, head, hd)
+            if c.get("geo_lashes"):
+                eyes += build_lashes(head, hd, c["geo_lashes"])
+        hair_mat = (mat("hair_solid", (1, 1, 1, 1), vcol=True, rough=0.5) if c["hair"].get("solid") else
+                    mat("hair", (1, 1, 1, 1), tex=os.path.join(TEX, "hair_strands.png"), vcol=True, clip=True, double=True))
+        # Объём причёски: волосы строятся на увеличенной «сфере» hd_h (у Кота по реф. 16 — пышная копна шире головы).
+        global CONFORM
+        hv = c["hair"].get("volume")
+        hd_h = (hd[0] * hv[0], hd[1] * hv[1], hd[2] * hv[2], hd[3] + hd[2] * hv[3]) if hv else hd
+        if c["hair"].get("conform"):
+            # Волосы «рисуются поверх» вылепленной головы: направления — по сфере черепа, расстояние — от кожи.
+            sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
+            hd_h = (hd[0] * sx, hd[1] * sy, hd[2] * sz, hd[3])
+            CONFORM = (BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get()), Vector((0, 0, hd[3])), hd[0], hd[3], hd[2])
+        if c["hair"].get("ribbons"):
+            hair = build_hair_ribbons(cid, head, hd, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat)
+            hd_h = (hd[0] * 1.15, hd[1] * 1.15, hd[2] * 1.1, hd[3])
+        else:
+            hair = build_hair(cid, hd_h, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat,
+                              hd_head=hd if hv else None)
+        head_parts = [head] + eyes + hair
+        marks = landmarks_head(head, hd, hair)
+        if c.get("ears"):
+            ear = dict(EAR_DEFAULT)
+            ear.update(c.get("ear", {}))
+            ear_objs, tips = build_ears(hd_h, mat("ear", c["ears"] + (1,)), mat("ear_inner", c["ear_inner"] + (1,)), ear)
+            head_parts += ear_objs
+            marks["ear_tip_vl"], marks["ear_tip_vr"] = tips
+        if c.get("wolf"):
+            oh, ob = wolf_details(head, hd, J, p, c["wolf"])
+            head_parts += oh
+            BODY_EXTRA.extend(ob)
     body_layers = underwear(J, p, c["sex"], under)
 
     garments = []
@@ -2956,6 +3447,13 @@ def build(cid):
             o = top(J, p, "garment__outerwear__jacket", cloth, "long", loose=0.024)
         elif g == "outer_vest":
             o = top(J, p, "garment__outerwear__vest", cloth, "none", loose=0.012)
+        elif g == "legs_trousers" and p.get("base"):
+            o = legs(J, p, "tmp", cloth, "trousers")
+            o = join([o] + belt_on_body(J, p, leather, metal, mat("chain", (0.45, 0.38, 0.3, 1), rough=0.3)),
+                     "garment__lower_body__trousers")
+        elif g == "neck_tie" and p.get("base"):
+            o = join(tie_on_body(J, p, plain, mat("choker", (0.35, 0.38, 0.45, 1), rough=0.4), metal),
+                     "garment__neck_accessory__tie")
         elif g == "legs_trousers":
             o = legs(J, p, "tmp", cloth, "trousers")
             # Ремень.

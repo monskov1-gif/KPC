@@ -43,8 +43,9 @@ def apply_target(vs, name, w):
         v[2] += float(dz) * w
 
 
-def shape(sex, teen=0.45, thin=0.7, bust=0.0):
-    """sex: male|female; teen: доля «child» в возрасте (0 — взрослый young); thin: к худощавому; bust: грудь 0..1."""
+def shape(sex, teen=0.45, thin=0.7, bust=0.0, muscle=0.0, heavy=0.0):
+    """sex: male|female; teen: доля «child» в возрасте (0 — взрослый young); thin: к худощавому; bust: грудь 0..1;
+    muscle — к максимальной мускулатуре, heavy — к большему весу (цели MakeHuman CC0, только взрослый мужской)."""
     vs, faces, groups = load_base()
     g = sex
     apply_target(vs, f"macrodetails_caucasian-{g}-young", 1 - teen)
@@ -52,6 +53,9 @@ def shape(sex, teen=0.45, thin=0.7, bust=0.0):
     apply_target(vs, f"macrodetails_universal-{g}-young-averagemuscle-minweight", (1 - teen) * thin)
     apply_target(vs, f"macrodetails_universal-{g}-child-averagemuscle-minweight", teen * thin)
     apply_target(vs, f"macrodetails_proportions_{g}-young-averagemuscle-averageweight-idealproportions", 1.0)
+    if muscle:
+        apply_target(vs, f"macrodetails_universal-{g}-young-maxmuscle-averageweight", muscle * (1 - heavy))
+        apply_target(vs, f"macrodetails_universal-{g}-young-maxmuscle-maxweight", muscle * heavy)
     if sex == "female":
         if bust >= 0:
             apply_target(vs, "breast_female-young-averagemuscle-averageweight-maxcup-averagefirmness", bust)

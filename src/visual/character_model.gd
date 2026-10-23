@@ -142,10 +142,10 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 			m.set_shader_parameter("use_vertex_color", true)
 			m.set_shader_parameter("shade_color", Color(0.58, 0.64, 0.86))
 			thickness = 0.0013
-		"hair_solid":
+		"hair_solid", "hair_solid_light":
 			# Объёмные пряди-клоки: тун-свет + тонкий контур, чтобы читались завитки.
 			m.set_shader_parameter("use_vertex_color", true)
-			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9))
+			m.set_shader_parameter("shade_color", Color(0.62, 0.68, 0.9) if src_name == "hair_solid" else Color(0.86, 0.78, 0.7))
 			# Тонкий контур: читаются отдельные пряди (толстый превращал причёску в «клубок линий»).
 			thickness = 0.0013
 		"ear", "ear_inner", "ear_fur":
@@ -180,6 +180,9 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		if src_name in ["hair_solid", "hair_cap"]:
 			# контур прядей — тёмно-бирюзовый, а не бордовый: в просветах между прядями он не читается дырой
 			outline.set_shader_parameter("outline_color", Color(0.2, 0.32, 0.42))
+		elif src_name == "hair_solid_light":
+			# светлая грива (Хотто): тёплый коричневатый контур — бирюзовый на ней читался синими пятнами
+			outline.set_shader_parameter("outline_color", Color(0.55, 0.45, 0.36))
 		if src_name.begins_with("face") and tex:
 			outline.set_shader_parameter("mask_tex", tex)
 			outline.set_shader_parameter("use_mask", true)

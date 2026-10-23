@@ -1,7 +1,7 @@
 extends Node3D
 ## Витрина 3D-прототипов персонажей (для проверки моделей и скриншотов). Не входит в игру.
 
-const IDS := ["kot", "gabi", "sora"]
+const IDS := ["kot", "gabi", "sora", "hotto"]
 var focus := ""   # пусто — все трое; иначе крупный план одного
 
 
@@ -21,12 +21,14 @@ func _ready() -> void:
 	key.light_energy = 0.7
 	key.light_color = Color("fff1e6")
 	add_child(key)
-	var x := -1.2
+	var x := -1.8
 	for id in IDS:
 		var m := CharacterModel.new()
 		add_child(m)
 		m.position = Vector3(x, 0, 0)
 		m.setup(id, s.characters)
+		if s.outfit_items(id).is_empty():
+			s.equipment.equip_signature(id)    # закрытый в гардеробе персонаж (Хотто) — витрина всё равно в образе
 		m.apply_items(s.outfit_items(id))
 		m.name = id
 		x += 1.2
@@ -48,10 +50,33 @@ func debug_focus_sora() -> void:
 	_focus("sora")
 
 
+func debug_focus_hotto() -> void:
+	_focus("hotto")
+
+
+## Хотто целиком: спереди, в 3/4 и сбоку (по очереди — через KPC_YAW), в образе.
+func debug_full_hotto() -> void:
+	var m: Node3D = get_node("hotto")
+	for id in IDS:
+		(get_node(id) as Node3D).visible = id == "hotto"
+	m.position = Vector3.ZERO
+	m.rotation_degrees.y = float(OS.get_environment("KPC_YAW")) if OS.has_environment("KPC_YAW") else 0.0
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 1.2, 5.0)
+	cam.rotation_degrees = Vector3.ZERO
+
+
+## Голова Хотто крупно (KPC_YAW — поворот).
+func debug_head_hotto() -> void:
+	debug_full_hotto()
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 2.05, 1.6)
+
+
 func _focus(id: String) -> void:
 	var cam := get_viewport().get_camera_3d()
 	var m: Node3D = get_node(id)
-	var h: float = {"kot": 1.63, "gabi": 1.6, "sora": 2.06}[id]
+	var h: float = {"kot": 1.63, "gabi": 1.6, "sora": 2.06, "hotto": 2.35}[id]
 	cam.position = m.position + Vector3(0, h * 0.86, 0.85)
 	cam.rotation_degrees = Vector3(-6, 0, 0)
 

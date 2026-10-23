@@ -259,5 +259,12 @@
  "item.sora_dark_trousers.name": "Тёмные брюки",
  "item.sora_dark_trousers.description": "Простые тёмные брюки.",
  "item.sora_dark_shoes.name": "Тёмные туфли Соры",
- "item.sora_dark_shoes.description": "Строгие тёмные туфли."
+ "item.sora_dark_shoes.description": "Строгие тёмные туфли.",
+ "character.hotto.name": "Хотто Дарака",
+ "item.hotto_white_shirt.name": "Белая рубашка Хотто",
+ "item.hotto_white_shirt.description": "Рубашка с закатанными рукавами, расстёгнутый ворот. Как на референсе Хотто.",
+ "item.hotto_black_tie.name": "Чёрный галстук",
+ "item.hotto_black_tie.description": "Небрежно ослабленный чёрный галстук. Как на референсе Хотто.",
+ "item.hotto_black_trousers.name": "Чёрные брюки",
+ "item.hotto_black_trousers.description": "Чёрные брюки с ремнём и цепочкой. Как на референсе Хотто."
 }

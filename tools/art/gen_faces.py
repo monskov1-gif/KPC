@@ -43,6 +43,9 @@ CHARS = {
     # Габи (реф. 05–07): фиолетовые глаза, мягкая улыбка, ресницы гуще.
     "gabi": {"iris": (176, 146, 226), "iris_dark": (72, 44, 124), "brow": (150, 50, 70), "mouth": "smile",
              "blush": 0.65, "bags": False, "lash": (58, 32, 46), "lash_len": 1.35},
+    # Хотто (реф. hotto_*): мех вместо кожи, серо-голубые прищуренные глаза, светлые брови; нос и пасть — геометрия.
+    "hotto": {"iris": (150, 170, 200), "iris_dark": (60, 72, 96), "brow": (214, 196, 168), "mouth": "none",
+              "blush": 0.0, "bags": False, "lash": (70, 58, 54), "lash_len": 0.8, "skin": (243, 230, 214), "muzzle": True},
     # Сора (реф. 12): тёмные глаза, тени усталости, хитрая полуулыбка.
     "sora": {"iris": (104, 116, 128), "iris_dark": (28, 34, 42), "brow": (36, 92, 96), "mouth": "smirk",
              "blush": 0.3, "bags": True, "lash": (36, 30, 38), "lash_len": 0.8},
@@ -84,7 +87,8 @@ def face(cid, c):
     def mx(u):
         return 0.5 + (u - 0.5) * mk
     S = N * SS
-    img = Image.new("RGBA", (S, S), SKIN + (255,))
+    skin = c.get("skin", SKIN)
+    img = Image.new("RGBA", (S, S), skin + (255,))
     # Лёгкая объёмная тень по краям лица и под подбородком.
     img.alpha_composite(soft((S, S), (232, 196, 190), 0.55, S * 0.05,
                              lambda d: (d.rectangle((0, 0, S * 0.08, S), fill=255), d.rectangle((S * 0.92, 0, S, S), fill=255),
@@ -151,6 +155,11 @@ def face(cid, c):
         img.alpha_composite(soft((S, S), (242, 150, 160), c["blush"] * 0.55, S * 0.02,
                                  lambda dd: dd.ellipse((cx - w * 0.9, cy + h * 1.6, cx + w * 0.9, cy + h * 2.4), fill=255)))
     d = ImageDraw.Draw(img)
+    if c.get("muzzle"):
+        # Морда (Хотто): нос и пасть — геометрия головы, на текстуре только глаза и брови.
+        img.putalpha(Image.fromarray(np.minimum(np.array(img.split()[3]), np.array(holes))))
+        img.resize((N, N), Image.LANCZOS).save(os.path.join(OUT, f"face_{cid}.png"))
+        return
     # Нос: мягкая тень сбоку и блик.
     img.alpha_composite(soft((S, S), (220, 168, 160), 0.7, S * 0.004,
                              lambda dd: dd.line((S * 0.506, S * (NOSE_Y - 0.045), S * 0.5, S * (NOSE_Y + 0.005)), fill=255, width=int(S * 0.005))))
@@ -332,6 +341,40 @@ def sclera(cid, size=512):
     Image.fromarray(np.clip(col, 0, 255).astype(np.uint8), "RGB").save(os.path.join(OUT, f"sclera_{cid}.png"))
 
 
+def fur(name="fur", size=512, seed=3):
+    """Плиточная фактура меха (умножается на цвет меха): мягкие пряди-штрихи разной длины и светлоты, без швов."""
+    rnd = random.Random(seed)
+    S = size
+    img = Image.new("L", (S * 3, S * 3), 236)
+    d = ImageDraw.Draw(img)
+    for _ in range(5200):
+        x, y = rnd.uniform(S, 2 * S), rnd.uniform(S, 2 * S)
+        L = rnd.uniform(S * 0.02, S * 0.07)
+        a = math.radians(90 + rnd.uniform(-28, 28))
+        v = int(rnd.uniform(190, 255))
+        for ox in (-S, 0, S):
+            for oy in (-S, 0, S):
+                d.line((x + ox, y + oy, x + ox + math.cos(a) * L, y + oy + math.sin(a) * L), fill=v, width=rnd.choice((1, 2, 2, 3)))
+    img = img.filter(ImageFilter.GaussianBlur(0.8)).crop((S, S, 2 * S, 2 * S))
+    a = np.asarray(img).astype(np.float32)
+    a = 200 + (a - a.min()) / max(1.0, a.max() - a.min()) * 55
+    Image.fromarray(np.dstack([a, a, a]).astype(np.uint8), "RGB").save(os.path.join(OUT, f"{name}.png"))
+
+
+def strand_lines(name="strand_lines", w=256, h=512, seed=9):
+    """Фактура прядей для объёмных лент-волос: тонкие продольные линии (вдоль v), без швов по u."""
+    rnd = np.random.default_rng(seed)
+    xs = np.linspace(0, 1, w, endpoint=False)
+    col = np.full(w, 0.93, np.float32)
+    for f, a in ((7, 0.04), (13, 0.035), (29, 0.03), (53, 0.025)):
+        col += a * np.sin(2 * np.pi * (xs * f + rnd.uniform()))
+    col = np.clip(col, 0.78, 1.0)
+    img = np.repeat(col[None, :], h, axis=0)
+    img = img * (0.97 + 0.03 * np.sin(np.linspace(0, 2 * np.pi * 3, h))[:, None])
+    v = (img * 255).astype(np.uint8)
+    Image.fromarray(np.dstack([v, v, v]), "RGB").save(os.path.join(OUT, f"{name}.png"))
+
+
 def hair_strands(w=512, h=1024):
     """Карта прядей: много тонких линий разной яркости, сужение к кончику (низ), прозрачные промежутки."""
     rnd = random.Random(3)
@@ -406,6 +449,8 @@ def main():
             iris_from_user(cid) if cid in USER_IRIS else iris(cid, c)
             sclera(cid)
     hair_strands()
+    fur()
+    strand_lines()
     knit()
     print("ok", sorted(os.listdir(OUT)))
 

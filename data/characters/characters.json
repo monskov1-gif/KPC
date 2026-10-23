@@ -1,5 +1,5 @@
 {
- "_comment": "Технические данные персонажей. Рост — из материалов пользователя (рост Габи неизвестен). Группы body_type, доступность Соры в гардеробе и состав signature_outfit — предварительные (по референсам 04 и 07), см. docs/OPEN_QUESTIONS.md.",
+ "_comment": "Технические данные персонажей. Рост — из материалов пользователя (рост Габи неизвестен). Группы body_type, доступность Соры в гардеробе и состав signature_outfit — предварительные (по референсам 04 и 07), см. docs/OPEN_QUESTIONS.md. Хотто Дарака (23.10): NPC, по умолчанию не открыт в гардеробе; группа body_type «tall» — предварительно (OPEN_QUESTIONS).",
  "characters": [
   {
    "id": "kot",
@@ -45,6 +45,19 @@
     "footwear": "clothing_sora_dark_shoes_001"
    },
    "placeholder_color": "#4a5a8c"
+  },
+  {
+   "id": "hotto",
+   "name_key": "character.hotto.name",
+   "body_type": "tall",
+   "height_cm": 235,
+   "unlocked_by_default": false,
+   "signature_outfit": {
+    "upper_body": "clothing_hotto_white_shirt_001",
+    "neck_accessory": "clothing_hotto_black_tie_001",
+    "lower_body": "clothing_hotto_black_trousers_001"
+   },
+   "placeholder_color": "#e8dcc8"
   }
  ]
 }
