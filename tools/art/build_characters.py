@@ -264,7 +264,8 @@ def build_mh_body(p, sex, skin_mat):
     top = [e for e in bm.edges if e.is_boundary and all(v.co.z > mh["neck_z"] * s - 0.03 * s for v in e.verts)]
     # шаги шеи: (сужение X, сужение Y, сдвиг Y (+ назад), подъём) — у Кота шея длинная и идёт вперёд к челюсти
     nk = mh.get("neck_steps", [(0.97, 0.9, 0.009, 0.03)] * 3)
-    for kx_, ky_, dy_, dz_ in nk:
+    sub_i, sub_fwd, sub_p = mh.get("neck_submental", (-1, 0.0, 3.0))
+    for si, (kx_, ky_, dy_, dz_) in enumerate(nk):
         res = bmesh.ops.extrude_edge_only(bm, edges=top)
         nv = [g for g in res["geom"] if isinstance(g, bmesh.types.BMVert)]
         c = sum((v.co for v in nv), Vector()) / len(nv)
@@ -276,6 +277,9 @@ def build_mh_body(p, sex, skin_mat):
             a = math.atan2(d.y / ey, d.x / ex)
             d = d.lerp(Vector((ex * math.cos(a), ey * math.sin(a), d.z)), mh.get("neck_round", 0.0))
             v.co = c + Vector((d.x * kx_, d.y * ky_, 0)) + Vector((0, dy_ * s, dz_ * s))
+            if si == sub_i and d.y < 0:
+                # передняя середина кольца — вперёд под подбородок: косая линия горло → подбородок в профиль
+                v.co.y -= sub_fwd * s * (-d.y / ey) ** sub_p * math.exp(-(d.x / (0.6 * ex)) ** 2)
         top = [g for g in res["geom"] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     # На открытой (срезанной у шеи) сетке recalc иногда выбирает «внутрь» — проверяем по торсу и при нужде
@@ -632,17 +636,18 @@ def sculpt_features(x, y, z, temples=False):
     # Нос: спинка от переносицы к кончику, кончик, крылья.
     top = ez + 0.03
     t = min(1.0, max(0.0, (top - z) / (top - NOSE_TIP_Z)))
-    amt = 0.014 + 0.1 * t ** 1.7
+    nk, lk = FP.get("nose_k", 1.0), FP.get("lip_k", 1.0)       # у Кота профиль чётче (Meshy-лист сбоку)
+    amt = (0.014 + 0.1 * t ** 1.7) * nk
     if z < NOSE_TIP_Z:
         amt *= g(-((z - NOSE_TIP_Z) / 0.045) ** 2)
     y -= front * amt * g(-(x / (0.045 + 0.04 * t)) ** 2)
     y -= 0.022 * front * g(-((ax - 0.075) / 0.035) ** 2) * g(-((z - NOSE_TIP_Z + 0.015) / 0.03) ** 2)
     # Губы: верхняя, линия рта, нижняя, ямка под губой, подбородок.
-    y -= 0.026 * front * g(-(x / (mw * 2.2)) ** 2) * g(-((z - MOUTH_Z - 0.05) / 0.045) ** 2)
-    y += 0.014 * front * g(-(x / (mw * 1.5)) ** 2) * g(-((z - MOUTH_Z) / 0.02) ** 2)
-    y -= 0.022 * front * g(-(x / (mw * 1.3)) ** 2) * g(-((z - MOUTH_Z + 0.045) / 0.032) ** 2)
-    y += 0.01 * front * g(-(x / (mw * 2.0)) ** 2) * g(-((z - MOUTH_Z + 0.12) / 0.03) ** 2)
-    y -= 0.016 * front * g(-(x / 0.16) ** 2) * g(-((z + 0.86) / 0.06) ** 2)
+    y -= 0.026 * lk * front * g(-(x / (mw * 2.2)) ** 2) * g(-((z - MOUTH_Z - 0.05) / 0.045) ** 2)
+    y += 0.014 * lk * front * g(-(x / (mw * 1.5)) ** 2) * g(-((z - MOUTH_Z) / 0.02) ** 2)
+    y -= 0.022 * lk * front * g(-(x / (mw * 1.3)) ** 2) * g(-((z - MOUTH_Z + 0.045) / 0.032) ** 2)
+    y += 0.01 * lk * front * g(-(x / (mw * 2.0)) ** 2) * g(-((z - MOUTH_Z + 0.12) / 0.03) ** 2)
+    y -= 0.016 * FP.get("chin_k", 1.0) * front * g(-(x / 0.16) ** 2) * g(-((z + 0.86) / 0.06) ** 2)
     return x, y, z
 
 
@@ -685,7 +690,10 @@ def loft_head_mesh(rx, ry, rz, cz, L):
     tc = len(verts); verts.append((0, rings[-1][0][1] * 0 + sum(q[1] for q in rings[-1]) / n_a, top * U))
     for k in range(n_a):
         faces.append(((n_lv) * n_a + k, (n_lv) * n_a + (k + 1) % n_a, tc))
-    bc = len(verts); verts.append((0, sum(q[1] for q in rings[0]) / n_a, 0))
+    # низ: у Кота (Meshy-лист сбоку) под подбородком косая линия к горлу, а не горизонтальная «полка» —
+    # центр донышка опускается вниз-назад (конус уходит внутрь шеи)
+    bc = len(verts); verts.append((0, sum(q[1] for q in rings[0]) / n_a + L.get("chin_drop_y", 0.0) * U,
+                                   -L.get("chin_drop", 0.0) * U))
     for k in range(n_a):
         faces.append(((k + 1) % n_a, k, bc))
     chin_z = cz - rz
@@ -793,7 +801,8 @@ def landmarks_head(head_obj, hd, hair):
     ps = FP["patch_side"]
     vis = -ps
     ez = cz - (FP["eye_v"] - 0.5) * 2 * rz
-    fr = [v.co for v in head_obj.data.vertices if v.co.y < -0.5 * ry]
+    # подбородок — низ передней части лица (не косое донышко под челюстью, уходящее в шею)
+    fr = [v.co for v in head_obj.data.vertices if v.co.y < -0.5 * ry and v.co.z > cz - rz * 1.03]
     m = {"chin": min(fr, key=lambda c: c.z).copy(),
          "eye_vis": front(vis * FP["eye_u"] * 2 * rx, ez),
          "patch": front(ps * (FP["eye_u"] * 2 + FP.get("patch_dx", 0.0)) * rx, ez + rz * FP.get("patch_dz", 0.06)),
@@ -1248,6 +1257,11 @@ def _env_clamp(co, hd, env, margin=0.0):
     zn = (co.z - cz) / rz
     x = math.copysign(soft(abs(co.x), lim(env["side"], zn) * rx), co.x)
     y = soft(co.y, lim(env["back"], zn) * ry) if co.y > 0 and env.get("back") else co.y
+    fr = env.get("front")
+    if fr and co.y < 0 and abs(co.x) > fr["min_x"] * rx and fr["z"][0] < zn < fr["z"][1]:
+        # бока копны у щёк — за линией лица: в профиль видны нос, губы и подбородок (Meshy-лист сбоку)
+        w = min(1.0, (abs(co.x) / rx - fr["min_x"]) / 0.25)
+        y = -soft(-y, fr["y"] * ry / max(w, 1e-3)) if w > 0 else y
     return Vector((x, y, co.z))
 
 
@@ -2513,7 +2527,9 @@ CHARACTERS = {
                         "torso_xs": [(0.0, 1.0), (0.3, 1.0), (0.4, 0.95), (0.5, 1.0), (0.84, 1.0), (0.9, 0.93), (0.95, 0.85),
                                      (1.0, 0.9)],
                         "neck_round": 0.6,
-                        "neck_steps": [(0.98, 0.95, 0.0, 0.03), (0.97, 0.93, -0.006, 0.03), (0.97, 0.92, -0.01, 0.03)],
+                        # шея: передняя линия к челюсти уходит назад-вверх (под подбородком — косая линия, а не «полка»)
+                        "neck_steps": [(0.98, 0.95, 0.0, 0.03), (0.97, 0.92, 0.003, 0.03), (0.97, 0.9, 0.005, 0.03)],
+                        "neck_submental": (0, 0.04, 2.0),
                         # анатомия по Meshy-листу: соски, пупок и тонкие линии рельефа (x в м, t — доля таз→шея)
                         "anat": {"marks": True, "nipple_x": 0.084, "nipple_t": 0.647, "navel_t": 0.255, "areola_r": 0.006,
                                  "pec_t": 0.585, "abs_t": (0.5, 0.42, 0.34), "line": (0.8, 0.58, 0.58),
@@ -2573,7 +2589,8 @@ CHARACTERS = {
                  "envelope": {"side": [(-1.5, 0.7), (-1.25, 1.05), (-1.0, 1.35), (-0.61, 1.77), (-0.23, 1.9), (0.16, 1.84), (0.54, 1.9),
                                        (0.93, 1.82), (1.32, 1.84)],
                               "back": [(-1.39, 0.6), (-1.0, 0.73), (-0.61, 1.12), (-0.23, 1.39), (0.16, 1.59), (0.54, 1.53),
-                                       (0.93, 1.26), (1.32, 0.99)]},
+                                       (0.93, 1.26), (1.32, 0.99)],
+                              "front": {"z": (-1.4, -0.1), "min_x": 0.45, "y": 0.42}},
                  "c_root": (0.45, 0.7, 0.6), "c_tip": (0.42, 0.52, 0.72), "cap_shade": 0.8},
         # Уши на черепе (реф. 16): крупные, с тёмной серединой.
         "ear": {"theta": 1.1, "phi": 0.72, "lift": 1.28, "w": 1.1, "h": 1.12, "d": 0.35, "tilt": 24, "yaw": -4},
@@ -2814,10 +2831,20 @@ def build(cid):
             garments.append(o)
 
     CONFORM = None
-    landmarks_body(body, garments)
+    landmarks_body(body, garments)          # уровни силуэта — от лица без наклона
+    on_head = ("garment__headwear", "garment__face")
+    if FP.get("head_tilt"):
+        # Голова чуть наклонена вперёд-вниз (Meshy-лист сбоку): поворот всего, что на голове, вокруг верха шеи.
+        rx, ry, rz, cz = hd
+        R = Matrix.Rotation(math.radians(FP["head_tilt"]), 4, "X")
+        piv = Vector((0, 0.15 * ry, cz - rz * 0.85))
+        T = Matrix.Translation(piv) @ R @ Matrix.Translation(-piv)
+        for o in head_parts + [g for g in garments if g.name.startswith(on_head)]:
+            o.matrix_world = T @ o.matrix_world
+        for k in list(MARKS):
+            MARKS[k] = T @ MARKS[k]
     export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))
-    on_head = ("garment__headwear", "garment__face")
     bind(rig, [body] + BODY_EXTRA + body_layers + [g for g in garments if not g.name.startswith(on_head)])
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
