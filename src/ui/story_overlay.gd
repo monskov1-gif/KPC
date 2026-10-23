@@ -145,10 +145,11 @@ func caption(text: String, sub: String, seconds: float) -> void:
 	_caption_title.visible = text != ""
 	_caption_sub.text = sub
 	_caption_sub.visible = sub != ""
+	var f := minf(0.6, seconds * 0.25)
 	var tw := create_tween()
-	tw.tween_property(_caption, "modulate:a", 1.0, 0.6)
-	tw.tween_interval(maxf(0.0, seconds - 1.2))
-	tw.tween_property(_caption, "modulate:a", 0.0, 0.6)
+	tw.tween_property(_caption, "modulate:a", 1.0, f)
+	tw.tween_interval(maxf(0.0, seconds - 2.0 * f))
+	tw.tween_property(_caption, "modulate:a", 0.0, f)
 	await tw.finished
 
 

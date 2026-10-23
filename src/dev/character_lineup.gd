@@ -2,6 +2,9 @@ extends Node3D
 ## Витрина 3D-прототипов персонажей (для проверки моделей и скриншотов). Не входит в игру.
 
 const IDS := ["kot", "gabi", "sora", "hotto"]
+## Персонажи пролога (образы — data/story/looks.json); снимок: debug_prologue.
+const PROLOGUE_IDS := ["kot_child", "girl", "gabi_child", "sora_young", "mama", "papa", "passerby_a", "passerby_b",
+	"doctor", "nurse", "resident_a", "resident_b"]
 var focus := ""   # пусто — все трое; иначе крупный план одного
 
 
@@ -225,3 +228,20 @@ func debug_face_bare_34() -> void:
 func debug_face_bare_side() -> void:
 	debug_underwear()
 	_kot_head_turn(-90.0)
+
+
+func debug_prologue() -> void:
+	for id in IDS:
+		get_node(id).visible = false
+	var looks := DataLoader.load_json(StoryGame.LOOKS_PATH)
+	var x := -0.75 * (PROLOGUE_IDS.size() - 1) / 2.0
+	for id in PROLOGUE_IDS:
+		var m := CharacterModel.new()
+		add_child(m)
+		m.position = Vector3(x, 0, 0)
+		m.setup(id, Game.session.characters)
+		m.apply_look(looks.get(id, {}))
+		x += 0.75
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 1.0, 9.5)
+	cam.fov = 32

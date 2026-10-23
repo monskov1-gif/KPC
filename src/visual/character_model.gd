@@ -113,6 +113,28 @@ func apply_items(items: Array[ClothingItem]) -> void:
 		(_underwear[part] as MeshInstance3D).visible = not covered
 
 
+## Неизменный образ персонажа без гардероба (NPC сюжета): {"слот__шаблон": "#цвет"} из data/story/looks.json.
+func apply_look(look: Dictionary) -> void:
+	if _root == null:
+		return
+	for g in _garments.values():
+		g.visible = false
+	var slots := {}
+	for key in look:
+		if not _garments.has(key):
+			push_warning("%s: нет шаблона одежды %s" % [character_id, key])
+			continue
+		var mi: MeshInstance3D = _garments[key]
+		mi.visible = true
+		slots[str(key).get_slice("__", 0)] = true
+		_tint(mi, Color(str(look[key])))
+	for part in _underwear:
+		var covered := false
+		for slot in UNDERWEAR_COVERED_BY.get(part, []):
+			covered = covered or slots.has(slot)
+		(_underwear[part] as MeshInstance3D).visible = not covered
+
+
 func _template_for(it: ClothingItem) -> String:
 	if it.model_template != "" and _garments.has(it.model_template):
 		return it.model_template

@@ -50,6 +50,30 @@ CHARS = {
     "sora": {"iris": (104, 116, 128), "iris_dark": (28, 34, 42), "brow": (36, 92, 96), "mouth": "smirk",
              "blush": 0.3, "bags": True, "lash": (36, 30, 38), "lash_len": 0.8},
 }
+# Персонажи пролога (docs/STORY.md): дети — те же лица, что взрослые; остальные — черновые.
+CHARS["kot_child"] = dict(CHARS["kot"], blush=0.6)
+CHARS["gabi_child"] = dict(CHARS["gabi"], blush=0.75)
+CHARS["sora_young"] = dict(CHARS["sora"], bags=False, mouth="smile")
+CHARS.update({
+    "papa": {"iris": (96, 128, 140), "iris_dark": (26, 40, 48), "brow": (30, 70, 76), "mouth": "smile",
+             "blush": 0.2, "bags": False, "lash": (36, 30, 38), "lash_len": 0.75},
+    "mama": {"iris": (150, 112, 160), "iris_dark": (62, 38, 70), "brow": (120, 64, 66), "mouth": "smile",
+             "blush": 0.5, "bags": False, "lash": (58, 32, 46), "lash_len": 1.25},
+    "girl": {"iris": (120, 92, 72), "iris_dark": (48, 30, 24), "brow": (70, 44, 40), "mouth": "smile",
+             "blush": 0.7, "bags": False, "lash": (52, 34, 40), "lash_len": 1.1},
+    "passerby_a": {"iris": (110, 84, 66), "iris_dark": (46, 30, 22), "brow": (96, 66, 54), "mouth": "smile",
+                   "blush": 0.4, "bags": False, "lash": (52, 34, 40), "lash_len": 1.1},
+    "passerby_b": {"iris": (84, 76, 70), "iris_dark": (30, 26, 24), "brow": (44, 36, 38), "mouth": "smirk",
+                   "blush": 0.15, "bags": False, "lash": (36, 30, 38), "lash_len": 0.7},
+    "doctor": {"iris": (92, 100, 110), "iris_dark": (30, 34, 40), "brow": (110, 110, 116), "mouth": "neutral",
+               "blush": 0.1, "bags": True, "lash": (40, 36, 40), "lash_len": 0.7},
+    "nurse": {"iris": (96, 74, 64), "iris_dark": (40, 26, 22), "brow": (50, 36, 40), "mouth": "smile",
+              "blush": 0.45, "bags": False, "lash": (48, 32, 40), "lash_len": 1.1},
+    "resident_a": {"iris": (100, 82, 64), "iris_dark": (40, 30, 22), "brow": (70, 56, 46), "mouth": "neutral",
+                   "blush": 0.15, "bags": True, "lash": (40, 34, 36), "lash_len": 0.7},
+    "resident_b": {"iris": (80, 72, 90), "iris_dark": (30, 26, 34), "brow": (40, 34, 44), "mouth": "neutral",
+                   "blush": 0.3, "bags": False, "lash": (40, 30, 40), "lash_len": 1.0},
+})
 
 
 def soft(size, color, alpha, blur, draw_fn):
@@ -240,6 +264,7 @@ def eye(cid, c, size=512):
 
 # Радужка, присланная пользователем (23.10): круг вырезается по центру и радиусу.
 USER_IRIS = {"kot": ("art/characters/textures/src/iris_kot_user.png", (506, 577), 490)}
+USER_IRIS["kot_child"] = USER_IRIS["kot"]
 
 
 def iris_from_user(cid, size=1024):

@@ -2598,17 +2598,41 @@ def add_bust(body, J, p):
 
 
 def skirt(J, p, name, m, top_z, bottom_z, r_top, r_bottom, pleats=14, depth=0.012):
+    """Юбка-колокол. top_z/bottom_z — абсолютные высоты (м); r_* — доли роста (как раньше, × s).
+    Радиус на каждой высоте — не меньше ширины тела там же + зазор: бёдра и ноги не протыкают ткань."""
     s = p["s"]
     bm = bmesh.new()
     seg = pleats * 4
+    nr = 7
+    # тело без рук: опущенные кисти не должны раздувать юбку
+    body = []
+    if _BODY:
+        for v in _BODY.data.vertices:
+            q = _BODY.matrix_world @ v.co
+            if top_z + 0.05 * s >= q.z >= bottom_z - 0.05 * s and not _nearest_bone(q)[0].startswith(("upper_arm", "forearm", "hand")):
+                body.append(q)
     rings = []
-    for k, (z, r) in enumerate([(top_z, r_top), ((top_z + bottom_z) / 2, (r_top + r_bottom) / 2), (bottom_z, r_bottom)]):
-        rings.append([bm.verts.new((math.cos(2 * math.pi * i / seg) * (r + depth * k * math.sin(2 * math.pi * i / seg * pleats)) * s,
-                                    math.sin(2 * math.pi * i / seg) * (r + depth * k * math.sin(2 * math.pi * i / seg * pleats)) * s * 0.85,
-                                    z * s)) for i in range(seg)])
-    for a, b in zip(rings, rings[1:]):
+    for k in range(nr):
+        t = k / (nr - 1)
+        z = top_z + (bottom_z - top_z) * t
+        r_lin = (r_top + (r_bottom - r_top) * t) * s
+        band = [q for q in body if abs(q.z - z) < 0.025 * s]
+        ring = []
         for i in range(seg):
-            bm.faces.new((a[i], a[(i + 1) % seg], b[(i + 1) % seg], b[i]))
+            a = 2 * math.pi * i / seg
+            ca, sa = math.cos(a), math.sin(a)
+            # протяжённость тела в этом направлении (точки в секторе ±20°)
+            ext = 0.0
+            for q in band:
+                rr = math.hypot(q.x, q.y / 0.85)
+                if rr > ext and (q.x * ca + q.y / 0.85 * sa) > rr * 0.94:
+                    ext = rr
+            r = max(r_lin, ext + 0.014 * s) + depth * s * t * math.sin(a * pleats)
+            ring.append(bm.verts.new((ca * r, sa * r * 0.85, z)))
+        rings.append(ring)
+    for ra, rb in zip(rings, rings[1:]):
+        for i in range(seg):
+            bm.faces.new((ra[i], ra[(i + 1) % seg], rb[(i + 1) % seg], rb[i]))
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
@@ -3187,6 +3211,50 @@ def idle_animation(rig, frames=96):
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.context.scene.frame_start = 0
     bpy.context.scene.frame_end = frames
+    _stash(rig)
+
+
+def _stash(rig):
+    """Действие — в отдельную дорожку NLA: так glTF выгружает все клипы (idle, walk), а не только активный."""
+    act = rig.animation_data.action
+    tr = rig.animation_data.nla_tracks.new()
+    tr.name = act.name
+    tr.strips.new(act.name, int(act.frame_range[0]), act)
+    act.use_fake_user = True
+    rig.animation_data.action = None
+
+
+def walk_animation(rig, frames=32):
+    """Шаг: бёдра вперёд-назад, колени сгибаются на переносе ноги, руки — навстречу ногам, корпус покачивается.
+    Цикл 32 кадра (24 к/с); игра подгоняет скорость клипа под скорость персонажа (CharacterModel.play_motion)."""
+    rig.animation_data_create()
+    rig.animation_data.action = bpy.data.actions.new("walk")
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="POSE")
+    pb = rig.pose.bones
+    for b in pb:
+        b.rotation_mode = "XYZ"
+    for f in range(0, frames + 1, 2):
+        t = f / frames * 2 * math.pi
+        for side, ph in (("L", 0.0), ("R", math.pi)):
+            sw = math.sin(t + ph)
+            pb[f"thigh.{side}"].rotation_euler = (-sw * 0.42, 0, 0)
+            # колено сгибается, когда нога идёт вперёд по воздуху
+            pb[f"shin.{side}"].rotation_euler = (max(0.0, math.sin(t + ph + 1.1)) * 0.75 + 0.05, 0, 0)
+            pb[f"foot.{side}"].rotation_euler = (sw * 0.15, 0, 0)
+            pb[f"upper_arm.{side}"].rotation_euler = (sw * 0.35, 0, 0)
+            pb[f"forearm.{side}"].rotation_euler = (-0.18 - max(0.0, sw) * 0.2, 0, 0)
+            for n in (f"thigh.{side}", f"shin.{side}", f"foot.{side}", f"upper_arm.{side}", f"forearm.{side}"):
+                pb[n].keyframe_insert("rotation_euler", frame=f)
+        pb["hips"].location = (0, abs(math.sin(t)) * 0.012 - 0.006, 0)
+        pb["hips"].keyframe_insert("location", frame=f)
+        pb["spine"].rotation_euler = (0.04, 0, math.sin(t) * 0.05)
+        pb["chest"].rotation_euler = (0, 0, -math.sin(t) * 0.07)
+        pb["head"].rotation_euler = (0, 0, math.sin(t) * 0.03)
+        for n in ("spine", "chest", "head"):
+            pb[n].keyframe_insert("rotation_euler", frame=f)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    _stash(rig)
 
 
 # ------------------------------------------------------------------ персонажи
@@ -3340,6 +3408,90 @@ CHARACTERS = {
 }
 
 
+# ------------------------------------------------------------------ персонажи пролога (docs/STORY.md)
+# Возраст по ответу пользователя 23.10: в начале пролога Коту 6, Габриэль 12, Соре 18.
+# Дети и подростки — те же персонажи (причёска, цвета, уши), тело — детская форма базы MakeHuman (CC0),
+# голова крупнее. Родители и прохожие не описаны в сценарии: внешность — ЧЕРНОВАЯ (docs/OPEN_QUESTIONS.md).
+# Одежда NPC — шаблоны garment__*, цвета задаёт data/story/looks.json.
+import copy  # noqa: E402
+
+NPC_GARMENTS = ["top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress", "socks", "shoes"]
+
+
+def _variant(base, body=None, mh=None, hair=None, **kw):
+    c = copy.deepcopy(CHARACTERS[base])
+    if body:
+        c["body"].update(body)
+    if mh:
+        c["body"]["mh"].update(mh)
+    if hair:
+        c["hair"].update(hair)
+    c.update(kw)
+    return c
+
+
+def _hair(style, root, tip, **kw):
+    """Причёски NPC на основе слоёв Габи/Соры: short — короткая, bob — каре, long — длинные распущенные."""
+    h = {"layers": [(0.12, 18, 1.06), (0.4, 26, 1.1), (0.75, 28, 1.14)], "bang_front": 0.55, "bang_len": 1.1,
+         "side_len": 1.5, "long": 0.0, "curl": 0.15, "w": 0.95, "cap_low": 0.6, "c_root": root, "c_tip": tip}
+    if style == "short":
+        h.update({"side_len": 1.15, "bang_len": 0.9, "cap_low": 0.5, "curl": 0.25})
+    elif style == "bob":
+        h.update({"side_len": 1.75, "bang_len": 1.15, "cap_low": 0.7, "curl": 0.05})
+    elif style == "long":
+        h.update({"side_len": 2.0, "long": 0.2, "bang_len": 1.2, "cap_low": 0.75, "curl": 0.1})
+    h.update(kw)
+    return h
+
+
+def _npc(sex, height_cm, teen, hair, thin=0.5, head=1.0, ears=None, **kw):
+    s = height_cm / 163
+    female = sex == "female"
+    kid = teen > 0.8
+    c = {"sex": sex,
+         "body": {"s": s, "shoulder": 0.128 if female else 0.15, "hip": 0.084 if female else 0.08, "head": head,
+                  "mh": {"teen": teen, "thin": thin, "bust": 0.4 if female and teen < 0.6 else 0.0, "neck_z": 1.335,
+                         "pelvis_z": 0.9, "slim": 0.95},
+                  "waist": 0.072 if female else 0.082, "chest": 0.09 if female else 0.1, "hip_r": 0.104 if female else 0.098},
+         "hair": hair, "ears": ears, "garments": list(NPC_GARMENTS)}
+    if female:
+        c["body"]["chest_d"] = 0.08
+    if kid:
+        c["body"]["hem_drop"] = 0.09
+    c.update(kw)
+    return c
+
+
+CHARACTERS.update({
+    # Кот в 6 лет: та же копна, уши и глаза; детская база, крупная голова; без рисунка рельефа тела.
+    "kot_child": _variant("kot", body={"s": 116 / 163, "head": 1.42, "shoulder": 0.128, "neck": 0.034, "hem_drop": 0.1},
+                          mh={"teen": 1.0, "thin": 0.35, "arm_len": 1.0, "clav": 10, "spine_back": 4, "anat": {}},
+                          garments=list(NPC_GARMENTS)),
+    # Габриэль в 12 лет: два пучка и те же цвета, детская база.
+    "gabi_child": _variant("gabi", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07}, mh={"teen": 0.9, "bust": 0.0, "thin": 0.55},
+                           garments=list(NPC_GARMENTS) + ["head_clips"]),
+    # Сора в 18 лет: те же волосы с хвостом и уши, тоньше и ниже, чем в 29.
+    "sora_young": _variant("sora", body={"s": 194 / 163, "shoulder": 0.15, "head": 0.98}, mh={"teen": 0.3, "thin": 0.6},
+                           garments=list(NPC_GARMENTS)),
+    # Родители (черновик): папа — бирюзово-тёмные волосы и кошачьи уши (как у Соры и Кота), мама — тёплые
+    # розово-каштановые длинные волосы (тона Габриэль).
+    "papa": _npc("male", 184, 0.0, _hair("short", (0.14, 0.36, 0.4), (0.12, 0.28, 0.36), ahoge=True), thin=0.45,
+                 head=0.95, ears=(0.16, 0.36, 0.4), ear_inner=(0.92, 0.7, 0.74),
+                 ear={"w": 0.5, "h": 0.6, "d": 0.12, "tilt": 18, "yaw": 12}),
+    "mama": _npc("female", 168, 0.0, _hair("long", (0.62, 0.32, 0.36), (0.86, 0.56, 0.44)), thin=0.6),
+    # Девочка, которая рисует (сцена 1): ровесница Кота, каре.
+    "girl": _npc("female", 114, 1.0, _hair("bob", (0.32, 0.2, 0.2), (0.44, 0.28, 0.24)), thin=0.4, head=1.4),
+
+    # Взрослые эпизодические: продавщица, прохожий, врач, медсестра, жильцы.
+    "passerby_a": _npc("female", 160, 0.0, _hair("bob", (0.42, 0.3, 0.26), (0.5, 0.36, 0.3)), thin=0.35),
+    "passerby_b": _npc("male", 176, 0.0, _hair("short", (0.2, 0.18, 0.2), (0.26, 0.22, 0.24)), thin=0.4),
+    "doctor": _npc("male", 178, 0.0, _hair("short", (0.5, 0.5, 0.54), (0.62, 0.62, 0.66)), thin=0.5, head=0.97),
+    "nurse": _npc("female", 162, 0.0, _hair("bob", (0.22, 0.16, 0.18), (0.3, 0.22, 0.24)), thin=0.6),
+    "resident_a": _npc("male", 172, 0.0, _hair("short", (0.34, 0.28, 0.24), (0.42, 0.34, 0.3)), thin=0.35),
+    "resident_b": _npc("female", 158, 0.0, _hair("long", (0.18, 0.16, 0.2), (0.28, 0.24, 0.3)), thin=0.5),
+})
+
+
 def build(cid):
     reset()
     set_face(cid)
@@ -3440,11 +3592,11 @@ def build(cid):
         elif g == "kot_boots":
             o = kot_boots(J, p, plain, mat("sole", (0.16, 0.15, 0.16, 1), rough=0.5))
         elif g == "top_long":
-            o = top(J, p, "garment__upper_body__long", cloth, "long")
+            o = top(J, p, "garment__upper_body__long", cloth, "long", hem_drop=p.get("hem_drop", 0.035))
         elif g == "top_tshirt":
-            o = top(J, p, "garment__upper_body__tshirt", cloth, "short")
+            o = top(J, p, "garment__upper_body__tshirt", cloth, "short", hem_drop=p.get("hem_drop", 0.035))
         elif g == "outer_jacket":
-            o = top(J, p, "garment__outerwear__jacket", cloth, "long", loose=0.024)
+            o = top(J, p, "garment__outerwear__jacket", cloth, "long", loose=0.024, hem_drop=p.get("hem_drop", 0.035) + 0.02)
         elif g == "outer_vest":
             o = top(J, p, "garment__outerwear__vest", cloth, "none", loose=0.012)
         elif g == "legs_trousers" and p.get("base"):
@@ -3470,10 +3622,12 @@ def build(cid):
             buckle.data.materials.append(metal)
             o = join([o, belt, buckle], "garment__lower_body__trousers")
         elif g == "legs_skirt":
-            o = skirt(J, p, "garment__lower_body__skirt", cloth, 0.98, 0.66, p["waist"] + 0.02, 0.19)
+            waist_z = J["pelvis"].lerp(J["spine"], 0.45).z
+            o = skirt(J, p, "garment__lower_body__skirt", cloth, waist_z, J["kn_l"].z + 0.04 * p["s"], p["waist"] + 0.02, 0.19)
         elif g == "dress":
             t_ = top(J, p, "tmp", cloth, "none", loose=0.004)
-            sk = skirt(J, p, "tmp2", cloth, 0.97, 0.16, p["waist"] + 0.022, 0.28, pleats=10)
+            sk = skirt(J, p, "tmp2", cloth, J["pelvis"].lerp(J["spine"], 0.4).z, J["an_l"].lerp(J["kn_l"], 0.45).z,
+                       p["waist"] + 0.022, 0.28, pleats=10)
             o = join([t_, sk], "garment__full_body__dress")
         elif g == "socks":
             o = legs(J, p, "garment__socks__knee", knit, "socks")
@@ -3593,6 +3747,7 @@ def build(cid):
     bind(rig, [body] + BODY_EXTRA + body_layers + [g for g in garments if not g.name.startswith(on_head)])
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
+    walk_animation(rig)
 
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{cid}.glb")

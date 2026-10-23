@@ -10,6 +10,7 @@ const INTERACT_RADIUS := 1.9
 const REACH_RADIUS := 1.5
 const PROGRESS_FLAG := "prologue_scene"
 const DONE_FLAG := "prologue_complete"
+const LOOKS_PATH := "res://data/story/looks.json"
 
 ## С какой сцены начать (задаёт титульный экран); −1 — продолжить с сохранённой.
 static var start_scene := -1
@@ -27,10 +28,12 @@ var _seen: Dictionary = {}
 var _focus := ""
 var _beacon: Node3D
 var _cutscene := false
+var _looks: Dictionary = {}
 
 
 func _ready() -> void:
 	story = StoryScript.load_file(SCRIPT_PATH)
+	_looks = DataLoader.load_json(LOOKS_PATH)
 	for e in story.errors:
 		push_error("Сценарий: " + e)
 	location = StoryLocation.new()
@@ -84,6 +87,8 @@ func enter_location(loc_id: String, model_id: String, spawn: String, time: Strin
 	if model_id != player_model:
 		player_model = model_id
 		player.set_character(model_id, Game.session.characters, _outfit(model_id))
+		if _looks.has(model_id):
+			player.model.apply_look(_looks[model_id])
 		cam.fit_height(player.model.height())
 	player.place(location.marker(spawn))
 	cam.snap_behind(player.model.rotation.y)
@@ -103,24 +108,34 @@ func _outfit(model_id: String) -> Array[ClothingItem]:
 
 func _spawn_npc(model_id: String, marker_name: String) -> void:
 	var body := StaticBody3D.new()
+	body.collision_layer = 4      # NPC: игрок упирается, камера (маска 1) проходит сквозь
 	add_child(body)
 	var t := location.marker(marker_name)
-	body.global_position = t.origin
 	var m := CharacterModel.new()
 	body.add_child(m)
-	body.add_child(blob_shadow(0.4))
 	m.setup(model_id, Game.session.characters)
 	m.apply_items(_outfit(model_id))
-	var f := -t.basis.z
-	m.rotation.y = atan2(f.x, f.z)
-	var shape := CollisionShape3D.new()
-	var cap := CapsuleShape3D.new()
-	var h := clampf(m.height(), 0.8, 2.6)
-	cap.radius = 0.26
-	cap.height = h
-	shape.shape = cap
-	shape.position.y = h * 0.5
-	body.add_child(shape)
+	if _looks.has(model_id):
+		m.apply_look(_looks[model_id])
+	var upright := t.basis.y.normalized().dot(Vector3.UP) > 0.9
+	if upright:
+		body.global_position = t.origin
+		var f := -t.basis.z
+		m.rotation.y = atan2(f.x, f.z)
+		body.add_child(blob_shadow(0.4))
+		var shape := CollisionShape3D.new()
+		var cap := CapsuleShape3D.new()
+		var h := clampf(m.height(), 0.8, 2.6)
+		cap.radius = 0.26
+		cap.height = h
+		shape.shape = cap
+		shape.position.y = h * 0.5
+		body.add_child(shape)
+	else:
+		# лежит (кровать): вся ориентация точки; модель смотрит по +Z, точка — по −Z
+		body.global_transform = Transform3D(t.basis.orthonormalized(), t.origin)
+		m.rotation.y = PI
+		m.play_motion("idle", 0.4)
 	_npcs[marker_name] = m
 
 
@@ -292,12 +307,24 @@ func debug_talk_family() -> void:
 
 
 func _debug_talk(id: String) -> void:
+	await get_tree().create_timer(0.8).timeout
 	if not _interactables.has(id):
 		return
 	var p: Vector3 = _interactables[id]
 	player.global_position = p + (player.global_position - p).normalized() * 1.3
 	_focus = id
 	_try_interact()
+
+
+## Дойти до текущей цели (световой столб) — для снимков следующих шагов сцены.
+func debug_reach() -> void:
+	await get_tree().create_timer(0.8).timeout
+	if _beacon.visible:
+		player.global_position = _beacon.global_position + Vector3(0, 0.1, 0)
+
+
+func debug_talk_hotel() -> void:
+	_debug_talk("hotel_sign")
 
 
 func debug_walk() -> void:

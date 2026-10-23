@@ -158,8 +158,8 @@ func _stylize(root: Node) -> void:
 		if nm.begins_with("lamp_") and not n is MeshInstance3D:
 			var l := OmniLight3D.new()
 			l.light_color = Color("ffd59a")
-			l.light_energy = 1.6
-			l.omni_range = 6.0
+			l.light_energy = 0.7
+			l.omni_range = 5.0
 			n.add_child(l)
 			_lamps.append(l)
 	for mi in root.find_children("*", "MeshInstance3D", true, false):
@@ -173,7 +173,7 @@ func _stylize(root: Node) -> void:
 			m.material_override = wm
 			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			continue
-		if nm.begins_with("far_") or nm.ends_with("_far"):
+		if nm.begins_with("far_") or nm.ends_with("_far") or nm.begins_with("ceiling"):
 			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		for i in m.mesh.get_surface_count():
 			var vcol: bool = (m.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) != 0

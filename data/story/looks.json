@@ -1,0 +1,15 @@
+{
+ "_comment": "Одежда персонажей пролога, у которых нет гардероба: шаблон garment__<слот>__<шаблон> → цвет. Внешность родителей и прохожих — черновая (в сценарии не описана), см. docs/OPEN_QUESTIONS.md.",
+ "kot_child": {"upper_body__long": "#f4d98c", "lower_body__trousers": "#5d6f96", "socks__knee": "#f6f2ea", "footwear__shoes": "#d9776a"},
+ "gabi_child": {"full_body__dress": "#f2b6c3", "socks__knee": "#fbf6ef", "footwear__shoes": "#8a5a6a", "headwear__clips": "#e8505a"},
+ "sora_young": {"upper_body__tshirt": "#f4f1ea", "outerwear__jacket": "#3f5d6a", "lower_body__trousers": "#2f3440", "footwear__shoes": "#e9e5dd"},
+ "papa": {"upper_body__long": "#c9d6d2", "outerwear__jacket": "#6e7d8c", "lower_body__trousers": "#4a4e5a", "footwear__shoes": "#5a4640"},
+ "mama": {"upper_body__long": "#f6efe4", "lower_body__skirt": "#c98a7a", "footwear__shoes": "#a07062"},
+ "girl": {"full_body__dress": "#f6d27c", "socks__knee": "#ffffff", "footwear__shoes": "#c8564e"},
+ "passerby_a": {"upper_body__long": "#f1e4cf", "lower_body__skirt": "#6f8a74", "footwear__shoes": "#6a5248"},
+ "passerby_b": {"upper_body__tshirt": "#d9dfe6", "lower_body__trousers": "#59606e", "footwear__shoes": "#3e3a3c"},
+ "doctor": {"upper_body__long": "#cfe0ea", "outerwear__jacket": "#fbfbf8", "lower_body__trousers": "#4f5562", "footwear__shoes": "#3e3a3c"},
+ "nurse": {"full_body__dress": "#bcd8e6", "socks__knee": "#f4f4f2", "footwear__shoes": "#f4f4f2"},
+ "resident_a": {"upper_body__long": "#8a9a8a", "lower_body__trousers": "#4f4a46", "footwear__shoes": "#3e3a3c"},
+ "resident_b": {"upper_body__long": "#c4a7b8", "outerwear__jacket": "#5f6672", "lower_body__trousers": "#3c4250", "footwear__shoes": "#3e3a3c"}
+}
