@@ -23,6 +23,9 @@ SKIN = (250, 230, 220)
 
 # Геометрия лица (глаза, нос, рот) — общая с build_characters.py: tools/art/face_params.json.
 import json  # noqa: E402
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(__file__))
+import eye_shape  # noqa: E402
 _FACE = json.load(open(os.path.join(os.path.dirname(__file__), "face_params.json"), encoding="utf-8"))
 
 
@@ -34,7 +37,8 @@ def face_params(cid):
 CHARS = {
     # Кот (реф. 04): светло-голубые глаза, спокойное лицо, лёгкий румянец.
     # Ресницы, складка века и брови у Кота — объёмные (build_characters.build_lashes), на текстуре их нет.
-    "kot": {"iris": (128, 146, 196), "iris_dark": (52, 62, 112), "brow": (44, 118, 120), "mouth": "lips",
+    "kot": {"iris": (146, 162, 208), "iris_dark": (62, 72, 122), "iris_pale": (214, 226, 248), "pupil": (26, 30, 62),
+            "pupil_r": 0.58, "brow": (44, 118, 120), "mouth": "lips",
             "blush": 0.45, "bags": False, "lash": (48, 36, 54), "lash_len": 1.0, "geo_lashes": True},
     # Габи (реф. 05–07): фиолетовые глаза, мягкая улыбка, ресницы гуще.
     "gabi": {"iris": (176, 146, 226), "iris_dark": (72, 44, 124), "brow": (150, 50, 70), "mouth": "smile",
@@ -92,6 +96,21 @@ def face(cid, c):
         w, h = S * EYE_W, S * EYE_H
         # Внешний угол — к краю лица: для правого глаза зеркалим наклон.
         pts = almond(cx, cy, w, h, lift=-fp["eye_lift"] * side)
+        es = fp.get("eye_shape")
+        if es:
+            # Прорезь по контуру век с арта (tools/art/eye_shape.py); центр — центр радужки.
+            cu, cv = 0.5 + side * EYE_U, EYE_V
+            pts = [(S * u, S * v) for u, v in (eye_shape.to_uv(q, es, side, cu, cv) for q in eye_shape.contour())]
+            n_up = (len(eye_shape.UPPER) - 1) * 8 + 1
+            hd.polygon(pts, fill=0)
+            # Тень века на коже над прорезью и розоватое нижнее веко (как у образца-подростка).
+            img.alpha_composite(soft((S, S), (206, 150, 150), 0.55, S * 0.006,
+                                     lambda dd: dd.line(pts[:n_up], fill=255, width=int(S * 0.016))))
+            img.alpha_composite(soft((S, S), (238, 168, 160), 0.5, S * 0.004,
+                                     lambda dd: dd.line(pts[n_up - 1:] + pts[:1], fill=255, width=int(S * 0.008))))
+            img.alpha_composite(soft((S, S), (242, 150, 160), c["blush"] * 0.55, S * 0.02,
+                                     lambda dd: dd.ellipse((cx - w * 0.9, cy + h * 2.2, cx + w * 0.9, cy + h * 3.0), fill=255)))
+            continue
         hd.polygon(pts, fill=0)
         d = ImageDraw.Draw(img)
         # Тень под верхним веком на коже (вокруг прорези) — глубина глазницы.
@@ -210,6 +229,89 @@ def eye(cid, c, size=512):
     img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"eye_{cid}.png"))
 
 
+def iris(cid, c, size=1024):
+    """Радужка отдельным диском (как у образца-подростка: радужка — свой меш перед склерой).
+    Сверху темнее (тень века и ресниц), книзу светлее; тёмный лимб; крупный вертикальный зрачок со светлой
+    каймой и тёмным кольцом (реф. 16 — зрачок-кольцо); радиальные волокна и штрихи вокруг зрачка;
+    светлый серп внизу. Блики — отдельной геометрией. RGBA: вне диска прозрачно."""
+    S = size * SS
+    ys = np.linspace(-1, 1, S)[:, None]
+    xs = np.linspace(-1, 1, S)[None, :]
+    rr = np.sqrt(xs ** 2 + ys ** 2)
+    ang = np.arctan2(ys, xs)
+    dark = np.array(c["iris_dark"], np.float32)
+    light = np.array(c["iris"], np.float32)
+    pale = np.array(c.get("iris_pale", (214, 224, 244)), np.float32)
+    t = np.clip((ys + 1) / 2, 0, 1)[..., None]                       # 0 — верх, 1 — низ
+    col = dark * (1 - t) ** 1.6 + light * (1 - (1 - t) ** 1.6)
+    rnd = np.random.default_rng(23)
+    fib = np.zeros_like(rr)
+    for f, a in ((29, 0.06), (53, 0.05), (97, 0.04), (151, 0.03)):
+        fib += a * np.sin(ang * f + rnd.uniform(0, 6.28) + rr * rnd.uniform(3, 9))
+    col = col * (0.94 + fib * np.clip((rr - 0.4) / 0.3, 0, 1))[..., None]
+    # Светлый серп снизу (свет проходит сквозь радужку) — мягкий, внутри лимба.
+    cres = np.exp(-((xs / 0.62) ** 2 + ((ys - 0.5) / 0.3) ** 2) * 1.6)[..., None]
+    col = col * (1 - cres * 0.72) + pale * cres * 0.72
+    # Лимб: тёмное кольцо по краю.
+    rim = np.clip((rr - 0.78) / 0.18, 0, 1)[..., None]
+    col = col * (1 - rim ** 1.3 * 0.72) + dark * 0.35 * rim ** 1.3 * 0.72
+    # Тень века/ресниц сверху.
+    top = np.clip((-ys - 0.25) / 0.6, 0, 1)[..., None]
+    col = col * (1 - top * 0.45)
+    # Зрачок: вертикальный овал, крупный.
+    pr = c.get("pupil_r", 0.5)
+    pe = np.sqrt((xs / (pr * 0.82)) ** 2 + ((ys + 0.02) / pr) ** 2)
+    ring = np.exp(-((pe - 1.0) / 0.06) ** 2)[..., None]               # тёмное кольцо по краю зрачка
+    halo = np.exp(-((pe - 1.12) / 0.07) ** 2)[..., None]              # светлая кайма снаружи
+    inside = (pe < 1.0)[..., None]
+    pd = np.array(c.get("pupil", (22, 24, 52)), np.float32)
+    core = np.clip(1 - pe, 0, 1)[..., None]
+    pin = pd * (1 - t * 0.7) + light * 0.45 * t * 0.7                 # внутри зрачка — книзу светлее (глубина)
+    pin = pin * (1 - core * 0.25) + np.array(c["iris_dark"], np.float32) * core * 0.25   # мягкая глубина в центре
+    col = np.where(inside, pin, col)
+    col = col * (1 - ring * 0.8) + pd * ring * 0.8
+    col = col * (1 - halo * 0.45) + pale * halo * 0.45
+    # Штрихи вокруг зрачка в нижней половине (как у образца): короткие тёмные радиальные чёрточки.
+    img = Image.fromarray(np.clip(col, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    d = ImageDraw.Draw(img)
+    cx = cy = S / 2
+    rnd2 = random.Random(5)
+    for k in range(30):
+        a = -math.radians(195 + 150 * k / 29 + rnd2.uniform(-2.5, 2.5))
+        r0, r1 = S / 2 * (pr * 1.28 + rnd2.uniform(0.0, 0.05)), S / 2 * (pr * 1.36 + rnd2.uniform(0.07, 0.15))
+        wd = S * rnd2.uniform(0.004, 0.0065)
+        nx, ny = -math.sin(a), math.cos(a)
+        p0 = (cx + math.cos(a) * r0, cy + math.sin(a) * r0)
+        p1 = (cx + math.cos(a) * r1, cy + math.sin(a) * r1)
+        d.polygon([(p0[0] + nx * wd * 0.3, p0[1] + ny * wd * 0.3), (p1[0] + nx * wd, p1[1] + ny * wd),
+                   (p1[0] - nx * wd, p1[1] - ny * wd), (p0[0] - nx * wd * 0.3, p0[1] - ny * wd * 0.3)],
+                  fill=tuple(int(v * 0.6) for v in c["iris_dark"]) + (190,))
+    # Мелкие светлые искры в верхней тёмной части.
+    for k in range(9):
+        a = rnd2.uniform(math.pi * 1.1, math.pi * 1.9)
+        r = S / 2 * rnd2.uniform(pr * 1.3, 0.75)
+        q = S * rnd2.uniform(0.006, 0.011)
+        x, y = cx + math.cos(a) * r, cy + math.sin(a) * r
+        d.ellipse((x - q, y - q, x + q, y + q), fill=tuple(min(255, int(v * 1.25)) for v in c["iris"]) + (160,))
+    alpha = (np.clip((1.0 - rr) * 120, 0, 1) * 255).astype(np.uint8)
+    img.putalpha(Image.fromarray(alpha))
+    img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"iris_{cid}.png"))
+
+
+def sclera(cid, size=512):
+    """Склера (белок): прохладный белый, сверху серо-лиловая тень века (как у образца-подростка), к углам темнее."""
+    S = size
+    ys = np.linspace(0, 1, S)[:, None]
+    xs = np.linspace(-1, 1, S)[None, :]
+    base = np.array((250, 249, 252), np.float32)
+    shade = np.array((170, 164, 196), np.float32)
+    top = np.clip((0.5 - ys) / 0.32, 0, 1) ** 0.8
+    corner = np.clip((np.abs(xs) - 0.55) / 0.45, 0, 1) ** 1.5
+    k = np.clip(top * 0.85 + corner * 0.35, 0, 1)[..., None]
+    col = base * (1 - k) + shade * k
+    Image.fromarray(np.clip(col, 0, 255).astype(np.uint8), "RGB").save(os.path.join(OUT, f"sclera_{cid}.png"))
+
+
 def hair_strands(w=512, h=1024):
     """Карта прядей: много тонких линий разной яркости, сужение к кончику (низ), прозрачные промежутки."""
     rnd = random.Random(3)
@@ -280,6 +382,9 @@ def main():
     for cid, c in CHARS.items():
         face(cid, c)
         eye(cid, c)
+        if face_params(cid).get("eye_shape"):
+            iris(cid, c)
+            sclera(cid)
     hair_strands()
     knit()
     print("ok", sorted(os.listdir(OUT)))
