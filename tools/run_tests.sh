@@ -19,5 +19,12 @@ if [ "$CODE" = "0" ] && [ -z "${KPC_SKIP_E2E:-}" ]; then
   CODE=$?
   grep -E "ПРОЙДЕН|ЗАСТРЯЛ|SCRIPT ERROR" <<<"$E2E" || echo "$E2E" | tail -20
   if grep -q "SCRIPT ERROR" <<<"$E2E"; then CODE=1; fi
+  # проходимость: от точки появления можно дойти до каждой цели сюжета (без телепортов автопилота)
+  if [ "$CODE" = "0" ]; then
+    WALK="$("$GODOT" --headless --path . -s tools/walk_check.gd 2>&1)"
+    CODE=$?
+    grep -E "^  |Проходимость|SCRIPT ERROR" <<<"$WALK"
+    if grep -q "SCRIPT ERROR" <<<"$WALK"; then CODE=1; fi
+  fi
 fi
 exit $CODE

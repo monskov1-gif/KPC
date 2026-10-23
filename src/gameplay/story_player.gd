@@ -24,6 +24,8 @@ var water_level := -INF
 var auto_target = null
 var _shape: CollisionShape3D
 var _step_acc := 0.0
+## Самый высокий уступ, на который герой шагает сам (бордюр, порог, настил переезда).
+const STEP_UP := 0.25
 var _height := 0.0
 
 
@@ -103,6 +105,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = -0.5
 	move_and_slide()
+	# невысокий уступ (бордюр, настил, порог) — шагнуть на него, а не упереться, как в невидимую стену
+	if is_on_floor() and target.length() > 0.3 and Vector2(velocity.x, velocity.z).length() < target.length() * 0.35 \
+			and get_slide_collision_count() > 0:
+		_try_step_up(target)
 	var flat := Vector2(velocity.x, velocity.z)
 	if flat.length() > 0.2:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(velocity.x, velocity.z), clampf(TURN * delta, 0.0, 1.0))
@@ -115,6 +121,23 @@ func _physics_process(delta: float) -> void:
 	else:
 		model.play_motion("idle")
 		_step_acc = 0.0
+
+
+## Подъём на ступеньку до STEP_UP: над головой свободно и на высоте ступеньки впереди нет стены —
+## поднять героя и сдвинуть вперёд; на опору его вернёт прижатие к полу.
+func _try_step_up(target: Vector3) -> void:
+	var up := Vector3(0, STEP_UP, 0)
+	var fwd := Vector3(target.x, 0, target.z).normalized() * 0.18
+	if test_move(global_transform, up):
+		return
+	if test_move(global_transform.translated(up), fwd):
+		return
+	global_position += up + fwd
+	var snap := floor_snap_length
+	floor_snap_length = STEP_UP + 0.1
+	velocity.y = 0.0
+	apply_floor_snap()
+	floor_snap_length = snap
 
 
 ## Шаги: звук на каждый шаг (полцикла клипа: шаг ≈ 0.39 роста, бег ≈ 0.75); поверхность — от локации,

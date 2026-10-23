@@ -691,7 +691,8 @@ def railway_crossing(S, Mt, x, y0, y1, track_len=50):
     for k in range(int(track_len / 0.6)):
         sl.box((x, -track_len / 2 + k * 0.6, 0.0), (2.2, 0.22, 0.08), (1, 1, 1, 1))
     pad = S.b("crossing_pad-col", Mt["asphalt"], tile=1.28)
-    pad.box((x, (y0 + y1) / 2, 0.0), (3.4, y1 - y0, 0.12), (1, 1, 1, 1))
+    # настил вровень с асфальтом (верх на 2 см): ступенька в 12 см не пускала героя через пути
+    pad.box((x, (y0 + y1) / 2, -0.1), (3.4, y1 - y0, 0.12), (1, 1, 1, 1))
     # точки для живого мира: концы пути поезда, мигающие фонари и шлагбаумы (их двигает игра, WorldLife)
     S.marker("train_a", (x, -track_len / 2, 0.15), face=(0, 1))
     S.marker("train_b", (x, track_len / 2, 0.15), face=(0, 1))
