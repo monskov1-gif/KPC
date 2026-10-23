@@ -1,0 +1,222 @@
+{
+ "_comment": "Пролог по docs/source/KPC_scenario_1.txt (раздел 3, сцены 1–9). В сценарии — только описания сцен, поэтому ВСЕ реплики черновые (draft) и ждут утверждения пользователя. Не названы и не выдуманы: причина аварии, длительность комы, имя девочки, устройство дома (см. docs/OPEN_QUESTIONS.md, 16–24).",
+ "id": "prologue",
+ "draft": true,
+ "speakers": {
+  "kot": "Кот",
+  "girl": "Девочка",
+  "passerby_a": "Продавщица",
+  "passerby_b": "Прохожий",
+  "mama": "Мама",
+  "papa": "Папа",
+  "sora": "Сора",
+  "gabi": "Габриэль",
+  "doctor": "Врач",
+  "nurse": "Медсестра",
+  "resident": "Жилец"
+ },
+ "scenes": [
+  {
+   "id": "p1_city",
+   "source": "Сцена 1. День в Shizunda Taver City",
+   "location": "city_street",
+   "player": "kot_child",
+   "time": "day",
+   "steps": [
+    {"type": "caption", "text": "Shizunda Taver City", "sub": "Много лет назад", "seconds": 3.0},
+    {"type": "objective", "text": "Прогуляйся по улице"},
+    {"type": "explore", "required": ["girl"], "optional_min": 2,
+     "interactions": {
+      "shop_window": [{"who": "kot", "text": "В витрине новые кисточки. Целый ряд — от тонких до толстых."}],
+      "viewpoint": [{"who": "kot", "text": "Отсюда видно всю улицу до самой воды. Надо запомнить, как ложится свет."}],
+      "passerby_a": [{"who": "passerby_a", "text": "Опять с тетрадкой? Что сегодня рисуешь?"},
+                     {"who": "kot", "text": "Пока смотрю. Потом нарисую."}],
+      "passerby_b": [{"who": "passerby_b", "text": "Осторожнее у фонтана, там скользко."},
+                     {"who": "kot", "text": "Спасибо!"}],
+      "fountain": [{"who": "kot", "text": "Если долго смотреть на воду, кажется, что город тоже течёт."}],
+      "girl": [{"who": "kot", "text": "Ты тоже рисуешь?"},
+               {"who": "girl", "text": "Угу. Это кот. Только у него не получаются уши."},
+               {"who": "kot", "text": "Можно? Вот так — чуть повыше и острее."},
+               {"who": "girl", "text": "Ой. Теперь он похож на тебя."},
+               {"who": "kot", "text": "Тогда это хороший кот."},
+               {"who": "girl", "text": "Покажешь свои рисунки в следующий раз?"},
+               {"who": "kot", "text": "Покажу."}]
+     }},
+    {"type": "fade", "to": "black", "seconds": 1.2}
+   ]
+  },
+  {
+   "id": "p2_family",
+   "source": "Сцена 2. Семья и близость",
+   "location": "family_home",
+   "player": "kot_child",
+   "time": "day",
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.0},
+    {"type": "objective", "text": "Побудь с семьёй"},
+    {"type": "explore", "required": ["family_table"], "optional_min": 0,
+     "interactions": {
+      "family_table": [{"who": "mama", "text": "Кот, руки мыть. Я вижу краску до самого локтя."},
+                       {"who": "kot", "text": "Это не краска, это закат."},
+                       {"who": "papa", "text": "Закат до локтя — серьёзная работа. Пусть сначала поест."},
+                       {"who": "gabi", "text": "А мне можно тоже закат?"},
+                       {"who": "sora", "text": "Тебе можно только суп. Закаты — после супа."},
+                       {"who": "mama", "text": "Сора, не командуй за столом."},
+                       {"who": "sora", "text": "Я не командую. Я старший."},
+                       {"who": "papa", "text": "На выходных едем на склон. Все. Даже тот, кто опять забудет перчатки."},
+                       {"who": "gabi", "text": "Это Сора."},
+                       {"who": "sora", "text": "Это было один раз."}],
+      "window": [{"who": "kot", "text": "С утра обещали снег. Хорошо бы, чтобы правда пошёл."}],
+      "sketch_corner": [{"who": "kot", "text": "Мой угол. Мама говорит, что тут скоро вырастет второй город — из бумаги."}]
+     }},
+    {"type": "fade", "to": "black", "seconds": 1.0},
+    {"type": "location", "id": "snow_slope", "player": "kot_child", "time": "day"},
+    {"type": "fade", "to": "clear", "seconds": 1.0},
+    {"type": "caption", "text": "Выходные", "seconds": 2.0},
+    {"type": "objective", "text": "Спустись к семье у подножия"},
+    {"type": "reach", "target": "slope_bottom"},
+    {"type": "say", "lines": [{"who": "papa", "text": "Вот это спуск! Сора, ты видел?"},
+                              {"who": "sora", "text": "Видел. Он даже ни разу не упал. Почти."},
+                              {"who": "kot", "text": "Сверху город как на рисунке."}]},
+    {"type": "fade", "to": "black", "seconds": 1.2}
+   ]
+  },
+  {
+   "id": "p3_roof",
+   "source": "Сцена 3. Скетчбук и крыша",
+   "location": "rooftop",
+   "player": "kot_child",
+   "time": "evening",
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.0},
+    {"type": "objective", "text": "Порисуй на крыше"},
+    {"type": "reach", "target": "roof_spot"},
+    {"type": "sketchbook", "pages": [
+     {"image": "sketch_street", "caption": "Улица и витрины"},
+     {"image": "sketch_family", "caption": "Мама, папа, Сора, Габриэль"},
+     {"image": "sketch_city", "caption": "Город сверху"}]},
+    {"type": "time", "to": "night", "seconds": 4.0},
+    {"type": "caption", "text": "", "sub": "Шум города стихает…", "seconds": 2.5},
+    {"type": "fade", "to": "black", "seconds": 1.5}
+   ]
+  },
+  {
+   "id": "p4_gabi",
+   "source": "Сцена 4. Приходит Габриэль",
+   "location": "rooftop",
+   "player": "kot_child",
+   "time": "night",
+   "npcs": {"gabi_child": "npc_gabi"},
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 0.8},
+    {"type": "say", "lines": [{"who": "gabi", "text": "Кот! Кот, проснись!"},
+                              {"who": "kot", "text": "Что… Уже ночь?"},
+                              {"who": "gabi", "text": "Надо ехать в больницу. Сейчас же."},
+                              {"who": "gabi", "text": "Маму и папу сбила машина. Сора тоже там. Ему очень плохо."},
+                              {"who": "kot", "text": "…"}]},
+    {"type": "fade", "to": "black", "seconds": 1.5}
+   ]
+  },
+  {
+   "id": "p5_hospital",
+   "source": "Сцена 5. Больница и кома",
+   "location": "hospital",
+   "player": "kot_child",
+   "time": "night",
+   "npcs": {"gabi_child": "npc_gabi", "doctor": "npc_doctor", "nurse": "npc_nurse"},
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.5},
+    {"type": "objective", "text": "Иди по коридору"},
+    {"type": "reach", "target": "corridor_mid", "fragments": [
+     {"who": "nurse", "text": "…сюда нельзя, подождите…"},
+     {"who": "doctor", "text": "…мы сделали всё, что могли…"}]},
+    {"type": "reach", "target": "ward_door", "fragments": [
+     {"who": "nurse", "text": "…старший в отделении…"},
+     {"who": "doctor", "text": "…состояние стабильно тяжёлое. Он в коме."}]},
+    {"type": "say", "lines": [{"who": "gabi", "text": "Кот… Мамы и папы больше нет."},
+                              {"who": "gabi", "text": "Сора спит. Врачи не знают, когда он проснётся."},
+                              {"who": "kot", "text": "Я подожду. Я буду ждать сколько надо."}]},
+    {"type": "fade", "to": "black", "seconds": 2.0}
+   ]
+  },
+  {
+   "id": "p6_custody",
+   "source": "Сцена 6. Сора берёт младших под опеку",
+   "location": "hospital",
+   "player": "kot_child",
+   "spawn": "spawn_ward",
+   "time": "day",
+   "npcs": {"gabi_child": "npc_gabi_ward", "sora_teen": "npc_sora_bed"},
+   "steps": [
+    {"type": "caption", "text": "", "sub": "Спустя время", "seconds": 2.0},
+    {"type": "fade", "to": "clear", "seconds": 1.2},
+    {"type": "say", "lines": [{"who": "sora", "text": "Кот… Габриэль…"},
+                              {"who": "gabi", "text": "Ты проснулся."},
+                              {"who": "sora", "text": "Мне сказали. Про маму и папу."},
+                              {"who": "sora", "text": "Я заберу вас. Обоих. Слышите? Вы будете со мной."},
+                              {"who": "kot", "text": "А ты справишься?"},
+                              {"who": "sora", "text": "Не знаю. Но я не отдам вас никому."}]},
+    {"type": "fade", "to": "black", "seconds": 1.5}
+   ]
+  },
+  {
+   "id": "p7_time",
+   "source": "Сцена 7. Проходит время",
+   "location": "rooftop",
+   "player": "kot_child",
+   "time": "day",
+   "steps": [
+    {"type": "montage", "frames": [
+     {"time": "day", "caption": "Весна"},
+     {"time": "evening", "caption": "Лето"},
+     {"time": "day", "caption": "Осень"},
+     {"time": "night", "caption": "Зима"}], "seconds_each": 2.2},
+    {"type": "sketchbook", "pages": [
+     {"image": "sketch_three", "caption": "Сора, Габриэль и я"},
+     {"image": "sketch_city", "caption": "Город всё тот же. Мы — нет."}]},
+    {"type": "caption", "text": "", "sub": "Прошли годы", "seconds": 2.5},
+    {"type": "fade", "to": "black", "seconds": 1.2}
+   ]
+  },
+  {
+   "id": "p8_flood",
+   "source": "Сцена 8. Затопление Shizunda Taver City",
+   "location": "city_street",
+   "player": "kot",
+   "spawn": "spawn_flood",
+   "time": "storm",
+   "npcs": {"resident_a": "npc_resident_a", "resident_b": "npc_resident_b"},
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.0},
+    {"type": "water", "level": 0.35, "seconds": 6.0},
+    {"type": "say", "lines": [{"who": "resident", "text": "Вода идёт! Все наверх, к мосту!"}]},
+    {"type": "objective", "text": "Уходи от воды — к мосту"},
+    {"type": "water", "level": 1.1, "seconds": 40.0, "async": true},
+    {"type": "reach", "target": "evac_point"},
+    {"type": "say", "lines": [{"who": "kot", "text": "Улицы, где я рисовал… их больше нет."}]},
+    {"type": "fade", "to": "black", "seconds": 1.5}
+   ]
+  },
+  {
+   "id": "p9_inheritance",
+   "source": "Сцена 9. Наследство семьи",
+   "location": "family_house",
+   "player": "kot",
+   "time": "evening",
+   "npcs": {"sora": "npc_sora"},
+   "steps": [
+    {"type": "fade", "to": "clear", "seconds": 1.2},
+    {"type": "objective", "text": "Подойди к Соре"},
+    {"type": "reach", "target": "talk_sora"},
+    {"type": "say", "lines": [{"who": "sora", "text": "Кот. Я должен был сказать тебе раньше."},
+                              {"who": "sora", "text": "Родители оставили тебе дом. Этот."},
+                              {"who": "kot", "text": "Мне? Он же… совсем старый."},
+                              {"who": "sora", "text": "Старый. Но он ваш с ними. Твой."},
+                              {"who": "kot", "text": "Я вернусь сюда. И сделаю его снова живым."},
+                              {"who": "sora", "text": "Знаю. Я помогу, когда смогу."}]},
+    {"type": "flag", "name": "prologue_complete"},
+    {"type": "caption", "text": "Конец пролога", "sub": "Том I — жилой комплекс на горе", "seconds": 4.0}
+   ]
+  }
+ ]
+}
