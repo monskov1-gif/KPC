@@ -113,6 +113,9 @@ static func validate(d: Dictionary) -> Array[String]:
 		return errs
 	var ids := {}
 	for sc in sc_list:
+		if typeof(sc) != TYPE_DICTIONARY:
+			errs.append("сцена — не объект: %s" % [sc])
+			continue
 		var sid := str(sc.get("id", ""))
 		if sid == "" or ids.has(sid):
 			errs.append("сцена без id или с повтором: '%s'" % sid)
@@ -128,7 +131,11 @@ static func validate(d: Dictionary) -> Array[String]:
 			errs.append("%s: нет шагов" % sid)
 			continue
 		for i in steps.size():
+			if typeof(steps[i]) != TYPE_DICTIONARY:
+				errs.append("%s#%d: шаг — не объект" % [sid, i])
+				continue
 			_check_step(steps[i], "%s#%d" % [sid, i], spk, errs)
+		_check_npc_markers(sc, sid, errs)
 	return errs
 
 
@@ -169,10 +176,16 @@ static func _check_step(st: Dictionary, where: String, spk: Dictionary, errs: Ar
 			if inter.is_empty():
 				errs.append("%s: осмотр без целей" % where)
 		"sketchbook":
+			if typeof(st.get("pages")) != TYPE_ARRAY or st.pages.is_empty():
+				errs.append("%s: скетчбук без страниц" % where)
+				return
 			for p in st.get("pages", []):
 				if str(p.get("image", "")) == "":
 					errs.append("%s: страница скетчбука без картинки" % where)
 		"montage":
+			if typeof(st.get("frames")) != TYPE_ARRAY or st.frames.is_empty():
+				errs.append("%s: монтаж без кадров" % where)
+				return
 			for fr in st.get("frames", []):
 				if not fr.get("time") in TIMES:
 					errs.append("%s: кадр монтажа с неизвестным временем" % where)
@@ -183,10 +196,28 @@ static func _check_lines(lines, where: String, spk: Dictionary, errs: Array[Stri
 		errs.append("%s: нет реплик" % where)
 		return
 	for l in lines:
+		if typeof(l) != TYPE_DICTIONARY:
+			errs.append("%s: реплика — не объект" % where)
+			continue
 		if not spk.has(str(l.get("who", ""))):
 			errs.append("%s: неизвестный говорящий '%s'" % [where, l.get("who")])
 		if not l.has("text"):
 			errs.append("%s: реплика без текста" % where)
+
+
+## Два NPC на одной точке — ошибка данных (второй встал бы поверх первого).
+static func _check_npc_markers(sc: Dictionary, sid: String, errs: Array[String]) -> void:
+	var groups: Array = [sc.get("npcs", {})]
+	for st in sc.get("steps", []):
+		if typeof(st) == TYPE_DICTIONARY and st.get("type") == "location":
+			groups.append(st.get("npcs", {}))
+	for g in groups:
+		var seen := {}
+		for m in g:
+			var p := str(g[m])
+			if seen.has(p):
+				errs.append("%s: на точке %s два NPC" % [sid, p])
+			seen[p] = true
 
 
 static func _add_unique(arr: Array[String], v: String) -> void:

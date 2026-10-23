@@ -22,8 +22,19 @@ func _ready() -> void:
 	add_child(_menu)
 	_menu.add_child(_hero())
 	_menu.add_child(_panel())
+	# пометка о черновых репликах — маленькая плашка в углу, не в меню
+	var note := PanelContainer.new()
+	note.add_theme_stylebox_override("panel", UiTheme.chip())
+	note.add_child(UiTheme.tag("Пролог: реплики черновые", 13, UiTheme.TEXT_DIM))
+	note.anchor_left = 1.0; note.anchor_right = 1.0; note.anchor_top = 1.0; note.anchor_bottom = 1.0
+	note.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	note.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	note.offset_right = -18; note.offset_bottom = -14
+	_menu.add_child(note)
 	resized.connect(_layout)
-	_layout()
+	# раскладка после первого кадра: переносимые строки к этому времени знают свою высоту
+	_layout.call_deferred()
+	_focus_first.call_deferred()
 
 
 ## Кот в 3D (тот же образ, что в гардеробе).
@@ -47,10 +58,23 @@ func _hero() -> Control:
 	m.apply_items(s.outfit_items("kot"))
 	m.rotation.y = deg_to_rad(-18)
 	var h := m.height()
+	# подиум со свечением под ногами (как в гардеробе-референсе)
+	var pod := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.55; cyl.bottom_radius = 0.6; cyl.height = 0.06
+	pod.mesh = cyl
+	pod.position.y = -0.03
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color("fbefe6")
+	pm.emission_enabled = true
+	pm.emission = Color("f6dcc0")
+	pm.emission_energy_multiplier = 0.25
+	pod.material_override = pm
+	vp.add_child(pod)
 	var cam := Camera3D.new()
 	cam.fov = 30
-	cam.position = Vector3(0, h * 0.55, h * 2.35)
-	cam.rotation.x = deg_to_rad(-4)
+	cam.position = Vector3(0, h * 0.5, h * 2.75)
+	cam.rotation.x = deg_to_rad(-3)
 	vp.add_child(cam)
 	var sun := DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-35), deg_to_rad(-30), 0)
@@ -74,25 +98,24 @@ func _panel() -> Control:
 	v.add_theme_constant_override("separation", 14)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	p.add_child(v)
-	var t := UiTheme.title("KPC", 72)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_child(t)
-	var sub := UiTheme.label("История Кота: город под водой, дом-отель родителей и жилой комплекс на горе", 18, UiTheme.TEXT_DIM)
+	# логотип: картуш-лента со звёздами
+	var logo := HBoxContainer.new()
+	logo.alignment = BoxContainer.ALIGNMENT_CENTER
+	logo.add_child(UiTheme.icon("star", 26, UiTheme.STAR))
+	logo.add_child(UiTheme.ribbon_title("KPC", 56))
+	logo.add_child(UiTheme.icon("star", 26, UiTheme.STAR))
+	v.add_child(logo)
+	var sub := UiTheme.label("История Кота: затопленный город, дом-отель родителей и жилой комплекс на горе", 18, UiTheme.TEXT_DIM)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
 	v.add_child(UiTheme.divider())
 	var flags := Game.session.flags
-	var progress := int(flags.get_flag(StoryGame.PROGRESS_FLAG, 0))
-	if progress > 0:
+	if StoryGame.saved_scene_id(StoryScript.load_file(StoryGame.SCRIPT_PATH)) != "":
 		v.add_child(UiTheme.primary(UiTheme.button("Продолжить пролог", func(): _start(-1))))
 		v.add_child(UiTheme.secondary(UiTheme.button("Пролог сначала", func(): _start(0))))
 	else:
 		v.add_child(UiTheme.primary(UiTheme.button("Пролог" if not flags.is_set(StoryGame.DONE_FLAG) else "Пролог ещё раз", func(): _start(0))))
 	v.add_child(UiTheme.secondary(UiTheme.button("Гардероб", _open_wardrobe)))
-	var note := UiTheme.label("Реплики пролога — черновые, ждут утверждения.", 14, UiTheme.TEXT_DIM)
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(note)
 	return p
 
 
@@ -106,12 +129,14 @@ func _layout() -> void:
 		hero.position = Vector2(0, 0)
 		hero.size = Vector2(size.x, size.y * 0.5)
 		panel.size = Vector2(minf(size.x - 32, 520), 0)
+		panel.size.y = panel.get_combined_minimum_size().y
 		panel.position = Vector2((size.x - panel.size.x) * 0.5, size.y * 0.5)
 	else:
 		hero.position = Vector2(size.x * 0.06, 0)
 		hero.size = Vector2(size.x * 0.42, size.y)
 		panel.size = Vector2(minf(size.x * 0.4, 560), 0)
-		panel.position = Vector2(size.x * 0.52, (size.y - panel.get_combined_minimum_size().y) * 0.5)
+		panel.size.y = panel.get_combined_minimum_size().y
+		panel.position = Vector2(size.x * 0.52, (size.y - panel.size.y) * 0.5)
 
 
 func _start(scene: int) -> void:
@@ -127,9 +152,17 @@ func _open_wardrobe() -> void:
 		_wardrobe.queue_free()
 		_wardrobe = null
 		_hero_model.apply_items(Game.session.outfit_items("kot"))   # образ из гардероба
-		_menu.visible = true)
+		_menu.visible = true
+		_focus_first())
 
 
 ## Для снимка гардероба через титульный экран.
 func debug_wardrobe() -> void:
 	_open_wardrobe()
+
+
+## Фокус на первой кнопке — меню доступно с геймпада и клавиатуры.
+func _focus_first() -> void:
+	var btns := _menu.find_children("*", "Button", true, false)
+	if not btns.is_empty():
+		(btns[0] as Button).grab_focus()

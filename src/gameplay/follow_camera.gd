@@ -1,7 +1,7 @@
 class_name FollowCamera
 extends Node3D
 ## Камера от третьего лица: следует за целью, вращается действиями camera_*, мышью (с зажатой кнопкой)
-## и свайпом по экрану; пружина не даёт уйти за стены. Для катсцен — look_at_point (плавный разворот).
+## и свайпом по экрану; пружина не даёт уйти за стены. Камера чуть сбоку («через плечо»), чтобы собеседник был виден.
 
 @export var distance := 4.2
 @export var height := 1.25
@@ -24,6 +24,7 @@ func _ready() -> void:
 	add_child(_arm)
 	camera = Camera3D.new()
 	camera.fov = 52
+	camera.h_offset = 0.45
 	camera.current = true
 	_arm.add_child(camera)
 
@@ -47,6 +48,9 @@ func snap_behind(model_yaw: float) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	# мышь, эмулированная из касаний, — не вращает камеру (палец на стике не должен крутить вид)
+	if e is InputEventMouse and e.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if e is InputEventMouseButton and e.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 		_drag = e.pressed
 	elif e is InputEventMouseMotion and _drag:

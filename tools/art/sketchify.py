@@ -30,6 +30,7 @@ def pencil(img):
     blur = np.array(Image.fromarray((inv * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(9)), np.float32) / 255
     dodge = np.clip(g / np.maximum(1 - blur, 1e-3), 0, 1)                 # «карандаш»: контуры и штриховка
     edges = np.array(img.convert("L").filter(ImageFilter.FIND_EDGES).filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
+    edges[:3, :] = 0; edges[-3:, :] = 0; edges[:, :3] = 0; edges[:, -3:] = 0
     line = np.clip(dodge - edges * 1.8, 0, 1)
     return line ** 1.6
 
@@ -43,7 +44,8 @@ def hatch(h, w, rnd, dark):
 
 def main(src, dst, warm=False):
     rnd = np.random.default_rng(abs(hash(dst)) % 2 ** 32)
-    img = Image.open(src).convert("RGB").resize((W, H), Image.LANCZOS)
+    img = Image.open(src).convert("RGB")
+    img = img.crop((4, 4, img.width - 4, img.height - 4)).resize((W, H), Image.LANCZOS)   # без рамки по краю кадра
     p = paper(W, H, rnd)
     line = pencil(img)
     lum = np.array(img.convert("L"), np.float32) / 255

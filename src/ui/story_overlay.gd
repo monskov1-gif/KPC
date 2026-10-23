@@ -5,6 +5,7 @@ extends CanvasLayer
 
 signal interact_pressed
 signal menu_requested
+signal skip_pressed
 
 const SKETCH_DIR := "res://art/story/sketches/"
 
@@ -23,7 +24,9 @@ var _prompt_text: Label
 var _prompt_key: Label
 var _fragments: VBoxContainer
 var _touch_btn: Button
+var _skip_btn: Button
 var _touch := false
+var _tweens: Array[Tween] = []
 
 
 func _ready() -> void:
@@ -36,8 +39,10 @@ func _ready() -> void:
 	add_child(_root)
 
 	_objective = PanelContainer.new()
-	_objective.add_theme_stylebox_override("panel", UiTheme.chip())
-	_objective.position = Vector2(20, 18)
+	var ost := UiTheme.cloud(Color(1, 0.99, 0.97, 0.94), 999, 10)
+	ost.content_margin_left = 16; ost.content_margin_right = 20
+	_objective.add_theme_stylebox_override("panel", ost)
+	_objective.position = Vector2(24, 22)
 	var oh := HBoxContainer.new()
 	oh.add_child(UiTheme.icon("sparkle", 22, UiTheme.GOLD))
 	_objective_text = UiTheme.tag("", 18)
@@ -46,10 +51,30 @@ func _ready() -> void:
 	_objective.visible = false
 	_root.add_child(_objective)
 
-	var menu := UiTheme.icon_button("back", func(): menu_requested.emit(), 52)
+	var menu := UiTheme.icon_button("menu", func(): menu_requested.emit(), 58)
 	menu.anchor_left = 1.0; menu.anchor_right = 1.0
-	menu.offset_left = -72; menu.offset_right = -20; menu.offset_top = 14; menu.offset_bottom = 66
+	menu.offset_left = -82; menu.offset_right = -24; menu.offset_top = 18; menu.offset_bottom = 76
 	_root.add_child(menu)
+	# «Пропустить» — только во время катсцен
+	_skip_btn = Button.new()
+	var skst := UiTheme.chip()
+	skst.content_margin_left = 36       # место под иконку
+	_skip_btn.add_theme_stylebox_override("normal", skst)
+	_skip_btn.add_theme_stylebox_override("hover", skst)
+	_skip_btn.add_theme_stylebox_override("pressed", skst)
+	_skip_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_skip_btn.add_theme_color_override("font_color", UiTheme.TEXT)
+	_skip_btn.add_theme_color_override("font_hover_color", UiTheme.TEXT)
+	_skip_btn.add_theme_constant_override("outline_size", 0)
+	_skip_btn.text = "Пропустить"
+	_skip_btn.anchor_left = 1.0; _skip_btn.anchor_right = 1.0
+	_skip_btn.offset_left = -250; _skip_btn.offset_right = -96; _skip_btn.offset_top = 26; _skip_btn.offset_bottom = 68
+	_skip_btn.pressed.connect(func(): skip_pressed.emit())
+	var sk := UiTheme.icon("skip", 18, UiTheme.GOLD_DEEP)
+	sk.position = Vector2(14, 12)
+	_skip_btn.add_child(sk)
+	_skip_btn.visible = false
+	_root.add_child(_skip_btn)
 
 	_fragments = VBoxContainer.new()
 	_fragments.anchor_left = 0.5; _fragments.anchor_right = 0.5
@@ -76,7 +101,7 @@ func _ready() -> void:
 	_prompt.add_child(ph)
 	_prompt.mouse_filter = Control.MOUSE_FILTER_STOP
 	_prompt.gui_input.connect(func(e):
-		if (e is InputEventMouseButton or e is InputEventScreenTouch) and e.pressed:
+		if _is_tap(e):
 			interact_pressed.emit())
 	_prompt.visible = false
 	_root.add_child(_prompt)
@@ -131,7 +156,7 @@ func fade(to_black: bool, seconds: float) -> void:
 	if seconds <= 0.0:
 		_fade.modulate.a = a
 		return
-	var tw := create_tween()
+	var tw := _track(create_tween())
 	tw.tween_property(_fade, "modulate:a", a, seconds)
 	await tw.finished
 
@@ -146,7 +171,7 @@ func caption(text: String, sub: String, seconds: float) -> void:
 	_caption_sub.text = sub
 	_caption_sub.visible = sub != ""
 	var f := minf(0.6, seconds * 0.25)
-	var tw := create_tween()
+	var tw := _track(create_tween())
 	tw.tween_property(_caption, "modulate:a", 1.0, f)
 	tw.tween_interval(maxf(0.0, seconds - 2.0 * f))
 	tw.tween_property(_caption, "modulate:a", 0.0, f)
@@ -171,10 +196,14 @@ func set_prompt(text: String) -> void:
 
 ## Обрывок фразы, услышанный на ходу (больница): курсив, сам тает через несколько секунд.
 func fragment(speaker: String, text: String, seconds := 3.2) -> void:
-	var l := UiTheme.label(("%s: %s" % [speaker, text]) if speaker != "" else text, 20, Color(1, 0.97, 0.94))
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_color_override("font_shadow_color", Color(0.15, 0.1, 0.2, 0.8))
-	l.add_theme_constant_override("shadow_outline_size", 6)
+	# облачко-подложка: читается и на белом коридоре, и на тёмной улице
+	var l := PanelContainer.new()
+	l.add_theme_stylebox_override("panel", UiTheme.cloud(Color(0.25, 0.2, 0.3, 0.55), 999, 10))
+	l.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var t := UiTheme.label(("%s: %s" % [speaker, text]) if speaker != "" else text, 20, Color(1, 0.97, 0.94))
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_override("font", UiTheme.title_font())
+	l.add_child(t)
 	l.modulate.a = 0.0
 	_fragments.add_child(l)
 	var tw := l.create_tween()
@@ -184,8 +213,36 @@ func fragment(speaker: String, text: String, seconds := 3.2) -> void:
 	tw.tween_callback(l.queue_free)
 
 
+func clear_fragments() -> void:
+	for c in _fragments.get_children():
+		c.queue_free()
+
+
 func touch_controls() -> bool:
 	return _touch
+
+
+func _track(tw: Tween) -> Tween:
+	_tweens = _tweens.filter(func(t): return t.is_valid())
+	_tweens.append(tw)
+	return tw
+
+
+## Пропуск: довести затемнения и титры до конца мгновенно.
+func finish_tweens() -> void:
+	for t in _tweens:
+		if t.is_valid() and t.is_running():
+			t.custom_step(1000.0)
+	_tweens.clear()
+
+
+## Добавить окно поверх интерфейса сцены (тема и масштаб — общие).
+func add_ui(c: Control) -> void:
+	_root.add_child(c)
+
+
+func set_skippable(on: bool) -> void:
+	_skip_btn.visible = on
 
 
 ## Скрыть игровые подсказки на время катсцены.
@@ -196,3 +253,12 @@ func set_gameplay_ui(on: bool) -> void:
 			stick.reset()
 	if not on:
 		set_prompt("")
+
+
+## Нажатие пальцем или кнопкой мыши — одно. Мышь, эмулированная из касания, не считается (иначе двойное срабатывание).
+static func _is_tap(e: InputEvent) -> bool:
+	if e is InputEventScreenTouch:
+		return e.pressed
+	if e is InputEventMouseButton:
+		return e.pressed and e.button_index == MOUSE_BUTTON_LEFT and e.device != InputEvent.DEVICE_ID_EMULATION
+	return false

@@ -18,9 +18,9 @@ dest_files=["res://.godot/imported/sora_eye_sora.png-17ef21013e6b53f542a97d231bc
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.85
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0

@@ -79,11 +79,13 @@ func play_motion(motion: String, speed_scale := 1.0) -> void:
 func height() -> float:
 	if _root == null:
 		return _fallback.scale.y * 1.6 if _fallback else 1.6
+	# в координатах самой модели: рост не зависит от того, где модель стоит в мире
 	var aabb := AABB()
 	var first := true
+	var to_local := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
 	for mi in _root.find_children("*", "MeshInstance3D", true, false):
 		var b: AABB = (mi as MeshInstance3D).get_aabb()
-		b = (mi as MeshInstance3D).global_transform * b if mi.is_inside_tree() else b
+		b = (to_local * (mi as MeshInstance3D).global_transform) * b if mi.is_inside_tree() else b
 		aabb = b if first else aabb.merge(b)
 		first = false
 	return aabb.end.y

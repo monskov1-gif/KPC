@@ -547,7 +547,7 @@ def hospital():
                 continue
             dr.box((x, sy * (Wc - 0.02), 0), (1.1, 0.06, 2.1), hexc("c9b8a0"))
             S.b("door_signs", "fabric").box((x, sy * (Wc - 0.06), 2.25), (0.4, 0.02, 0.15), hexc("7fa6b8"))
-    rail = S.b("prop_handrails", "metal")
+    rail = S.b("handrails", "metal")
     for sy in (-1, 1):
         K.tube(rail, [(0.3, sy * (Wc - 0.08), 0.9), (L - 0.3, sy * (Wc - 0.08), 0.9)], 0.03, hexc("b8a890"))
     for x in (6.5, 16.5):

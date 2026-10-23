@@ -3262,7 +3262,8 @@ def walk_animation(rig, frames=32):
 CHARACTERS = {
     # Хотто Дарака (реф. hotto_sheet / hotto_outfit, 23.10): антропоморфный волк 235 см, очень мускулистый; кремовый мех,
     # длинная светлая грива, уши с тёмными кончиками, серо-голубые прищуренные глаза, чёрные когти, пушистый хвост.
-    # Канон: навязчивый поклонник Соры, живёт на 4-м этаже (docs/source/story_and_chapter1_script.txt, сцены 10–11).
+    # По старому (вспомогательному) сценарию: навязчивый поклонник Соры, живёт на 4-м этаже
+    # (docs/source/story_and_chapter1_script.txt, сцены 10–11); роль в новом сценарии — docs/OPEN_QUESTIONS.md, 29.
     "hotto": {
         "sex": "male",
         "skin": (0.92, 0.84, 0.8, 1),                  # мех тёплый кремово-розовый (реф.)
@@ -3451,6 +3452,7 @@ def _npc(sex, height_cm, teen, hair, thin=0.5, head=1.0, ears=None, **kw):
     c = {"sex": sex,
          "body": {"s": s, "shoulder": 0.128 if female else 0.15, "hip": 0.084 if female else 0.08, "head": head,
                   "mh": {"teen": teen, "thin": thin, "bust": 0.4 if female and teen < 0.6 else 0.0, "neck_z": 1.335,
+                         "arms_down": 26,                       # руки свободно опущены (не А-поза витрины)
                          "pelvis_z": 0.9, "slim": 0.95},
                   "waist": 0.072 if female else 0.082, "chest": 0.09 if female else 0.1, "hip_r": 0.104 if female else 0.098},
          "hair": hair, "ears": ears, "garments": list(NPC_GARMENTS)}
@@ -3465,13 +3467,15 @@ def _npc(sex, height_cm, teen, hair, thin=0.5, head=1.0, ears=None, **kw):
 CHARACTERS.update({
     # Кот в 6 лет: та же копна, уши и глаза; детская база, крупная голова; без рисунка рельефа тела.
     "kot_child": _variant("kot", body={"s": 116 / 163, "head": 1.42, "shoulder": 0.128, "neck": 0.034, "hem_drop": 0.1},
-                          mh={"teen": 1.0, "thin": 0.35, "arm_len": 1.0, "clav": 10, "spine_back": 4, "anat": {}},
+                          mh={"teen": 1.0, "thin": 0.35, "arm_len": 1.0, "clav": 10, "spine_back": 4, "anat": {}, "arms_down": 24},
                           garments=list(NPC_GARMENTS)),
     # Габриэль в 12 лет: два пучка и те же цвета, детская база.
-    "gabi_child": _variant("gabi", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07}, mh={"teen": 0.9, "bust": 0.0, "thin": 0.55},
+    "gabi_child": _variant("gabi", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07},
+                           mh={"teen": 0.9, "bust": 0.0, "thin": 0.55, "arms_down": 26},
                            garments=list(NPC_GARMENTS) + ["head_clips"]),
     # Сора в 18 лет: те же волосы с хвостом и уши, тоньше и ниже, чем в 29.
-    "sora_young": _variant("sora", body={"s": 194 / 163, "shoulder": 0.15, "head": 0.98}, mh={"teen": 0.3, "thin": 0.6},
+    "sora_young": _variant("sora", body={"s": 194 / 163, "shoulder": 0.15, "head": 0.98},
+                           mh={"teen": 0.3, "thin": 0.6, "arms_down": 26},
                            garments=list(NPC_GARMENTS)),
     # Родители (черновик): папа — бирюзово-тёмные волосы и кошачьи уши (как у Соры и Кота), мама — тёплые
     # розово-каштановые длинные волосы (тона Габриэль).

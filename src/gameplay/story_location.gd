@@ -13,13 +13,13 @@ const WATER := preload("res://art/shaders/water.gdshader")
 const TIME_PRESETS := {
 	"day": {"sun": Color("fff3e2"), "energy": 0.78, "pitch": -48.0, "yaw": -35.0,
 		"sky_top": Color("9cc6ec"), "sky_horizon": Color("f6e2dc"), "ground": Color("d9c8c4"),
-		"ambient": Color("f2e6e6"), "ambient_energy": 0.32, "fog": Color("eadfe0"), "fog_density": 0.004},
+		"ambient": Color("f2e6e6"), "ambient_energy": 0.32, "fog": Color("dfe6ee"), "fog_density": 0.0022},
 	"evening": {"sun": Color("ffb07a"), "energy": 0.72, "pitch": -14.0, "yaw": -70.0,
 		"sky_top": Color("7f86c8"), "sky_horizon": Color("ffbc94"), "ground": Color("8a6c78"),
 		"ambient": Color("e8c4c4"), "ambient_energy": 0.3, "fog": Color("f0b8a8"), "fog_density": 0.006},
 	"night": {"sun": Color("aebef0"), "energy": 0.32, "pitch": -40.0, "yaw": 20.0,
 		"sky_top": Color("1d2550"), "sky_horizon": Color("4a4f86"), "ground": Color("232744"),
-		"ambient": Color("7f88c0"), "ambient_energy": 0.32, "fog": Color("343a6a"), "fog_density": 0.01},
+		"ambient": Color("6f78b4"), "ambient_energy": 0.24, "fog": Color("343a6a"), "fog_density": 0.01},
 	"storm": {"sun": Color("c4ccd8"), "energy": 0.35, "pitch": -60.0, "yaw": 0.0,
 		"sky_top": Color("5b6474"), "sky_horizon": Color("8f97a2"), "ground": Color("4a505a"),
 		"ambient": Color("a8b0bc"), "ambient_energy": 0.36, "fog": Color("8a929c"), "fog_density": 0.03},
@@ -36,6 +36,9 @@ var _lamps: Array[OmniLight3D] = []
 var _materials := {}
 var _glow: Array[ShaderMaterial] = []
 var _tween: Tween
+var _water_tween: Tween
+## Дождь (время «storm»): частицы-штрихи; StoryGame держит его над игроком.
+var rain: CPUParticles3D
 
 
 func _ready() -> void:
@@ -59,6 +62,28 @@ func _ready() -> void:
 	_sun.shadow_enabled = not compat()
 	_sun.directional_shadow_max_distance = 40.0
 	add_child(_sun)
+	rain = CPUParticles3D.new()
+	rain.amount = 900
+	rain.lifetime = 0.9
+	rain.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	rain.emission_box_extents = Vector3(14, 0.5, 14)
+	rain.direction = Vector3(0.15, -1, 0.05)
+	rain.spread = 2.0
+	rain.gravity = Vector3(0, -6, 0)
+	rain.initial_velocity_min = 14.0
+	rain.initial_velocity_max = 18.0
+	var streak := QuadMesh.new()
+	streak.size = Vector2(0.025, 0.55)
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	rm.albedo_color = Color(0.85, 0.9, 1.0, 0.45)
+	streak.material = rm
+	rain.mesh = streak
+	rain.emitting = false
+	rain.visible = false
+	add_child(rain)
 
 
 static func compat() -> bool:
@@ -104,6 +129,8 @@ func apply_time(t: String, seconds := 0.0) -> void:
 	time_of_day = t
 	if _tween:
 		_tween.kill()
+	rain.emitting = t == "storm"
+	rain.visible = t == "storm"
 	var lamps_on := t in ["night", "storm", "evening"]
 	for l in _lamps:
 		l.visible = lamps_on
@@ -142,9 +169,19 @@ func set_water(level: float, seconds: float) -> Tween:
 	if water == null:
 		push_warning("%s: в локации нет воды" % location_id)
 		return null
+	if _water_tween and _water_tween.is_valid():
+		_water_tween.kill()
 	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(water, "position:y", level, seconds)
+	_water_tween = tw
 	return tw
+
+
+## Пропуск катсцены: свет и вода сразу в итоговом состоянии.
+func finish_tweens() -> void:
+	for t in [_tween, _water_tween]:
+		if t and t.is_valid() and t.is_running():
+			t.custom_step(1000.0)
 
 
 func water_level() -> float:

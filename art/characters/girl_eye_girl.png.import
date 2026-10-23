@@ -18,9 +18,9 @@ dest_files=["res://.godot/imported/girl_eye_girl.png-bb7360d480e4b453ea36f0c3388
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.85
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0

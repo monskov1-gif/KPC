@@ -76,3 +76,58 @@ func test_explore_state() -> void:
 	e.mark("c")
 	check(e.complete(), "обязательная + 2 необязательных — готово")
 	eq(e.remaining(), 0, "ничего не осталось")
+
+
+func test_validator_types_and_empty() -> void:
+	var bad := {"speakers": {"kot": "Кот"}, "scenes": [
+		"не сцена",
+		{"id": "b", "location": "x", "player": "kot", "time": "noon", "npcs": {"a": "p1", "b": "p1"}, "steps": [
+			7,
+			{"type": "sketchbook", "pages": []},
+			{"type": "montage", "frames": [], "seconds_each": 1},
+			{"type": "say", "lines": ["строка"]},
+		]},
+	]}
+	var text := "\n".join(StoryScript.validate(bad))
+	check("не объект" in text, "сцена/шаг/реплика не того типа")
+	check("без страниц" in text, "пустой скетчбук")
+	check("без кадров" in text, "пустой монтаж")
+	check("два NPC" in text, "два NPC на одной точке")
+	check("noon" in text, "неизвестное время суток")
+
+
+func test_time_presets_match_script() -> void:
+	for t in StoryScript.TIMES:
+		check(StoryLocation.TIME_PRESETS.has(t), "нет пресета света для %s" % t)
+	eq(StoryLocation.TIME_PRESETS.size(), StoryScript.TIMES.size(), "списки времени суток совпадают")
+
+
+## Образы NPC (looks.json) ссылаются только на шаблоны одежды, которые есть в их моделях.
+func test_looks_match_garments() -> void:
+	var looks := DataLoader.load_json("res://data/story/looks.json")
+	for id in looks:
+		if str(id).begins_with("_"):
+			continue
+		var path := CharacterModel.MODEL_DIR + str(id) + ".glb"
+		if not ResourceLoader.exists(path):
+			check(false, "нет модели %s" % id)
+			continue
+		var inst: Node = (load(path) as PackedScene).instantiate()
+		for key in looks[id]:
+			check(inst.find_child("garment__" + str(key), true, false) != null, "%s: нет шаблона %s" % [id, key])
+		inst.free()
+
+
+## Стоящие NPC — на вертикальных точках, лежащие (кровать) — на повёрнутых.
+func test_npc_markers_upright() -> void:
+	var s := StoryScript.load_file(PROLOGUE)
+	for sc in s.scenes:
+		var path := StoryLocation.DIR + str(sc.location) + ".glb"
+		var inst: Node = (load(path) as PackedScene).instantiate()
+		for m in sc.get("npcs", {}).values():
+			var n := inst.find_child(str(m), true, false) as Node3D
+			if n == null:
+				continue
+			var up := n.transform.basis.y.normalized().dot(Vector3.UP) > 0.9
+			check(up == not str(m).ends_with("_bed"), "%s: точка %s ориентирована неверно" % [sc.id, m])
+		inst.free()

@@ -29,13 +29,13 @@ var _focus := ""
 var _beacon: Node3D
 var _cutscene := false
 var _looks: Dictionary = {}
+var _verbs: Dictionary = {}
+var _pause: Sheet
 
 
 func _ready() -> void:
 	story = StoryScript.load_file(SCRIPT_PATH)
 	_looks = DataLoader.load_json(LOOKS_PATH)
-	for e in story.errors:
-		push_error("Сценарий: " + e)
 	location = StoryLocation.new()
 	add_child(location)
 	player = StoryPlayer.new()
@@ -48,7 +48,13 @@ func _ready() -> void:
 	add_child(overlay)
 	overlay.set_black(true)
 	overlay.interact_pressed.connect(_try_interact)
-	overlay.menu_requested.connect(to_title)
+	overlay.menu_requested.connect(open_pause)
+	overlay.skip_pressed.connect(func(): director.skip())
+	overlay.process_mode = Node.PROCESS_MODE_ALWAYS     # меню паузы работает при остановленной сцене
+	_pause = Sheet.new()
+	_pause.max_size = Vector2(520, 420)
+	overlay.add_ui(_pause)
+	_pause.closed.connect(func(): get_tree().paused = false)
 	_beacon = _make_beacon()
 	add_child(_beacon)
 	_beacon.visible = false
@@ -60,7 +66,12 @@ func _ready() -> void:
 	add_child(director)
 	director.scene_started.connect(_on_scene_started)
 	director.finished.connect(_on_finished)
-	if story.scenes.is_empty():
+	if not story.errors.is_empty() or story.scenes.is_empty():
+		# сломанный сценарий не запускаем: понятное сообщение вместо сцены не на своих местах
+		for e in story.errors:
+			push_error("Сценарий: " + e)
+		overlay.set_black(true)
+		overlay.caption("Сценарий не загрузился", "Ошибок: %d — подробности в журнале" % story.errors.size(), 600.0)
 		return
 	director.run.call_deferred(_first_scene())
 
@@ -71,7 +82,17 @@ func _first_scene() -> int:
 		return int(v) if v.is_valid_int() else maxi(0, story.scene_index(v))
 	if start_scene >= 0:
 		return start_scene
-	return clampi(int(Game.session.flags.get_flag(PROGRESS_FLAG, 0)), 0, story.scenes.size() - 1)
+	return maxi(0, story.scene_index(saved_scene_id(story)))
+
+
+## Сохранённая сцена — по id (вставка или перестановка сцен в данных не ломает старые сохранения).
+## Старые сохранения хранили номер — переводим его в id.
+static func saved_scene_id(s: StoryScript) -> String:
+	var v = Game.session.flags.get_flag(PROGRESS_FLAG, "")
+	if typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT:
+		var i := int(v)
+		return str(s.scenes[i].id) if i > 0 and i < s.scenes.size() else ""
+	return str(v)
 
 
 ## Загрузить локацию, поставить игрока на точку, расставить NPC, выставить время суток.
@@ -96,14 +117,19 @@ func enter_location(loc_id: String, model_id: String, spawn: String, time: Strin
 		_spawn_npc(str(model), str(npcs[model]))
 
 
-## Кот носит то, что надето в гардеробе; остальные персонажи из каталога — фирменный образ.
+## Кот носит то, что надето в гардеробе; если там пусто (или персонаж закрыт) — фирменный образ,
+## но только на модели: сохранённый гардероб сюжет не меняет.
 func _outfit(model_id: String) -> Array[ClothingItem]:
 	var s := Game.session
 	if not s.characters.has_character(model_id):
 		return []
-	if s.outfit_items(model_id).is_empty():
-		s.equipment.equip_signature(model_id)
-	return s.outfit_items(model_id)
+	var items := s.outfit_items(model_id)
+	if items.is_empty():
+		var sig := s.characters.signature_outfit(model_id)
+		for slot in sig:
+			if s.catalog.has_item(str(sig[slot])):
+				items.append(s.catalog.get_item(str(sig[slot])))
+	return items
 
 
 func _spawn_npc(model_id: String, marker_name: String) -> void:
@@ -139,9 +165,10 @@ func _spawn_npc(model_id: String, marker_name: String) -> void:
 	_npcs[marker_name] = m
 
 
-## Цели осмотра: точки int_<id> текущей локации.
-func set_interactables(ids: Array) -> void:
+## Цели осмотра: точки int_<id> текущей локации; verbs — действие у цели из данных шага.
+func set_interactables(ids: Array, verbs: Dictionary = {}) -> void:
 	_interactables.clear()
+	_verbs = verbs
 	for id in ids:
 		_interactables[str(id)] = location.marker("int_" + str(id)).origin
 	_focus = ""
@@ -167,6 +194,9 @@ func set_cutscene(on: bool, focus_id := "") -> void:
 	_cutscene = on
 	player.input_enabled = not on
 	overlay.set_gameplay_ui(not on)
+	overlay.set_skippable(on)
+	if on:
+		overlay.clear_fragments()
 	if on and focus_id != "" and _interactables.has(focus_id):
 		var p: Vector3 = _interactables[focus_id]
 		player.face(p)
@@ -178,8 +208,11 @@ func set_cutscene(on: bool, focus_id := "") -> void:
 
 func _process(_delta: float) -> void:
 	player.water_level = location.water_level()
+	if location.rain.visible:
+		location.rain.global_position = player.global_position + Vector3(0, 9, 0)
 	if overlay.stick:
 		player.touch_move = overlay.stick.value
+		player.touch_run = overlay.stick.value.length() > 0.92     # стик до упора — бег
 	player.camera_yaw = cam.yaw
 	if _beacon.visible:
 		_beacon.rotation.y += _delta * 0.8
@@ -191,7 +224,7 @@ func _process(_delta: float) -> void:
 	var best_d := INTERACT_RADIUS
 	for id in _interactables:
 		var d := player_distance(_interactables[id])
-		if d < best_d:
+		if d < best_d and _visible_from_player(_interactables[id]):
 			best_d = d
 			best = id
 	if best != _focus:
@@ -199,14 +232,14 @@ func _process(_delta: float) -> void:
 		if best == "":
 			overlay.set_prompt("")
 		else:
-			overlay.set_prompt(("Поговорить" if story.speakers.has(best) else "Осмотреть") + ("  ✓" if _seen.has(best) else ""))
+			overlay.set_prompt(_verb(best) + ("  ✓" if _seen.has(best) else ""))
 
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e.is_action_pressed("interact"):
 		_try_interact()
 	elif e.is_action_pressed("pause"):
-		to_title()
+		open_pause()
 
 
 func _try_interact() -> void:
@@ -220,12 +253,13 @@ func _try_interact() -> void:
 
 func _on_scene_started(i: int) -> void:
 	_seen.clear()
-	Game.session.flags.set_flag(PROGRESS_FLAG, i)
+	# первую сцену не запоминаем: «Продолжить» появляется, когда есть что продолжать
+	Game.session.flags.set_flag(PROGRESS_FLAG, str(story.scenes[i].id) if i > 0 else "")
 	Game.save_game()
 
 
 func _on_finished() -> void:
-	Game.session.flags.set_flag(PROGRESS_FLAG, 0)
+	Game.session.flags.set_flag(PROGRESS_FLAG, "")
 	Game.session.flags.set_flag(DONE_FLAG, true)
 	Game.save_game()
 	await overlay.fade(true, 1.0)
@@ -233,9 +267,36 @@ func _on_finished() -> void:
 
 
 func to_title() -> void:
+	get_tree().paused = false
 	Game.save_game()
 	start_scene = -1
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+
+## Пауза: продолжить или выйти в главное меню (прогресс — с начала текущей сцены).
+func open_pause() -> void:
+	if _pause.visible:
+		_pause.close()
+		return
+	get_tree().paused = true
+	_pause.clear()
+	_pause.content.add_child(UiTheme.label("Прогресс сохранён с начала текущей сцены.", 18, UiTheme.TEXT_DIM))
+	_pause.add_footer(UiTheme.secondary(UiTheme.button("В главное меню", to_title)))
+	_pause.add_footer(UiTheme.primary(UiTheme.button("Продолжить", _pause.close)))
+	_pause.open("Пауза", "menu")
+
+
+## Глагол подсказки: из данных шага («verbs»: {"цель": "talk"|"look"}), иначе — по тому, говорящий ли это.
+func _verb(id: String) -> String:
+	var v: String = _verbs.get(id, "talk" if story.speakers.has(id) else "look")
+	return "Поговорить" if v == "talk" else "Осмотреть"
+
+
+## Цель видна, если между головой игрока и точкой нет стены (подсказка не светится сквозь стены).
+func _visible_from_player(p: Vector3) -> bool:
+	var from := player.global_position + Vector3(0, 1.0, 0)
+	var q := PhysicsRayQueryParameters3D.create(from, p + Vector3(0, 1.0, 0), 1)
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
 ## Мягкое пятно тени под персонажем (вместо теней солнца в рендерере Compatibility, и для «приземления»).
