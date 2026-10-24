@@ -40,7 +40,8 @@
  "resources": {
   "coins": 1500,
   "fabric_velvet": 1,
-  "thread_silk": 0
+  "thread_silk": 0,
+  "wish_ticket": 10
  },
  "equip_signature_outfits": true
 }

@@ -43,7 +43,15 @@
   "crossing_bell": {"files": ["res://audio/sfx/crossing_bell.ogg"], "volume_db": -6, "loop": true},
   "train_pass": {"files": ["res://audio/sfx/train_pass.ogg"], "volume_db": -2},
   "splash": {"files": ["res://audio/sfx/splash.ogg"], "volume_db": -8, "pitch_rand": 0.1},
-  "door": {"files": ["res://audio/sfx/door.ogg"], "volume_db": -10}
+  "door": {"files": ["res://audio/sfx/door.ogg"], "volume_db": -10},
+  "jump": {"files": ["res://audio/sfx/jump.ogg"], "volume_db": -8, "pitch_rand": 0.05},
+  "land": {"files": ["res://audio/sfx/land.ogg"], "volume_db": -12, "pitch_rand": 0.05},
+  "dodge": {"files": ["res://audio/sfx/dodge.ogg"], "volume_db": -9, "pitch_rand": 0.05},
+  "swing": {"files": ["res://audio/sfx/swing.ogg"], "volume_db": -8, "pitch_rand": 0.05},
+  "skill": {"files": ["res://audio/sfx/skill.ogg"], "volume_db": -8, "pitch_rand": 0.05},
+  "shutter": {"files": ["res://audio/sfx/shutter.ogg"], "volume_db": -6, "pitch_rand": 0.05},
+  "wish": {"files": ["res://audio/sfx/wish.ogg"], "volume_db": -6, "pitch_rand": 0.05},
+  "wish_gold": {"files": ["res://audio/sfx/wish_gold.ogg"], "volume_db": -4, "pitch_rand": 0.05}
  },
  "locations": {
   "city_street": {"surface": "asphalt",

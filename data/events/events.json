@@ -1,0 +1,49 @@
+{
+  "_comment": "События: конкурсы-испытания по расписанию и ежедневный подарок. Расписание — по дням (UTC) от начала эпохи: событие идёт days дней из каждого цикла cycle, начиная с offset. Награды — стартовый баланс (PLACEHOLDER).",
+  "events": [
+    {
+      "id": "event_cute_contest_001",
+      "kind": "challenge",
+      "title_key": "event.cute_contest.title",
+      "description_key": "event.cute_contest.description",
+      "icon": "sparkle",
+      "accent": "#f2a7c2",
+      "challenge_id": "challenge_event_cute_contest_001",
+      "cycle": 14, "offset": 0, "days": 7,
+      "reward": {"wish_ticket": 3, "star_dust": 20}
+    },
+    {
+      "id": "event_reception_001",
+      "kind": "challenge",
+      "title_key": "event.reception.title",
+      "description_key": "event.reception.description",
+      "icon": "trophy",
+      "accent": "#9fb4d8",
+      "challenge_id": "challenge_event_reception_001",
+      "cycle": 14, "offset": 7, "days": 7,
+      "reward": {"wish_ticket": 3, "coins": 300}
+    },
+    {
+      "id": "event_evening_ball_001",
+      "kind": "challenge",
+      "title_key": "event.evening_ball.title",
+      "description_key": "event.evening_ball.description",
+      "icon": "note",
+      "accent": "#d8b36e",
+      "challenge_id": "fashion_challenge_evening_ball_test_001",
+      "cycle": 1, "offset": 0, "days": 1,
+      "reward": {"wish_ticket": 1}
+    },
+    {
+      "id": "event_daily_gift_001",
+      "kind": "daily",
+      "title_key": "event.daily_gift.title",
+      "description_key": "event.daily_gift.description",
+      "icon": "chest",
+      "accent": "#86cfc0",
+      "cycle": 1, "offset": 0, "days": 1,
+      "reward": {"coins": 100},
+      "streak_bonus": {"every": 7, "reward": {"wish_ticket": 2}}
+    }
+  ]
+}

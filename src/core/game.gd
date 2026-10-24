@@ -46,6 +46,12 @@ func _update_ui_scale() -> void:
 	win.content_scale_factor = factor * ui_scale
 
 
+## Время в игре — в профиль игрока (пауза и свёрнутое окно не считаются).
+func _process(delta: float) -> void:
+	if session and not get_tree().paused:
+		session.profile.play_seconds += delta
+
+
 func load_or_new() -> void:
 	var res := save_service.load_save()
 	if res.ok:

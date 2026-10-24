@@ -290,6 +290,311 @@
     ]
    },
    "story_only": true
+  },
+  {
+   "id": "challenge_event_cute_contest_001",
+   "title_key": "challenge.event_cute_contest.title",
+   "description_key": "challenge.event_cute_contest.description",
+   "theme_tags": [
+    "cute",
+    "floral",
+    "romantic"
+   ],
+   "attribute_weights": {
+    "cuteness": 1.6,
+    "fantasy": 1.3,
+    "romance": 1.0,
+    "elegance": 0.5,
+    "coolness": 0.3
+   },
+   "theme_rules": [
+    {
+     "id": "socks_not_scored",
+     "when": {
+      "slots": [
+       "socks"
+      ]
+     },
+     "level": "not_scored"
+    },
+    {
+     "id": "fairy_perfect",
+     "when": {
+      "tags_all": [
+       "cute",
+       "floral"
+      ]
+     },
+     "level": "perfect"
+    },
+    {
+     "id": "cute_good",
+     "when": {
+      "tags_any": [
+       "cute",
+       "romantic",
+       "festival"
+      ]
+     },
+     "level": "good"
+    },
+    {
+     "id": "formal_weak",
+     "when": {
+      "tags_any": [
+       "formal",
+       "sporty"
+      ]
+     },
+     "level": "weak"
+    }
+   ],
+   "default_theme_level": "neutral",
+   "item_multipliers": {},
+   "requirements": [
+    {
+     "id": "req_face",
+     "type": "required_slot",
+     "params": {
+      "slot": "face_style"
+     },
+     "severity": "major",
+     "text_key": "req.face_style"
+    },
+    {
+     "id": "req_cute",
+     "type": "tag_any",
+     "params": {
+      "tag": "cute",
+      "min_count": 2
+     },
+     "severity": "major",
+     "text_key": "req.cute_two"
+    }
+   ],
+   "optional_requirements": [
+    {
+     "id": "opt_cuteness",
+     "type": "attribute_min",
+     "params": {
+      "attribute": "cuteness",
+      "min": 70
+     },
+     "bonus": 150,
+     "text_key": "req.opt_cuteness"
+    }
+   ],
+   "synergy_rules": [],
+   "rank_thresholds": {
+    "D": 0,
+    "C": 400,
+    "B": 750,
+    "A": 1050,
+    "S": 1550
+   },
+   "min_clear_rank": "C",
+   "repeatable": true,
+   "reward_table": {
+    "first_clear": [
+     {
+      "type": "resource",
+      "id": "wish_ticket",
+      "amount": 2
+     }
+    ],
+    "rank_rewards": {
+     "B": [
+      {
+       "type": "resource",
+       "id": "coins",
+       "amount": 200
+      }
+     ],
+     "A": [
+      {
+       "type": "resource",
+       "id": "wish_ticket",
+       "amount": 1
+      }
+     ],
+     "S": [
+      {
+       "type": "item",
+       "id": "face_star_001"
+      }
+     ]
+    },
+    "repeat": [
+     {
+      "type": "resource",
+      "id": "coins",
+      "amount": 30
+     }
+    ]
+   },
+   "event_only": true
+  },
+  {
+   "id": "challenge_event_reception_001",
+   "title_key": "challenge.event_reception.title",
+   "description_key": "challenge.event_reception.description",
+   "theme_tags": [
+    "formal",
+    "elegant"
+   ],
+   "attribute_weights": {
+    "formality": 1.6,
+    "elegance": 1.3,
+    "simplicity": 0.8,
+    "luxury": 0.6,
+    "cuteness": 0.3,
+    "casualness": 0.2
+   },
+   "theme_rules": [
+    {
+     "id": "socks_not_scored",
+     "when": {
+      "slots": [
+       "socks"
+      ]
+     },
+     "level": "not_scored"
+    },
+    {
+     "id": "sporty_contradicts",
+     "when": {
+      "tags_any": [
+       "sporty",
+       "festival"
+      ]
+     },
+     "level": "contradicts"
+    },
+    {
+     "id": "formal_perfect",
+     "when": {
+      "tags_all": [
+       "formal",
+       "elegant"
+      ]
+     },
+     "level": "perfect"
+    },
+    {
+     "id": "formal_good",
+     "when": {
+      "tags_any": [
+       "formal",
+       "elegant"
+      ]
+     },
+     "level": "good"
+    },
+    {
+     "id": "casual_weak",
+     "when": {
+      "tags_any": [
+       "casual",
+       "cozy",
+       "cute"
+      ]
+     },
+     "level": "weak"
+    }
+   ],
+   "default_theme_level": "neutral",
+   "item_multipliers": {},
+   "requirements": [
+    {
+     "id": "req_face",
+     "type": "required_slot",
+     "params": {
+      "slot": "face_style"
+     },
+     "severity": "major",
+     "text_key": "req.face_style"
+    },
+    {
+     "id": "req_formal",
+     "type": "tag_any",
+     "params": {
+      "tag": "formal",
+      "min_count": 2
+     },
+     "severity": "major",
+     "text_key": "req.formal_two"
+    },
+    {
+     "id": "req_no_festival",
+     "type": "forbidden_tag",
+     "params": {
+      "tag": "festival"
+     },
+     "severity": "minor",
+     "text_key": "req.no_festival"
+    }
+   ],
+   "optional_requirements": [
+    {
+     "id": "opt_formality",
+     "type": "attribute_min",
+     "params": {
+      "attribute": "formality",
+      "min": 70
+     },
+     "bonus": 150,
+     "text_key": "req.opt_formality"
+    }
+   ],
+   "synergy_rules": [],
+   "rank_thresholds": {
+    "D": 0,
+    "C": 400,
+    "B": 750,
+    "A": 1050,
+    "S": 1550
+   },
+   "min_clear_rank": "C",
+   "repeatable": true,
+   "reward_table": {
+    "first_clear": [
+     {
+      "type": "resource",
+      "id": "wish_ticket",
+      "amount": 2
+     }
+    ],
+    "rank_rewards": {
+     "B": [
+      {
+       "type": "resource",
+       "id": "coins",
+       "amount": 200
+      }
+     ],
+     "A": [
+      {
+       "type": "resource",
+       "id": "wish_ticket",
+       "amount": 1
+      }
+     ],
+     "S": [
+      {
+       "type": "item",
+       "id": "face_moon_001"
+      }
+     ]
+    },
+    "repeat": [
+     {
+      "type": "resource",
+      "id": "coins",
+      "amount": 30
+     }
+    ]
+   },
+   "event_only": true
   }
  ]
 }

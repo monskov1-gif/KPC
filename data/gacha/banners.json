@@ -1,0 +1,63 @@
+{
+  "_comment": "Молитвы (гача персонажей и образов). Шансы, гарант, цены и содержимое — стартовый баланс (PLACEHOLDER), не канон. Вероятности показываются игроку в окне «Шансы».",
+  "currency": "wish_ticket",
+  "dust_resource": "star_dust",
+  "dust_for_duplicate_character": 60,
+  "dust_per_ticket": 20,
+  "banners": [
+    {
+      "id": "banner_hotto_001",
+      "kind": "character",
+      "title_key": "gacha.banner_hotto.title",
+      "subtitle_key": "gacha.banner_hotto.subtitle",
+      "featured": "hotto",
+      "accent": "#e8c37a",
+      "cost": 1,
+      "rates": {"5": 0.006, "4": 0.051},
+      "soft_pity": 74,
+      "soft_step": 0.06,
+      "hard_pity": 90,
+      "pity_4": 10,
+      "pool_5": [{"type": "character", "id": "hotto"}],
+      "pool_4": [
+        {"type": "item", "id": "face_butterfly_001"},
+        {"type": "item", "id": "face_rainbow_001"},
+        {"type": "item", "id": "face_evening_001"},
+        {"type": "item", "id": "face_cat_001"},
+        {"type": "item", "id": "face_heart_001"}
+      ],
+      "pool_3": [
+        {"type": "resource", "id": "coins", "amount": 120},
+        {"type": "resource", "id": "fabric_velvet", "amount": 1},
+        {"type": "resource", "id": "thread_silk", "amount": 2},
+        {"type": "resource", "id": "star_dust", "amount": 5}
+      ]
+    },
+    {
+      "id": "banner_fairy_faces_001",
+      "kind": "item",
+      "title_key": "gacha.banner_fairy.title",
+      "subtitle_key": "gacha.banner_fairy.subtitle",
+      "featured": "face_fairytale_001",
+      "accent": "#c8a8ff",
+      "cost": 1,
+      "rates": {"5": 0.008, "4": 0.06},
+      "soft_pity": 60,
+      "soft_step": 0.07,
+      "hard_pity": 75,
+      "pity_4": 10,
+      "pool_5": [{"type": "item", "id": "face_fairytale_001"}],
+      "pool_4": [
+        {"type": "item", "id": "face_butterfly_001"},
+        {"type": "item", "id": "face_rainbow_001"},
+        {"type": "item", "id": "face_star_001"},
+        {"type": "item", "id": "face_moon_001"}
+      ],
+      "pool_3": [
+        {"type": "resource", "id": "coins", "amount": 120},
+        {"type": "resource", "id": "thread_silk", "amount": 2},
+        {"type": "resource", "id": "star_dust", "amount": 5}
+      ]
+    }
+  ]
+}

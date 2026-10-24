@@ -230,6 +230,20 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 			for x in [0.14, 0.54]:
 				for y in [0.14, 0.54]:
 					ci.draw_rect(Rect2(_p(r, x, y), Vector2(w * 0.32, w * 0.32)), c)
+		"camera":
+			ci.draw_rect(Rect2(_p(r, 0.1, 0.3), Vector2(w * 0.8, w * 0.52)), c)
+			ci.draw_rect(Rect2(_p(r, 0.34, 0.18), Vector2(w * 0.3, w * 0.14)), c)
+			ci.draw_circle(_p(r, 0.5, 0.56), w * 0.17, Color(1, 1, 1, 0.9))
+			ci.draw_circle(_p(r, 0.5, 0.56), w * 0.1, c)
+		"ticket":
+			ci.draw_colored_polygon(_poly([[0.1, 0.28], [0.9, 0.28], [0.9, 0.42], [0.84, 0.5], [0.9, 0.58], [0.9, 0.72],
+				[0.1, 0.72], [0.1, 0.58], [0.16, 0.5], [0.1, 0.42]], r), c)
+			_sparkle(ci, _p(r, 0.5, 0.5), w * 0.16, Color(1, 1, 1, 0.95))
+		"dust":
+			_sparkle(ci, _p(r, 0.36, 0.6), w * 0.22, c)
+			_sparkle(ci, _p(r, 0.68, 0.32), w * 0.16, c)
+			ci.draw_circle(_p(r, 0.72, 0.72), w * 0.06, c)
+			ci.draw_circle(_p(r, 0.24, 0.24), w * 0.05, c)
 		"thread":
 			ci.draw_rect(Rect2(_p(r, 0.26, 0.14), Vector2(w * 0.48, w * 0.10)), c.darkened(0.2))
 			ci.draw_rect(Rect2(_p(r, 0.26, 0.76), Vector2(w * 0.48, w * 0.10)), c.darkened(0.2))

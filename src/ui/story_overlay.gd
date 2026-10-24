@@ -12,6 +12,8 @@ const SKETCH_DIR := "res://art/story/sketches/"
 var dialogue: DialogueBox
 var sketchbook: SketchbookView
 var stick: VirtualStick
+## Игровой интерфейс исследования: профиль, разделы, валюта, мини-карта, кнопки действий (прячется в катсценах).
+var hud: GameHud
 var _root: Control
 var _fade: ColorRect
 var _caption: VBoxContainer
@@ -34,6 +36,10 @@ var _hint_keys: HBoxContainer
 var _hint_icon: IconView
 var _hint_title: Label
 var _hint_text: Label
+var _toast: PanelContainer
+var _toast_text: Label
+var _toast_tween: Tween
+var _flash: ColorRect
 
 
 func _ready() -> void:
@@ -57,6 +63,13 @@ func _ready() -> void:
 	_objective.add_child(oh)
 	_objective.visible = false
 	_root.add_child(_objective)
+	hud = GameHud.new()
+	hud.name = "Hud"
+	_root.add_child(hud)
+	hud.set_touch(_touch)
+	hud.visible = false                 # появляется, когда герой управляется (set_gameplay_ui)
+	hud.modulate.a = 0.0
+	_root.move_child(_objective, -1)
 
 	var menu := UiTheme.icon_button("menu", func(): menu_requested.emit(), 58)
 	menu.anchor_left = 1.0; menu.anchor_right = 1.0
@@ -135,13 +148,33 @@ func _ready() -> void:
 		_touch_btn = UiTheme.icon_button("sparkle", func(): interact_pressed.emit(), 92, UiTheme.GOLD_DEEP)
 		_touch_btn.anchor_left = 1.0; _touch_btn.anchor_right = 1.0
 		_touch_btn.anchor_top = 1.0; _touch_btn.anchor_bottom = 1.0
-		_touch_btn.offset_left = -130; _touch_btn.offset_right = -38
-		_touch_btn.offset_top = -150; _touch_btn.offset_bottom = -58
+		# слева от кнопок действий HUD (удар, прыжок, рывок, снимок)
+		_touch_btn.offset_left = -334; _touch_btn.offset_right = -246
+		_touch_btn.offset_top = -156; _touch_btn.offset_bottom = -68
 		_touch_btn.visible = false
 		_root.add_child(_touch_btn)
 		_prompt_key.get_parent().visible = false
 
 	_build_hint()
+	_toast = PanelContainer.new()
+	_toast.add_theme_stylebox_override("panel", UiTheme.cloud(Color(1, 0.99, 0.97, 0.95), 999, 10))
+	_toast.anchor_left = 0.5; _toast.anchor_right = 0.5
+	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_toast.offset_top = 96
+	var th := HBoxContainer.new()
+	th.add_child(UiTheme.icon("sparkle", 20, UiTheme.GOLD))
+	_toast_text = UiTheme.tag("", 17)
+	th.add_child(_toast_text)
+	_toast.add_child(th)
+	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast.modulate.a = 0.0
+	_root.add_child(_toast)
+	_flash = ColorRect.new()
+	_flash.color = Color(1, 1, 1)
+	_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash.modulate.a = 0.0
+	_root.add_child(_flash)
 	dialogue = DialogueBox.new()
 	_root.add_child(dialogue)
 	sketchbook = SketchbookView.new()
@@ -202,7 +235,25 @@ func caption(text: String, sub: String, seconds: float) -> void:
 	await tw.finished
 
 
+## Короткое сообщение сверху по центру (снимок сохранён, награда получена…).
+func toast(text: String, seconds := 2.2) -> void:
+	_toast_text.text = text
+	if _toast_tween and _toast_tween.is_valid():
+		_toast_tween.kill()
+	_toast_tween = create_tween()
+	_toast_tween.tween_property(_toast, "modulate:a", 1.0, 0.2)
+	_toast_tween.tween_interval(seconds)
+	_toast_tween.tween_property(_toast, "modulate:a", 0.0, 0.5)
+
+
+## Вспышка (снимок).
+func flash() -> void:
+	_flash.modulate.a = 0.85
+	create_tween().tween_property(_flash, "modulate:a", 0.0, 0.45)
+
+
 func set_objective(text: String) -> void:
+	_objective.position = Vector2(24, hud.objective_y() if hud else 22.0)
 	if text != "" and text.get_slice("  ·  ", 0) != _objective_text.text.get_slice("  ·  ", 0):
 		Audio.sfx("objective")
 	_objective_text.text = text
@@ -383,6 +434,13 @@ func set_gameplay_ui(on: bool) -> void:
 		_bars_tween.tween_property(b, "modulate:a", 0.0 if on else 1.0, 0.5)
 	if _objective_text.text != "":
 		_bars_tween.tween_property(_objective, "modulate:a", 1.0 if on else 0.0, 0.4)
+	if hud:
+		if on:
+			hud.visible = true
+			hud.refresh()
+		_bars_tween.tween_property(hud, "modulate:a", 1.0 if on else 0.0, 0.4)
+		if not on:
+			_bars_tween.chain().tween_callback(func(): hud.visible = false)
 	if stick:
 		stick.visible = on
 		if not on:

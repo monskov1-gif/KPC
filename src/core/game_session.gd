@@ -22,6 +22,9 @@ var crafting: CraftingService
 var shops: ShopService
 var rewards: ChallengeRewardService
 var flags: StoryFlags
+var gacha: GachaService
+var events: EventService
+var profile := PlayerProfile.new()
 var unlocked_characters: Array[String] = []
 var orphaned_items: Dictionary = {}   # item_id -> запись владения; предметы, которых нет в текущем каталоге
 var _starting_state: Dictionary = {}
@@ -58,11 +61,16 @@ func _load(dir: String) -> void:
 	rewards = ChallengeRewardService.new(config, grants, crafting)
 	flags = StoryFlags.new()
 	_starting_state = DataLoader.load_json(dir + "/wardrobe/starting_state.json", errs)
+	gacha = GachaService.new(grants, resources)
+	gacha.load_data(DataLoader.load_json(dir + "/gacha/banners.json", errs), catalog, characters)
+	events = EventService.new(resources)
+	events.load_data(DataLoader.load_json(dir + "/events/events.json", errs).get("events", []), challenges)
 
 	challenges.validate_rewards(catalog, resources, crafting)
 	for e in errs:
 		errors.append(str(e))
-	for src in [catalog.errors, characters.errors, challenges.errors, crafting.errors, shops.errors]:
+	for src in [catalog.errors, characters.errors, challenges.errors, crafting.errors, shops.errors, gacha.errors,
+			events.errors]:
 		errors.append_array(src)
 	warnings.append_array(catalog.warnings)
 
@@ -77,6 +85,9 @@ func reset_state() -> void:
 	shops.reset()
 	rewards.reset()
 	flags.reset()
+	gacha.reset()
+	events.reset()
+	profile.reset()
 	unlocked_characters.clear()
 	orphaned_items.clear()
 
@@ -94,6 +105,42 @@ func new_game() -> void:
 	if _starting_state.get("equip_signature_outfits", false):
 		for c in unlocked_characters:
 			equipment.equip_signature(c)
+	profile.ensure_uid(int(Time.get_unix_time_from_system() * 1000.0))
+
+
+## Молитвы на баннере; новый персонаж сразу получает фирменный образ (открыт в гардеробе).
+func gacha_pull(banner_id: String, count: int) -> Dictionary:
+	var before := unlocked_characters.duplicate()
+	var res := gacha.pull(banner_id, count, unlocked_characters)
+	for c in unlocked_characters:
+		if not before.has(c) and equipment.get_outfit(c).items.is_empty():
+			equipment.equip_signature(c)
+	return res
+
+
+## Награда события; для конкурса условие — испытание события пройдено.
+func claim_event(event_id: String, day: int) -> Dictionary:
+	var e := events.get_event(event_id)
+	var cleared := bool(rewards.result(str(e.get("challenge_id", ""))).get("cleared", false))
+	return events.claim(event_id, day, cleared)
+
+
+## Сводка для профиля игрока (уровень считается из неё).
+func profile_stats() -> Dictionary:
+	var cleared := 0
+	var best := ""
+	var order: Array = config.rank_order
+	for id in challenges.ids():
+		var r := rewards.result(id)
+		if r.get("cleared", false):
+			cleared += 1
+		var rk := str(r.get("best_rank", ""))
+		if rk != "" and (best == "" or order.find(rk) > order.find(best)):
+			best = rk
+	var playable := characters.ids().filter(func(c): return not characters.get_data(c).get("story_only", false))
+	return {"item": inventory.count(), "items_total": catalog.all_items().size(), "challenge": cleared,
+		"best_rank": best, "pull": gacha.total_pulls(), "event": events.claims_total(), "photo": profile.photos.size(),
+		"characters": unlocked_characters.filter(func(c): return playable.has(c)).size(), "characters_total": playable.size()}
 
 
 func outfit_items(character_id: String) -> Array[ClothingItem]:
@@ -122,6 +169,9 @@ func to_save_dict() -> Dictionary:
 		"challenge_results": rewards.to_dict(),
 		"flags": flags.to_dict(),
 		"unlocked_characters": unlocked_characters.duplicate(),
+		"gacha": gacha.to_dict(),
+		"events": events.to_dict(),
+		"profile": profile.to_dict(),
 	}
 
 
@@ -144,7 +194,8 @@ func load_save_dict(d: Dictionary) -> Array[String]:
 			orphaned_items[id] = saved_orphans[id]
 	resources.load_dict(_section(d, "resources"))
 	var chars = d.get("unlocked_characters", [])
-	unlocked_characters = DataLoader.to_string_array(chars).filter(func(c): return characters.has_character(c))
+	# тот же массив, а не новый: на него ссылаются сервисы (молитвы открывают персонажей)
+	unlocked_characters.assign(DataLoader.to_string_array(chars).filter(func(c): return characters.has_character(c)))
 	for dropped in equipment.load_dict(_section(d, "equipment")):
 		notes.append("Из экипировки убран недоступный предмет: %s" % dropped)
 	presets.load_dict(_section(d, "presets"))
@@ -152,6 +203,10 @@ func load_save_dict(d: Dictionary) -> Array[String]:
 	shops.load_dict(_section(d, "shops"))
 	rewards.load_dict(_section(d, "challenge_results"))
 	flags.load_dict(_section(d, "flags"))
+	gacha.load_dict(_section(d, "gacha"))
+	events.load_dict(_section(d, "events"))
+	profile.load_dict(_section(d, "profile"))
+	profile.ensure_uid(hash(JSON.stringify(_section(d, "wardrobe"))))
 	# Сохранение из прошлой версии: стартовых вещей, добавленных обновлением (одежда Кота-ребёнка для пролога),
 	# в нём нет — выдать их, иначе сюжетное испытание нечем пройти.
 	if inventory.count() > 0:

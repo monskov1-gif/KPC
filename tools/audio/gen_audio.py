@@ -593,6 +593,29 @@ def sfx_all():
     out["train_pass"] = body * 0.8 + clack * 0.4
     out["splash"] = fft_filter(rng.standard_normal(int(0.7 * SR)), lo=300, hi=6000) * env(int(0.7 * SR), a=0.01, d=0.2, r=0.1) * 0.6
     out["door"] = step("wood", rng) * 0.8
+    # игровой интерфейс 24.10: прыжок, приземление, рывок, удар, вспышка навыка, затвор, молитвы
+    n = int(0.28 * SR)
+    t = t_axis(n)
+    out["jump"] = fft_filter(rng.standard_normal(n), lo=400, hi=3000) * env(n, a=0.03, d=0.12, r=0.05) * 0.5 \
+        + 0.4 * np.sin(2 * np.pi * (300 + 500 * t / t[-1]) * t) * np.exp(-t * 14)
+    out["land"] = step("asphalt", rng) * 0.9
+    n = int(0.32 * SR)
+    t = t_axis(n)
+    out["dodge"] = fft_filter(rng.standard_normal(n), lo=700, hi=6000) * np.sin(np.pi * t / t[-1]) ** 2 * 0.6
+    n = int(0.22 * SR)
+    t = t_axis(n)
+    out["swing"] = fft_filter(rng.standard_normal(n), lo=1200, hi=8000) * np.sin(np.pi * t / t[-1]) ** 3 * 0.6 \
+        + 0.25 * glock(midi(91), 0.1, 0.3)[:n]
+    out["skill"] = chime([79, 83, 86, 91, 95], 0.035, vel=0.4, tail=0.9)
+    n = int(0.12 * SR)
+    t = t_axis(n)
+    click = np.zeros(n)
+    for i0 in (0, int(0.045 * SR)):
+        c = fft_filter(rng.standard_normal(int(0.02 * SR)), lo=1500, hi=9000) * np.exp(-t_axis(int(0.02 * SR)) * 250)
+        click[i0:i0 + len(c)] += c
+    out["shutter"] = click
+    out["wish"] = chime([67, 71, 74, 79, 83, 86, 91], 0.09, inst=musicbox, vel=0.35, tail=1.4)
+    out["wish_gold"] = chime([72, 79, 84, 88, 91, 96, 100], 0.08, vel=0.45, tail=2.2)
     for k, v in list(out.items()):
         out[k] = v / (np.abs(v).max() + 1e-9) * (0.9 if not k.startswith("step") else 0.7)
     return out

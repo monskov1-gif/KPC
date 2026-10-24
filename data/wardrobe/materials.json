@@ -1,8 +1,35 @@
 {
   "_comment": "Ресурсы: валюта и материалы для крафта. Названия и количества — PLACEHOLDER.",
   "resources": [
-    { "id": "coins", "kind": "currency", "name_key": "resource.coins.name", "max": 9999999 },
-    { "id": "fabric_velvet", "kind": "material", "name_key": "resource.fabric_velvet.name", "max": 999 },
-    { "id": "thread_silk", "kind": "material", "name_key": "resource.thread_silk.name", "max": 999 }
+    {
+      "id": "coins",
+      "kind": "currency",
+      "name_key": "resource.coins.name",
+      "max": 9999999
+    },
+    {
+      "id": "wish_ticket",
+      "kind": "currency",
+      "name_key": "resource.wish_ticket.name",
+      "max": 99999
+    },
+    {
+      "id": "star_dust",
+      "kind": "currency",
+      "name_key": "resource.star_dust.name",
+      "max": 99999
+    },
+    {
+      "id": "fabric_velvet",
+      "kind": "material",
+      "name_key": "resource.fabric_velvet.name",
+      "max": 999
+    },
+    {
+      "id": "thread_silk",
+      "kind": "material",
+      "name_key": "resource.thread_silk.name",
+      "max": 999
+    }
   ]
 }
