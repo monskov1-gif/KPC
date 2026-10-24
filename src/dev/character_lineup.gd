@@ -75,6 +75,7 @@ func debug_head_hotto() -> void:
 	debug_full_hotto()
 	var cam := get_viewport().get_camera_3d()
 	cam.position = Vector3(0, 2.05, 1.6)
+	_cam_override()
 
 
 func _focus(id: String) -> void:
@@ -319,11 +320,21 @@ func debug_face_styles() -> void:
 	_cam_override()
 
 
-## KPC_CAM=«x,y,z» — камера в эту точку (крупный план любого места витрины).
+## KPC_CAM=«x,y,z» — камера в эту точку (крупный план любого места витрины);
+## KPC_HIDE=«начало имени» — спрятать части моделей (например garment__upper — проверить тело под вещью).
 func _cam_override() -> void:
 	if OS.has_environment("KPC_CAM"):
 		var c := OS.get_environment("KPC_CAM").split_floats(",")
 		get_viewport().get_camera_3d().position = Vector3(c[0], c[1], c[2])
+	if OS.has_environment("KPC_REST"):          # поза покоя (без анимации) — отличить ошибку сетки от ошибки весов
+		for ap in find_children("*", "AnimationPlayer", true, false):
+			(ap as AnimationPlayer).stop()
+		for sk in find_children("*", "Skeleton3D", true, false):
+			(sk as Skeleton3D).reset_bone_poses()
+	if OS.has_environment("KPC_HIDE"):
+		for mi in find_children("*", "MeshInstance3D", true, false):
+			if String(mi.name).begins_with(OS.get_environment("KPC_HIDE")):
+				(mi as MeshInstance3D).visible = false
 
 
 ## Кадры анимации: KPC_POSE_ID=<модель> KPC_ANIM=walk|run|idle; 4 копии в разных фазах цикла, вид сбоку и спереди.

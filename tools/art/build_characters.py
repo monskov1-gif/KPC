@@ -2557,6 +2557,7 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     bm.normal_update()
     # номер исходной вершины тела: при привязке к скелету вещь берёт веса тела (не расходится с ним на шаге)
     src = bm.verts.layers.int.new("src")
+    edge = bm.verts.layers.int.new("edge")   # кромка сдвинута вдоль петли — веса ей нужны по месту, не по «src»
     for v in bm.verts:
         v[src] = v.index
     global _SPEC_N
@@ -2583,12 +2584,15 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     bnd = [v for v in bm.verts if v.is_boundary]
     loop_nb = {v: [e.other_vert(v) for e in v.link_edges if e.is_boundary] for v in bnd}
     start = {v: v.co.copy() for v in bnd}
+    # предел сдвига — ступенька сетки у этой вершины (у крупной базы, например мускулистой, рёбра длиннее,
+    # и постоянные 1.2 см оставляли зубцы ворота)
+    lim = {v: max(0.012, 0.9 * sum(e.calc_length() for e in v.link_edges) / max(1, len(v.link_edges))) for v in bnd}
     for _ in range(10):
         new = {v: v.co.lerp((nb[0].co + nb[1].co) * 0.5, 0.55) for v, nb in loop_nb.items() if len(nb) == 2}
         for v, co in new.items():
             # не дальше ступеньки сетки: в узкой выемке (пройма у подмышки) петля иначе схлопывается в шипы
             d = co - start[v]
-            v.co = start[v] + d * min(1.0, 0.012 / max(d.length, 1e-9))
+            v.co = start[v] + d * min(1.0, lim[v] / max(d.length, 1e-9))
     bset = set(bnd)
     ring = {e.other_vert(v) for v in bnd for e in v.link_edges} - bset
     for _ in range(3):
@@ -2599,6 +2603,7 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
         for v, co in new.items():
             v.co = co
     for v in list(bset) + list(ring):
+        v[edge] = 1
         if v in off_of:
             loc, nrm, _i, _d = tree.find_nearest(v.co)
             if loc is not None:
@@ -2610,16 +2615,26 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
         if neck:
             o["neck_low"] = min(neck)
     if smooth:
+        # кромку не трогаем: она уже сглажена вдоль петли, а общее сглаживание тянуло каждую её вершину внутрь
+        # на свою величину (соседи только с одной стороны) — край выреза снова становился «пилой»
+        inner = [v for v in bm.verts if not v.is_boundary]
         for _ in range(smooth):
-            bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+            bmesh.ops.smooth_vert(bm, verts=inner, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
         # сглаживание стягивает ткань внутрь рельефного тела (мышцы Хотто) — кожа проступает пятнами;
         # всё, что ушло ближе к своей исходной точке кожи, чем отступ вещи, выталкиваем обратно на отступ
         # (меряем от своей точки, а не от ближайшей поверхности: иначе ткань бедра обтягивала лежащую на нём кисть)
         for v in bm.verts:
-            if v not in off_of or v.is_boundary:
+            if v not in off_of:
+                continue
+            need = max(off_of[v] * 0.85, 0.004)
+            if v.is_boundary:
+                # кромка сдвинута вдоль петли и от своей точки кожи ушла — меряем от ближайшей поверхности
+                # (иначе сглаживание утягивало край ворота под кожу, и сквозь него проступали зубцы треугольников тела)
+                loc, nrm, _i, _d = tree.find_nearest(v.co)
+                if loc is not None and (v.co - loc).dot(nrm) < need:
+                    v.co = loc + nrm * need
                 continue
             co0, n0 = base_of[v]
-            need = max(off_of[v] * 0.85, 0.004)
             h = (v.co - co0).dot(n0)
             if h < need:
                 v.co += n0 * (need - h)
@@ -3696,12 +3711,18 @@ def _copy_body_weights(rig, o, body_w):
     mw = o.matrix_world
     # оболочка тела (shell) помнит исходную вершину кожи («src»): берём её веса, а не ближайшей точки —
     # иначе ткань на бедре под опущенной кистью (Хотто) брала веса кисти и уезжала вместе с рукой
+    # Исключение — кромка (ворот, пройма, подол): её вершины сдвинуты сглаживанием вдоль петли, и соседние брали
+    # веса разных костей (шея / грудь / плечо) — в позе край ворота расходился зубцами. Кромке — веса по месту.
     src = o.data.attributes.get("src")
+    edge = o.data.attributes.get("edge")
     bverts = _BODY.data.vertices if _BODY is not None else []
     bmw = _BODY.matrix_world if _BODY is not None else None
+    W = []
     for v in o.data.vertices:
         acc = {}
         si = src.data[v.index].value if src is not None and src.domain == "POINT" else -1
+        if edge is not None and edge.domain == "POINT" and edge.data[v.index].value:
+            si = -1
         if 0 <= si < len(weights) and si < len(bverts) and ((bmw @ bverts[si].co) - mw @ v.co).length < 0.06 \
                 and weights[si]:
             near = [(None, si, 1.0)]
@@ -3720,8 +3741,31 @@ def _copy_body_weights(rig, o, body_w):
         if torso_only:
             w = [(n, x) for n, x in w if not n.startswith(("thigh", "shin", "foot"))] or [("hips", 1.0)]
         tot = sum(x for _n, x in w) or 1.0
-        for n, x in w:
-            groups[n].add([v.index], x / tot, "ADD")
+        W.append({n: x / tot for n, x in w})
+    # веса кромки сглаживаем по соседям: край ворота и подола идёт в позе ровной линией, без зубцов
+    flag = [bool(edge.data[i].value) for i in range(len(W))] if edge is not None and edge.domain == "POINT" else []
+    if any(flag):
+        nb = [[] for _ in W]
+        for e in o.data.edges:
+            a, b = e.vertices
+            nb[a].append(b)
+            nb[b].append(a)
+        for _ in range(6):
+            nw = {}
+            for i, f in enumerate(flag):
+                if not f or not nb[i]:
+                    continue
+                acc = dict((n, x * 0.5) for n, x in W[i].items())
+                for j in nb[i]:
+                    for n, x in W[j].items():
+                        acc[n] = acc.get(n, 0.0) + x * 0.5 / len(nb[i])
+                nw[i] = acc
+            for i, acc in nw.items():
+                W[i] = acc
+    for i, w in enumerate(W):
+        for n, x in w.items():
+            if x > 1e-4:
+                groups[n].add([i], x, "ADD")
 
 
 def idle_animation(rig, frames=96):
