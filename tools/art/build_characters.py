@@ -44,11 +44,16 @@ def set_face(cid):
 
 # ------------------------------------------------------------------ утилиты
 
+# Поверхность причёски из прядей-оболочек (для заколок); None — старые причёски.
+HAIR_SURF = None
+
 def reset():
+    global HAIR_SURF
+    HAIR_SURF = None
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def mat(name, color, tex=None, vcol=False, rough=0.8, clip=False, double=False):
+def mat(name, color, tex=None, vcol=False, rough=0.8, clip=False, double=False, vcol_alpha=False):
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
@@ -77,6 +82,10 @@ def mat(name, color, tex=None, vcol=False, rough=0.8, clip=False, double=False):
         vn = nt.nodes.new("ShaderNodeVertexColor")
         vn.layer_name = "Col"
         nt.links.new(vn.outputs["Color"], bsdf.inputs["Base Color"])
+        # альфа цвета вершин несёт данные (области тела, толщина контура прядей): связка с Alpha нужна, чтобы
+        # экспорт glTF записал COLOR_0 с альфой (RGBA). Материал в игре заменяется своим шейдером.
+        if vcol_alpha:
+            nt.links.new(vn.outputs["Alpha"], bsdf.inputs["Alpha"])
     if clip:
         m.blend_method = "CLIP" if hasattr(m, "blend_method") else m.blend_method
         try:
@@ -3231,6 +3240,58 @@ def _seg_dist(p, a, b):
     return (a + ab * t - p).length
 
 
+# Области тела (альфа цвета вершин кожи, ×0.1): игра не рисует области, закрытые надетой одеждой — тело не
+# просвечивает сквозь ткань (как у игровых моделей: под одеждой тела нет, docs/MODEL_STUDY.md «Видео»).
+REGIONS = {"torso": 9, "hips": 8, "upper_arm": 7, "forearm": 6, "hand": 5, "thigh": 4, "shin": 3, "foot": 2}
+
+
+def body_regions(body, rig):
+    """Записать область тела в альфу цвета вершин «Col» (10 — всегда видно: голова, шея, плечи, ключицы)."""
+    me = body.data
+    col = me.color_attributes.get("Col")
+    if col is None:
+        return
+    names = {g.index: g.name for g in body.vertex_groups}
+    bones = rig.data.bones
+    up_z = bones["upper_chest"].head_local.z
+    hip_top = bones["spine"].head_local.z
+    region = []
+    for v in me.vertices:
+        if not v.groups:
+            region.append(10)
+            continue
+        g = max(v.groups, key=lambda x: x.weight)
+        n = names.get(g.group, "")
+        p = v.co
+        r = 10
+        if n in ("spine", "chest") or (n == "upper_chest" and p.z < up_z - 0.01):
+            r = REGIONS["torso"]
+        elif n == "hips":
+            r = REGIONS["hips"] if p.z < hip_top else REGIONS["torso"]
+        elif n.startswith("upper_arm"):
+            sh = bones[n].head_local
+            r = REGIONS["upper_arm"] if (p - sh).length > 0.05 else 10       # плечо у сустава — видно в майке
+        elif n.startswith("forearm"):
+            r = REGIONS["forearm"]
+        elif n.startswith("hand"):
+            r = REGIONS["hand"]
+        elif n.startswith("thigh"):
+            r = REGIONS["thigh"]
+        elif n.startswith("shin"):
+            r = REGIONS["shin"]
+        elif n.startswith("foot"):
+            r = REGIONS["foot"]
+        region.append(r)
+    if col.domain == "CORNER":
+        for poly in me.polygons:
+            for li, vi in zip(poly.loop_indices, poly.vertices):
+                c = col.data[li].color
+                col.data[li].color = (c[0], c[1], c[2], region[vi] / 10.0)
+    else:
+        for i, c in enumerate(col.data):
+            col.data[i].color = (c.color[0], c.color[1], c.color[2], region[i] / 10.0)
+
+
 def bind(rig, objs, rigid_bone=None):
     """Веса: две ближайшие кости (обратный квадрат расстояния); голова и всё на ней — жёстко к кости head."""
     bones = [(b.name, b.head_local.copy(), b.tail_local.copy()) for b in rig.data.bones if b.name != "head"]
@@ -3523,7 +3584,7 @@ CHARACTERS = {
         # от вихра на макушке; концы завиваются (реф. 16 — пышные завитки по бокам, чёлка до глаз).
         # Силуэт копны — по наложению на Meshy-лист (tools/art/body_overlay.sh, таблица «причёска»): спереди почти
         # одной ширины от макушки до щёк (~0.22 Hc) и сужается к подбородку, сзади прилегает к затылку и шее.
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.34, "nape": 0.95, "thick_top": 0.05, "thick_side": 0.02,
+        "hair": {"clumps": True, "cap_hairline": 1.0, "c_lock_root": (0.6, 0.88, 0.78), "c_lock_tip": (0.42, 0.6, 0.92), "ribbons": True, "solid": True, "hairline": 0.34, "nape": 0.95, "thick_top": 0.05, "thick_side": 0.02,
                  "cheek_puff": 0.0, "face_open_x": 0.68, "thick": 1.0,
                  "whorl": (0.12, 1.0),
                  # Пряди-локоны как на Meshy-модели: толстые, круглые в сечении, концы закручены в завиток.
@@ -3700,7 +3761,7 @@ def build(cid):
     s = p["s"]
     global SKIN
     SKIN = c.get("skin", SKIN_DEFAULT)
-    skin = mat("skin", SKIN, rough=0.6, vcol=True)
+    skin = mat("skin", SKIN, rough=0.6, vcol=True, vcol_alpha=True)
     if p.get("base"):
         # мех: плиточная фактура × цвет меха × раскраска в вершинах (нос, когти, подушечки, уши)
         skin = mat("skin", SKIN, rough=0.6, vcol=True, tex=os.path.join(TEX, "fur.png"))
@@ -3760,7 +3821,16 @@ def build(cid):
             sx, sy, sz = FP.get("cranium", (1.0, 1.0, 1.0))
             hd_h = (hd[0] * sx, hd[1] * sy, hd[2] * sz, hd[3])
             CONFORM = (BVHTree.FromObject(head, bpy.context.evaluated_depsgraph_get()), Vector((0, 0, hd[3])), hd[0], hd[3], hd[2])
-        if c["hair"].get("ribbons"):
+        if c["hair"].get("clumps"):
+            # крупные пряди-оболочки (метод игровых аниме-моделей, docs/MODEL_STUDY.md — «Видео»)
+            import hair_clumps
+            locks = hair_clumps.build_hair_clumps(cid, head, hd, c["hair"], mat("hair_lock", (1, 1, 1, 1), vcol=True, rough=0.5, vcol_alpha=True),
+                                                 mat("hair_cap_lock", (1, 1, 1, 1), vcol=True, rough=0.5, vcol_alpha=True))
+            hair = [locks[0], join(locks[1:], "hair_locks")]
+            global HAIR_SURF
+            HAIR_SURF = BVHTree.FromObject(hair[1], bpy.context.evaluated_depsgraph_get())
+            hd_h = (hd[0] * 1.15, hd[1] * 1.15, hd[2] * 1.1, hd[3])
+        elif c["hair"].get("ribbons"):
             hair = build_hair_ribbons(cid, head, hd, c["hair"], mat("hair_cap", (1, 1, 1, 1), vcol=True, rough=0.5), hair_mat)
             hd_h = (hd[0] * 1.15, hd[1] * 1.15, hd[2] * 1.1, hd[3])
         else:
@@ -3847,12 +3917,20 @@ def build(cid):
             objs = []
             cl = c.get("clips", {"fish": [(-0.98, 0.78, 1.3, 2.6, 1.0), (1.32, 1.0, 1.3, 0.5, 1.0)], "cloud": (0.66, 0.8, 1.3, 0.15, 1.0)})
             hcz = hd_h[3]
+            def on_hair(th, ph, lf):
+                # заколки — на внешней поверхности причёски (пряди-оболочки), а не на «сфере» волос
+                q0 = conform(on_scalp(hd_h, th, ph, lf), lf)
+                if HAIR_SURF is None:
+                    return q0
+                d = (q0 - Vector((0, 0, hcz))).normalized()
+                hit = HAIR_SURF.ray_cast(Vector((0, 0, hcz)) + d * 0.6, -d)
+                return hit[0] + d * 0.006 if hit[0] is not None else q0
             for th, ph, lf, ang, sc in cl["fish"]:
-                q = conform(on_scalp(hd_h, th, ph, lf), lf)
+                q = on_hair(th, ph, lf)
                 fn = ((q - Vector((0, 0, hcz))).normalized() * 0.45 + Vector((0, -1, 0)) * 0.55).normalized()   # к зрителю
                 objs += fish_clip(q, fn, ang, rx * sc, plain, red_belly, eye_m)
             th, ph, lf, ang, sc = cl["cloud"]
-            q = conform(on_scalp(hd_h, th, ph, lf), lf)
+            q = on_hair(th, ph, lf)
             objs += cloud_clip(q, ((q - Vector((0, 0, hcz))).normalized() * 0.5 + Vector((0, -1, 0)) * 0.5).normalized(), ang, rx * sc,
                                mat("cloud", (0.99, 0.95, 0.95, 1)), mat("cloud_edge", (0.95, 0.56, 0.62, 1)))
             o = join(objs, "garment__headwear__clips")
@@ -3949,6 +4027,7 @@ def build(cid):
     export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))
     bind(rig, [body] + BODY_EXTRA + body_layers + [g for g in garments if not g.name.startswith(on_head)])
+    body_regions(body, rig)
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
     walk_animation(rig)

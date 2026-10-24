@@ -11,6 +11,9 @@ uniform float shade_softness = 0.06;
 uniform vec4 rim_color : source_color = vec4(1.0, 0.9, 0.88, 1.0);
 uniform float rim_strength = 0.28;
 uniform float emission_boost = 0.0;   // самосвечение (окна, фонари локаций)
+// Кожа: области тела под одеждой не рисуются (альфа цвета вершин = область ×0.1, биты маски — CharacterModel).
+uniform bool use_regions = false;
+uniform int hide_regions = 0;
 
 varying vec4 vcol;
 
@@ -24,6 +27,9 @@ void fragment() {
 		base.rgb *= vcol.rgb;
 	}
 	ALBEDO = base.rgb;
+	if (use_regions && ((hide_regions >> int(round(vcol.a * 10.0))) & 1) == 1) {
+		discard;
+	}
 	if (use_alpha_scissor && base.a < 0.5) {
 		discard;
 	}

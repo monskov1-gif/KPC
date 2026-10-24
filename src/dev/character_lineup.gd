@@ -20,7 +20,7 @@ func _ready() -> void:
 	env.environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	add_child(env)
 	var key := DirectionalLight3D.new()
-	key.rotation_degrees = Vector3(-35, 30, 0)
+	key.rotation_degrees = Vector3(-35, float(OS.get_environment("KPC_SUN_YAW")) if OS.has_environment("KPC_SUN_YAW") else 30.0, 0)
 	key.light_energy = 0.7
 	key.light_color = Color("fff1e6")
 	add_child(key)
@@ -139,7 +139,7 @@ func debug_head_kot_bare() -> void:
 func debug_kot_back_hips() -> void:
 	_kot_turn(180.0)
 	var cam := get_viewport().get_camera_3d()
-	cam.position = Vector3(get_node("kot").position.x, 0.95, 0.8)
+	cam.position = Vector3(get_node("kot").position.x, float(OS.get_environment("KPC_CAM_Y")) if OS.has_environment("KPC_CAM_Y") else 0.95, 0.8)
 
 
 ## Лицо Кота в три четверти и в профиль — проверка лепки головы (нос, губы, подбородок, скулы).
