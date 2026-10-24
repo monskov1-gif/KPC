@@ -74,6 +74,8 @@ def mat(name, color, tex=None, vcol=False, rough=0.8, clip=False, double=False, 
             nt.links.new(tn.outputs["Color"], mix.inputs[6])
             nt.links.new(vn.outputs["Color"], mix.inputs[7])
             nt.links.new(mix.outputs[2], bsdf.inputs["Base Color"])
+            if vcol_alpha and not clip:
+                nt.links.new(vn.outputs["Alpha"], bsdf.inputs["Alpha"])
         else:
             nt.links.new(tn.outputs["Color"], bsdf.inputs["Base Color"])
         if clip:
@@ -721,6 +723,38 @@ def loft_head_mesh(rx, ry, rz, cz, L):
     return [(x / rx, y / ry, (z + chin_z - cz) / rz) for x, y, z in verts], faces
 
 
+def fit_arm_joints(me, J):
+    """Суставы опущенных рук чужой базы — по сечениям сетки: prep_base.py ставил локоть и кисть на ~15 см позади
+    и снаружи настоящей руки (кость кисти торчала в воздухе), и кожа кисти привязывалась к бедру.
+    Ниже локтя рука отделена от корпуса просветом: центр сечения руки — середина её габарита по x и y."""
+    vs = [v.co for v in me.vertices]
+    for k, sd in (("l", 1), ("r", -1)):
+        def arm_slice(z, thr):
+            pts = [q for q in vs if abs(q.z - z) < 0.02 and q.x * sd > thr]
+            if len(pts) < 8:
+                return None
+            xs = [q.x for q in pts]
+            ys = [q.y for q in pts]
+            return Vector(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, z))
+
+        def gap_at(z):
+            xs = sorted(q.x * sd for q in vs if abs(q.z - z) < 0.02 and q.x * sd > 0.1)
+            best = max(((b - a, b) for a, b in zip(xs, xs[1:])), default=(0, 0))
+            return best[1] if best[0] > 0.05 else None
+        thr = gap_at(J["wr_" + k].z)
+        if thr is None:
+            continue
+        wr = arm_slice(J["wr_" + k].z, thr - 0.005)
+        pa = arm_slice(J["palm_" + k].z, thr - 0.03)
+        el = arm_slice(J["el_" + k].z, thr - 0.06)
+        if wr is None or pa is None:
+            continue
+        print("суставы руки", k, "запястье", tuple(round(c, 2) for c in J["wr_" + k]), "→", tuple(round(c, 2) for c in wr))
+        J["wr_" + k], J["palm_" + k] = wr, pa
+        if el is not None:
+            J["el_" + k] = el
+
+
 def load_base_body(base, skin_mat):
     """Тело из подготовленной чужой базы (tools/art/prep_base.py): меш + суставы из <base>.joints.json."""
     path = os.path.join(os.path.dirname(__file__), "..", "..", "art", "characters", "src", base)
@@ -735,6 +769,16 @@ def load_base_body(base, skin_mat):
     me.materials.clear()
     me.materials.append(skin_mat)
     J = {k: Vector(v) for k, v in json.load(open(path + ".joints.json")).items()}
+    # glTF-импорт режет меш по швам развёртки (вершины-двойники): одежда-оболочка из такого тела распадалась
+    # на ~150 островков, сглаживание стягивало каждый к центру — в рубашке и брюках зияли дыры. Сшиваем швы
+    # (развёртка и цвета в Blender хранятся по углам граней — не теряются).
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    fit_arm_joints(me, J)
     # цвет меха в вершинах: кончики ушей и пальцев темнее, впадины чуть темнее (иначе мех — плоская заливка)
     bm = bmesh.new()
     bm.from_mesh(me)
@@ -1097,6 +1141,28 @@ def _strip(rows, m, name, thick=0.0002):
     return o
 
 
+def _strip_uv(rows, m, name):
+    """Односторонняя лента (край1, край2) с развёрткой: U вдоль, V — от края1 (0) к краю2 (1)."""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+    vs = [(bm.verts.new(a), bm.verts.new(b)) for a, b in rows]
+    k = len(vs) - 1
+    for i, ((a1, b1), (a2, b2)) in enumerate(zip(vs, vs[1:])):
+        f = bm.faces.new((a1, b1, b2, a2))
+        for loop, uv in zip(f.loops, ((i / k, 0), (i / k, 1), ((i + 1) / k, 1), ((i + 1) / k, 0))):
+            loop[uvl].uv = uv
+    bm.normal_update()
+    if sum((f.normal.y for f in bm.faces), 0.0) > 0:      # лицевой стороной к зрителю (−Y)
+        bmesh.ops.reverse_faces(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    o = new_obj(name, me)
+    shade_smooth(o)
+    o.data.materials.append(m)
+    return o
+
+
 MARKS = {}   # ориентиры для наложения на референс (экспортируются как пустые узлы lm_<имя>)
 
 
@@ -1413,6 +1479,9 @@ def build_lashes_v2(head_obj, hd, c, cid):
     m_brow = mat("brow", c["brow"] + (1,), rough=0.6)
     m_crease = mat("crease", (0.66, 0.44, 0.46, 1), rough=0.7)
     m_warm = mat("lid_warm", (0.95, 0.66, 0.6, 1), rough=0.7)
+    m_lash_hi = mat("lash_hi", c.get("lash_hi", tuple(min(1.0, x * 2.6 + 0.04) for x in c["lash"])) + (1,), rough=0.4)
+    m_glint = mat("lash_glint", c.get("lash_glint", tuple(min(1.0, x * 5.0 + 0.2) for x in c["lash"])) + (1,), rough=0.4)
+    m_shade = mat("eye_shade", c.get("eye_shade", (0.2, 0.18, 0.4)) + (1,), rough=0.7)
     rnd = random.Random(31)
     out = []
     for side in (-1, 1):
@@ -1448,6 +1517,32 @@ def build_lashes_v2(head_obj, hd, c, cid):
             th = th0 * (1 - f) ** 1.1 + um * 0.002
             rows.append((cpt - o * um * 0.004 * (1 - f), cpt + o * th))
         out.append(_strip(rows, m_lash, "lash_upper"))
+        # Двухцветная ресница (2AM, стиль ZZZ): верхняя половина светлее нижней, над зрачком — блик
+        # насыщенным светлым тоном; полосы чуть впереди основной ресницы.
+        hi_rows, glint_rows = [], []
+        for i, (base, top) in enumerate(rows[:m]):
+            t = i / (m - 1)
+            n = Up[i][1]
+            mid = base.lerp(top, 0.5)
+            hi_rows.append((mid + n * lift, top + n * lift))
+            if 0.36 <= t <= 0.56:
+                glint_rows.append((mid.lerp(top, 0.25) + n * lift * 2, mid.lerp(top, 0.8) + n * lift * 2))
+        out.append(_strip(hi_rows, m_lash_hi, "lash_hi"))
+        if len(glint_rows) > 1:
+            out.append(_strip(glint_rows, m_glint, "lash_glint"))
+        # Полупрозрачная тень века на радужке и белке (2AM): лента от линии века вниз, между лицом и радужкой;
+        # сверху плотнее, книзу сходит на нет (прозрачность — шейдер eye_shade по UV.y).
+        # глубина — между лицом и передом купола радужки (купол выступает до iris_depth − iris_dome)
+        es = FP["eye_shape"]
+        deep = Vector((0, (es["iris_depth"] - es["iris_dome"]) * um * 0.15, 0))
+        sh_rows = []
+        for i, (q, n, T, o) in enumerate(Up):
+            t = i / (m - 1)
+            if not 0.03 < t < 0.97:
+                continue
+            hgt = um * (0.04 + 0.11 * math.sin(math.pi * (t - 0.03) / 0.94))
+            sh_rows.append((q + o * um * 0.012 + deep, q - o * hgt + deep))
+        out.append(_strip_uv(sh_rows, m_shade, "eye_shade"))
         for k in range(22):
             t = min(1.0, max(0.0, 0.08 + 0.92 * (k + rnd.uniform(-0.3, 0.3)) / 21))
             top, n, T, o, _ = top_edge[int(t * (m - 1))]
@@ -2328,17 +2423,86 @@ def build_ears(hd, color, inner, ear):
 # на стыках кожа просвечивала).
 _BODY = None
 _BONE_SEGS = []
+# Руки чужой базы (Хотто) опущены и лежат на бёдрах: кожа бедра и бока ближе к кисти, чем к своей кости, —
+# по одному расстоянию брюки и рубашка теряли там куски, а бедро ходило за рукой. Поэтому кожа рук находится
+# заливкой по сетке от ладони (arm_mask): костям рук разрешены только её вершины, а ей — только кости рук.
+_ARM = None      # {индекс вершины тела: "L"|"R"} или None (своё тело — руки отведены, хватает расстояния)
+_J = None
+_SPEC_N = Vector((0, 0, 1))   # нормаль кожи в текущей вершине — для spec() (пройма безрукавки)
 
 
-def set_body(body, J):
-    global _BODY, _BONE_SEGS
+def set_body(body, J, arms=False):
+    global _BODY, _BONE_SEGS, _ARM, _J
     _BODY = body
+    _J = J
     _BONE_SEGS = [(n, J[a], J[b]) for n, a, b, _ in BONES if b in J]
+    _ARM = arm_mask(body, J) if arms else None
 
 
-def _nearest_bone(co):
+def arm_mask(body, J):
+    """Вершины кожи рук: заливка по рёбрам от ладони, пока вершина близко к оси руки, а ось — позади кожи
+    (бок корпуса и бедро смотрят на руку — туда заливка не переходит); выше плеча — не идёт."""
+    me = body.data
+    nb = [[] for _ in me.vertices]
+    for e in me.edges:
+        a, b = e.vertices
+        nb[a].append(b)
+        nb[b].append(a)
+    out = {}
+    for sd, k in (("L", "l"), ("R", "r")):
+        segs = [(J["sh_" + k], J["el_" + k]), (J["el_" + k], J["wr_" + k]), (J["wr_" + k], J["palm_" + k])]
+        r_max = (J["el_" + k] - J["sh_" + k]).length * 0.55
+
+        def ok(i):
+            co, n = me.vertices[i].co, me.vertices[i].normal
+            best = None
+            for si, (a, b) in enumerate(segs):
+                ab = b - a
+                t = (co - a).dot(ab) / max(ab.length_squared, 1e-9)
+                tc = max(0.0, min(1.0, t))
+                q = a + ab * tc
+                d = (q - co).length
+                if best is None or d < best[0]:
+                    best = (d, si, t, q)
+            d, si, t, q = best
+            if si == 0 and t < 0.0:
+                return False                       # выше плечевого сустава — уже корпус
+            if d > r_max:
+                return False
+            # ось руки должна быть позади кожи (кожа смотрит от неё); у кисти — всегда своя
+            return si == 2 or (q - co).dot(n) <= 0.25 * d
+        palm = J["palm_" + k]
+        seeds = sorted(range(len(me.vertices)), key=lambda i: (me.vertices[i].co - palm).length)[:12]
+        stack = [i for i in seeds if ok(i)]
+        seen = set(stack)
+        while stack:
+            i = stack.pop()
+            for j in nb[i]:
+                if j not in seen and j not in out and ok(j):
+                    seen.add(j)
+                    stack.append(j)
+        for i in seen:
+            out[i] = sd
+    print("кожа рук:", sum(1 for v in out.values() if v == "L"), sum(1 for v in out.values() if v == "R"), "вершин")
+    return out
+
+
+def _bone_ok(name, idx):
+    """Можно ли вершине тела idx брать кость name (маска рук _ARM)."""
+    if _ARM is None or idx is None:
+        return True
+    side = _ARM.get(idx)
+    is_arm = name.startswith(("upper_arm", "forearm", "hand"))
+    if side is None:
+        return not is_arm
+    return (is_arm and name.endswith("." + side)) or name == "upper_chest"
+
+
+def _nearest_bone(co, idx=None):
     best = None
     for name, a, b in _BONE_SEGS:
+        if not _bone_ok(name, idx):
+            continue
         ab = b - a
         t = max(0.0, min(1.0, (co - a).dot(ab) / max(ab.length_squared, 1e-9)))
         d = (a + ab * t - co).length
@@ -2360,47 +2524,108 @@ def shell(name, m, spec, smooth=0, uv=(3, 5)):
     src = bm.verts.layers.int.new("src")
     for v in bm.verts:
         v[src] = v.index
+    global _SPEC_N
     kill, moves = [], []
     for v in bm.verts:
-        bone, t = _nearest_bone(v.co)
+        _SPEC_N = v.normal
+        bone, t = _nearest_bone(v.co, v.index)
         off = spec(bone, t, v.co)
         if off is None:
             kill.append(v)
         else:
             moves.append((v, v.normal.copy(), off))
+    base_of = {v: (v.co.copy(), n) for v, n, _off in moves}
     for v, n, off in moves:
         v.co += n * off
     bmesh.ops.delete(bm, geom=kill, context="VERTS")
-    # Кромка вещи: удаление по вершинам даёт «пилу» — выравниваем край, сглаживая только ВЫСОТУ вдоль
-    # граничной петли, затем возвращаем вершины на поверхность тела с прежним отступом (иначе кромка
-    # стягивается внутрь и сквозь неё проступает кожа).
+    # Кромка вещи: удаление по вершинам даёт «пилу» (ступеньки по рёбрам сетки тела) — ворот, пройма и подол
+    # выходили зубчатыми. Сглаживаем кромку вдоль петли по всем осям (а не только по высоте — пройма и V-вырез
+    # идут вертикально), подтягиваем за ней соседний ряд (иначе треугольники у кромки складываются в шипы)
+    # и возвращаем всё на поверхность тела с прежним отступом (иначе кромка стягивается внутрь и сквозь неё
+    # проступает кожа).
     off_of = {v: off for v, _n, off in moves}
     tree = BVHTree.FromObject(_BODY, bpy.context.evaluated_depsgraph_get())
-    for _ in range(6):
-        upd = []
-        for v in bm.verts:
-            if not v.is_boundary:
-                continue
-            nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
-            if len(nb) == 2:
-                upd.append((v, (nb[0].co.z + nb[1].co.z) / 2))
-        for v, z in upd:
-            v.co.z = v.co.z * 0.4 + z * 0.6
-    for v in bm.verts:
-        if v.is_boundary and v in off_of:
+    bnd = [v for v in bm.verts if v.is_boundary]
+    loop_nb = {v: [e.other_vert(v) for e in v.link_edges if e.is_boundary] for v in bnd}
+    start = {v: v.co.copy() for v in bnd}
+    for _ in range(10):
+        new = {v: v.co.lerp((nb[0].co + nb[1].co) * 0.5, 0.55) for v, nb in loop_nb.items() if len(nb) == 2}
+        for v, co in new.items():
+            # не дальше ступеньки сетки: в узкой выемке (пройма у подмышки) петля иначе схлопывается в шипы
+            d = co - start[v]
+            v.co = start[v] + d * min(1.0, 0.012 / max(d.length, 1e-9))
+    bset = set(bnd)
+    ring = {e.other_vert(v) for v in bnd for e in v.link_edges} - bset
+    for _ in range(3):
+        new = {}
+        for v in ring:
+            nb = [e.other_vert(v).co for e in v.link_edges]
+            new[v] = v.co.lerp(sum(nb, Vector()) / len(nb), 0.5)
+        for v, co in new.items():
+            v.co = co
+    for v in list(bset) + list(ring):
+        if v in off_of:
             loc, nrm, _i, _d = tree.find_nearest(v.co)
             if loc is not None:
                 v.co = loc + nrm * max(off_of[v], 0.0045)
+    # самая низкая точка выреза спереди (для «ворота» кожи — body_regions): после SOLIDIFY края уже не найти
+    if _J is not None:
+        neck = [v.co.z for v in bnd if abs(v.co.x) < 0.12 and v.co.y < _J["neck"].y + 0.02
+                and _J["upchest"].z - 0.18 < v.co.z < _J["neck"].z + 0.05]
+        if neck:
+            o["neck_low"] = min(neck)
     if smooth:
         for _ in range(smooth):
             bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        # сглаживание стягивает ткань внутрь рельефного тела (мышцы Хотто) — кожа проступает пятнами;
+        # всё, что ушло ближе к своей исходной точке кожи, чем отступ вещи, выталкиваем обратно на отступ
+        # (меряем от своей точки, а не от ближайшей поверхности: иначе ткань бедра обтягивала лежащую на нём кисть)
+        for v in bm.verts:
+            if v not in off_of or v.is_boundary:
+                continue
+            co0, n0 = base_of[v]
+            need = max(off_of[v] * 0.85, 0.004)
+            h = (v.co - co0).dot(n0)
+            if h < need:
+                v.co += n0 * (need - h)
+    outline_width(bm, tree)
     bm.to_mesh(me)
     bm.free()
+    if me.color_attributes.get("Col"):       # экспорт glTF берёт активный атрибут цвета — пусть это будет «Col»
+        me.color_attributes.active_color = me.color_attributes["Col"]
+        me.color_attributes.render_color_index = me.color_attributes.find("Col")
     o.modifiers.new("sol", "SOLIDIFY").thickness = 0.0015
     apply_mods(o)
     shade_smooth(o)
     cylinder_uv(o, *uv)
     return o
+
+
+def outline_width(bm, body_tree, near=0.015):
+    """Толщина контура по вершинам (видео про линии и тени: тоньше там, где рядом другая поверхность) — в альфу
+    цвета вершин «Col». Контур-оболочка раздувается наружу по нормали; в подмышке, у сгиба локтя, под
+    грудью соседняя поверхность ближе этой толщины, и контур протыкал её тёмными пятнами."""
+    lay = bm.loops.layers.color.get("Col") or bm.loops.layers.float_color.get("Col") \
+        or bm.loops.layers.float_color.new("Col")
+    bm.normal_update()
+    self_tree = BVHTree.FromBMesh(bm)
+    width = {}
+    for v in bm.verts:
+        n = v.normal
+        if n.length < 0.5:
+            width[v] = 1.0
+            continue
+        o = v.co + n * 0.0008
+        d = near
+        for tr in (body_tree, self_tree):
+            hit = tr.ray_cast(o, n, near)
+            if hit[0] is not None:
+                d = min(d, hit[3])
+        width[v] = max(0.12, min(1.0, d / near))
+    for f in bm.faces:
+        for loop in f.loops:
+            c = loop[lay]
+            loop[lay] = (c[0], c[1], c[2], width[loop.vert])
 
 
 def _front_hit(x, z, off):
@@ -2518,8 +2743,10 @@ def top(J, p, name, m, sleeve="long", neck=False, loose=0.0, cover_hand=False, h
             return base if co.z <= J["neck"].z - 0.012 * s else None
         if b.startswith("upper_arm"):
             if sleeve == "none":
-                # Безрукавка: проймы держим у плеча, чтобы под мышкой не было дыр.
-                return base if abs(co.x) < abs(J["sh_l"].x) * 0.92 else None
+                # Безрукавка: проймы держим у плеча, чтобы под мышкой не было дыр; но внутренняя сторона опущенной
+                # руки (смотрит к корпусу) — уже рука, иначе по пройме торчали лоскуты-шипы
+                inner_arm = _SPEC_N.x * (1 if co.x > 0 else -1) < -0.25 and co.z < J["sh_l"].z - 0.03 * s
+                return base if abs(co.x) < abs(J["sh_l"].x) * 0.92 and not inner_arm else None
             if sleeve == "short":
                 return base + 0.006 * s if t < 0.55 else None
             return base + 0.004 * s
@@ -3242,43 +3469,76 @@ def _seg_dist(p, a, b):
 
 # Области тела (альфа цвета вершин кожи, ×0.1): игра не рисует области, закрытые надетой одеждой — тело не
 # просвечивает сквозь ткань (как у игровых моделей: под одеждой тела нет, docs/MODEL_STUDY.md «Видео»).
-REGIONS = {"torso": 9, "hips": 8, "upper_arm": 7, "forearm": 6, "hand": 5, "thigh": 4, "shin": 3, "foot": 2}
+# Альфа = номер/20; 20 — всегда видно. Узкие полосы (плечо, запястье, колено, щиколотка) — края одежды
+# ложатся в них, и большие области закрываются целиком.
+REGIONS = {"torso": 19, "hips": 18, "upper_arm": 17, "forearm": 16, "hand": 15, "thigh": 14, "knee": 13, "shin": 12,
+           "ankle": 11, "foot": 10, "shoulder": 9, "wrist": 8, "collar": 7}
 
 
-def body_regions(body, rig):
-    """Записать область тела в альфу цвета вершин «Col» (10 — всегда видно: голова, шея, плечи, ключицы)."""
+def neckline_z(garments, J):
+    """Самая низкая точка выреза среди верхних вещей (её отметила shell() до SOLIDIFY): кожа выше — «ворот»,
+    всегда видна."""
+    lows = [g["neck_low"] for g in garments if any(k in g.name for k in ("upper_body", "full_body", "outerwear"))
+            and "neck_low" in g]
+    return min(lows) if lows else None
+
+
+def _along(p, b):
+    """Расстояние вдоль оси кости от её начала до проекции точки."""
+    ax = b.tail_local - b.head_local
+    return (p - b.head_local).dot(ax.normalized()) if ax.length > 1e-6 else 0.0
+
+
+def body_regions(body, rig, collar_z=None):
+    """Записать область тела в альфу цвета вершин «Col» (20 — всегда видно: голова, шея, ворот)."""
     me = body.data
     col = me.color_attributes.get("Col")
     if col is None:
         return
     names = {g.index: g.name for g in body.vertex_groups}
-    bones = rig.data.bones
+    # всё — в мировых координатах: у чужой базы тела (Хотто) у объекта тела и скелета свои трансформы
+    rw = rig.matrix_world
+    bw = body.matrix_world
+
+    class _B:
+        def __init__(self, b):
+            self.head_local = rw @ b.head_local
+            self.tail_local = rw @ b.tail_local
+    bones = {b.name: _B(b) for b in rig.data.bones}
     up_z = bones["upper_chest"].head_local.z
     hip_top = bones["spine"].head_local.z
     region = []
     for v in me.vertices:
         if not v.groups:
-            region.append(10)
+            region.append(20)
             continue
         g = max(v.groups, key=lambda x: x.weight)
         n = names.get(g.group, "")
-        p = v.co
-        r = 10
-        if n in ("spine", "chest") or (n == "upper_chest" and p.z < up_z - 0.01):
+        p = bw @ v.co
+        r = 20
+        cap = (collar_z - 0.02) if collar_z is not None else up_z - 0.05
+        if p.z >= cap and n in ("spine", "chest", "upper_chest", "neck") or (n.startswith("upper_arm") and p.z >= cap and abs(p.x) < bones[n].head_local.x * (1 if p.x > 0 else -1) + 0.02):
+            # выше самого низкого выреза — «ворот» (всегда видно): иначе в вырезе открылась бы пустота
+            r = REGIONS["collar"]
+        elif n in ("spine", "chest", "upper_chest"):
             r = REGIONS["torso"]
         elif n == "hips":
             r = REGIONS["hips"] if p.z < hip_top else REGIONS["torso"]
         elif n.startswith("upper_arm"):
-            sh = bones[n].head_local
-            r = REGIONS["upper_arm"] if (p - sh).length > 0.05 else 10       # плечо у сустава — видно в майке
-        elif n.startswith("forearm"):
-            r = REGIONS["forearm"]
-        elif n.startswith("hand"):
-            r = REGIONS["hand"]
-        elif n.startswith("thigh"):
-            r = REGIONS["thigh"]
-        elif n.startswith("shin"):
-            r = REGIONS["shin"]
+            r = REGIONS["upper_arm"] if _along(p, bones[n]) > 0.06 else REGIONS["shoulder"]
+        elif n.startswith(("forearm", "hand")):
+            fa = bones[n.replace("hand", "forearm")]
+            d = abs(_along(p, fa) - (fa.tail_local - fa.head_local).length)
+            r = REGIONS["wrist"] if d < 0.035 else (REGIONS["forearm"] if n.startswith("forearm") else REGIONS["hand"])
+        elif n.startswith(("thigh", "shin")):
+            # полосы суставов — по оси кости (а не шаром от сустава): у толстых ног (Хотто) шар до кожи не достаёт
+            sn = bones[n.replace("thigh", "shin")]
+            if abs(_along(p, sn)) < 0.06:
+                r = REGIONS["knee"]
+            elif n.startswith("shin") and abs(_along(p, sn) - (sn.tail_local - sn.head_local).length) < 0.06:
+                r = REGIONS["ankle"]
+            else:
+                r = REGIONS["thigh"] if n.startswith("thigh") else REGIONS["shin"]
         elif n.startswith("foot"):
             r = REGIONS["foot"]
         region.append(r)
@@ -3286,10 +3546,45 @@ def body_regions(body, rig):
         for poly in me.polygons:
             for li, vi in zip(poly.loop_indices, poly.vertices):
                 c = col.data[li].color
-                col.data[li].color = (c[0], c[1], c[2], region[vi] / 10.0)
+                col.data[li].color = (c[0], c[1], c[2], region[vi] / 20.0)
     else:
         for i, c in enumerate(col.data):
-            col.data[i].color = (c.color[0], c.color[1], c.color[2], region[i] / 10.0)
+            col.data[i].color = (c.color[0], c.color[1], c.color[2], region[i] / 20.0)
+    return region
+
+
+def garment_covers(body, region_of, garments, need=0.85, reach=0.24):
+    """Какие области тела закрывает каждая вещь (геометрически): луч от кожи наружу по нормали упирается в ткань
+    у ≥95% вершин области — область закрыта (её можно не рисовать). Пишется в art/characters/<id>.covers.json."""
+    deps = bpy.context.evaluated_depsgraph_get()
+    names = {v: k for k, v in REGIONS.items()}
+    verts = body.data.vertices
+    mw = body.matrix_world
+    out = {}
+    for g in garments:
+        tree = BVHTree.FromObject(g, deps)
+        hit = {}
+        tot = {}
+        for v in verts:
+            r = region_of[v.index]
+            if r not in names:
+                continue
+            tot[r] = tot.get(r, 0) + 1
+            p = mw @ v.co
+            n = (mw.to_3x3() @ v.normal).normalized()
+            # луч начинается чуть под кожей: ткань, прижатая вплотную или задевающая кожу, тоже считается
+            h = tree.ray_cast(p - n * 0.004, n, reach)
+            if h[0] is None:
+                # ткань под кожей (тело толще вещи, как у Хотто): скрыть кожу — и вещь станет видна
+                h = tree.ray_cast(p + n * 0.004, -n, 0.06)
+            if h[0] is not None:
+                hit[r] = hit.get(r, 0) + 1
+        key = g.name.replace("garment__", "", 1)
+        # ворот всегда виден: край выреза неровный, скрытая кожа у шеи дала бы просветы между зубцами
+        out[key] = sorted(names[r] for r in tot if hit.get(r, 0) >= need * tot[r] and names[r] != "collar")
+        if os.environ.get("KPC_COVER_DEBUG"):
+            print("COVER", key, {names[r]: round(hit.get(r, 0) / tot[r], 2) for r in tot})
+    return out
 
 
 def bind(rig, objs, rigid_bone=None):
@@ -3318,12 +3613,13 @@ def bind(rig, objs, rigid_bone=None):
         band = 0.35 * sh_x
         for v in o.data.vertices:
             p = mw @ v.co
+            vi = v.index if o is _BODY else None
             if skirt_like and p.z < rig.data.bones["hips"].head_local.z + 0.02:
                 legs = sorted((_seg_dist(p, h, t), name) for name, h, t in bones if name.startswith("thigh"))
                 groups["hips"].add([v.index], 0.65, "REPLACE")
                 groups[legs[0][1]].add([v.index], 0.35, "ADD")
                 continue
-            d = sorted((_seg_dist(p, h, t), name) for name, h, t in cand)[:2]
+            d = sorted((_seg_dist(p, h, t), name) for name, h, t in cand if _bone_ok(name, vi))[:2]
             w0, w1 = 1.0 / max(d[0][0], 1e-4) ** 2, 1.0 / max(d[1][0], 1e-4) ** 2
             if d[1][0] > d[0][0] * 1.8:
                 w1 = 0.0
@@ -3332,7 +3628,7 @@ def bind(rig, objs, rigid_bone=None):
             if w1 > 0:
                 w[d[1][1]] = w1 / tot
             arm_w = sum(x for n, x in w.items() if n.startswith(("upper_arm", "forearm", "hand")))
-            if arm_w > 0:
+            if arm_w > 0 and _ARM is None:
                 f = max(0.0, min(1.0, (abs(p.x) - (sh_x - band)) / band))
                 f = f * f * (3 - 2 * f)
                 if f < 1.0:
@@ -3363,9 +3659,19 @@ def _copy_body_weights(rig, o, body_w):
     torso_only = any(k in o.name for k in ("upper_body", "outerwear"))
     skirt_like = any(k in o.name for k in ("lower_body__skirt", "full_body__dress"))
     mw = o.matrix_world
+    # оболочка тела (shell) помнит исходную вершину кожи («src»): берём её веса, а не ближайшей точки —
+    # иначе ткань на бедре под опущенной кистью (Хотто) брала веса кисти и уезжала вместе с рукой
+    src = o.data.attributes.get("src")
+    bverts = _BODY.data.vertices if _BODY is not None else []
+    bmw = _BODY.matrix_world if _BODY is not None else None
     for v in o.data.vertices:
         acc = {}
-        near = kd.find_n(mw @ v.co, 3)
+        si = src.data[v.index].value if src is not None and src.domain == "POINT" else -1
+        if 0 <= si < len(weights) and si < len(bverts) and ((bmw @ bverts[si].co) - mw @ v.co).length < 0.06 \
+                and weights[si]:
+            near = [(None, si, 1.0)]
+        else:
+            near = kd.find_n(mw @ v.co, 3)
         tot_d = 0.0
         for _co, i, dist in near:
             k = 1.0 / max(dist, 1e-4)
@@ -3644,7 +3950,8 @@ CHARACTERS = {
         "body": {"s": 0.98, "shoulder": 0.135, "hip": 0.084, "head": 1.0,
                  # тело — та же открытая база (CC0), женская форма; пропорции Silver Palace — только как замеры
                  "mh": {"teen": 0.35, "thin": 0.6, "bust": 0.65, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 0.95}, "waist": 0.07, "chest": 0.092, "chest_d": 0.08, "hip_r": 0.108},
-        "hair": {"layers": [(0.15, 20, 1.06), (0.45, 28, 1.1), (0.8, 30, 1.14)], "bang_front": 0.6, "bang_len": 1.2,
+        "hair": {"clumps": True, "clump_style": "long", "cap_hairline": 1.0, "part": -0.2,
+                 "layers": [(0.15, 20, 1.06), (0.45, 28, 1.1), (0.8, 30, 1.14)], "bang_front": 0.6, "bang_len": 1.2,
                  "side_len": 2.0, "long": 0.22, "curl": 0.1, "w": 0.95, "cap_low": 0.75, "buns": [-1, 1],
                  "c_root": (0.8, 0.28, 0.42), "c_tip": (0.99, 0.62, 0.3)},
         "ears": None,
@@ -3656,7 +3963,8 @@ CHARACTERS = {
         "sex": "male",
         "body": {"s": 206 / 163, "shoulder": 0.16, "hip": 0.082, "head": 0.95,
                  "mh": {"teen": 0.0, "thin": 0.5, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 1.0}, "waist": 0.084, "chest": 0.104, "hip_r": 0.1},
-        "hair": {"layers": [(0.12, 18, 1.07), (0.4, 26, 1.12), (0.75, 28, 1.17)], "bang_front": 0.55, "bang_len": 1.3,
+        "hair": {"clumps": True, "clump_style": "short", "cap_hairline": 1.0, "part": 0.35,
+                 "layers": [(0.12, 18, 1.07), (0.4, 26, 1.12), (0.75, 28, 1.17)], "bang_front": 0.55, "bang_len": 1.3,
                  "side_len": 1.85, "long": 0.04, "curl": 0.3, "w": 0.95, "cap_low": 0.6, "ahoge": True, "ponytail": True,
                  "c_root": (0.2, 0.6, 0.6), "c_tip": (0.16, 0.44, 0.54)},
         "ears": (0.2, 0.58, 0.58), "ear_inner": (0.92, 0.7, 0.74), "ear": {"w": 0.5, "h": 0.6, "d": 0.12, "tilt": 18, "yaw": 12},
@@ -3692,6 +4000,8 @@ def _hair(style, root, tip, **kw):
     """Причёски NPC на основе слоёв Габи/Соры: short — короткая, bob — каре, long — длинные распущенные."""
     h = {"layers": [(0.12, 18, 1.06), (0.4, 26, 1.1), (0.75, 28, 1.14)], "bang_front": 0.55, "bang_len": 1.1,
          "side_len": 1.5, "long": 0.0, "curl": 0.15, "w": 0.95, "cap_low": 0.6, "c_root": root, "c_tip": tip}
+    # причёска из прядей-оболочек (hair_clumps.py, стиль по типу); старые слои — запасной путь
+    h.update({"clumps": True, "clump_style": style, "cap_hairline": 1.0})
     if style == "short":
         h.update({"side_len": 1.15, "bang_len": 0.9, "cap_low": 0.5, "curl": 0.25})
     elif style == "bob":
@@ -3771,7 +4081,9 @@ def build(cid):
     else:
         J = body_joints(p)
     knit = mat("garment_knit", (1, 1, 1, 1), tex=os.path.join(TEX, "knit.png"))
-    cloth = mat("garment_cloth", (1, 1, 1, 1), tex=os.path.join(TEX, "cloth.png"))
+    # альфа вершин ткани — толщина контура (outline_width); цвет вершин в игре не используется (тон — из образа),
+    # связка с текстурой нужна лишь затем, чтобы glTF записал COLOR_0 с альфой
+    cloth = mat("garment_cloth", (1, 1, 1, 1), tex=os.path.join(TEX, "cloth.png"), vcol=True, vcol_alpha=True)
     plain = mat("garment_plain", (1, 1, 1, 1))
     rib = mat("garment_rib", (1, 1, 1, 1), tex=os.path.join(TEX, "rib.png"))
     metal = mat("metal", (0.78, 0.78, 0.8, 1), rough=0.2)
@@ -3788,7 +4100,7 @@ def build(cid):
         body = build_part("body", J, list(J.keys()), body_edges(), lambda j: _rs(R[j], s), skin)
         if c["sex"] == "female":
             add_bust(body, J, p)
-    set_body(body, J)
+    set_body(body, J, arms=bool(p.get("base")))
     if p.get("base"):
         # Готовое тело с головой (чужая база, см. art/characters/src/CREDITS.md): своя только грива, хвост, одежда.
         global CONFORM
@@ -4027,7 +4339,9 @@ def build(cid):
     export_landmarks()
     rig = build_armature(J, Vector((0, 0, hd[3] + hd[2])))
     bind(rig, [body] + BODY_EXTRA + body_layers + [g for g in garments if not g.name.startswith(on_head)])
-    body_regions(body, rig)
+    region_of = body_regions(body, rig, neckline_z(garments, J))
+    # чужая база (Хотто): вещи не повторяют форму тела — геометрия не скажет правды, игра берёт таблицу шаблонов
+    covers = garment_covers(body, region_of, [g for g in garments if not g.name.startswith(on_head)])
     bind(rig, head_parts + [g for g in garments if g.name.startswith(on_head)], rigid_bone="head")
     idle_animation(rig)
     walk_animation(rig)
@@ -4037,6 +4351,9 @@ def build(cid):
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{cid}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_animations=True, export_skins=True, export_yup=True)
+    # какие области тела закрывает каждая вещь — игра их не рисует (CharacterModel._hide_covered)
+    with open(path.replace(".glb", ".covers.json"), "w", encoding="utf-8") as f:
+        json.dump(covers, f, ensure_ascii=False, indent=1)
     print("exported", path, "garments:", [g.name for g in garments], "underwear:", [u.name for u in body_layers])
 
 

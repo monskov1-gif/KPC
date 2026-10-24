@@ -1,0 +1,56 @@
+{
+ "upper_body__long": [
+  "forearm",
+  "hips",
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "upper_body__tshirt": [
+  "hips",
+  "shoulder",
+  "torso"
+ ],
+ "outerwear__jacket": [
+  "forearm",
+  "hips",
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "lower_body__trousers": [
+  "knee",
+  "shin",
+  "thigh"
+ ],
+ "lower_body__skirt": [
+  "thigh"
+ ],
+ "full_body__dress": [
+  "hips",
+  "knee",
+  "thigh",
+  "torso"
+ ],
+ "socks__knee": [
+  "ankle",
+  "foot"
+ ],
+ "footwear__shoes": [
+  "foot"
+ ],
+ "upper_body__oversize": [
+  "forearm",
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "lower_body__wide": [
+  "knee",
+  "shin"
+ ],
+ "gloves__gloves": [
+  "hand",
+  "wrist"
+ ]
+}

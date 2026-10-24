@@ -5,6 +5,7 @@ extends Node3D
 ## показываются по надетым вещам и окрашиваются в цвет вещи. Если модели нет — показывает манекен-заглушку.
 
 const TOON := preload("res://art/shaders/toon.gdshader")
+const EYE_SHADE := preload("res://art/shaders/eye_shade.gdshader")
 const OUTLINE := preload("res://art/shaders/outline.gdshader")
 const HAIR_LOCK := preload("res://art/shaders/toon_hair_lock.gdshader")
 const FACE := preload("res://art/shaders/toon_face.gdshader")
@@ -26,19 +27,22 @@ const UNDERWEAR_COVERED_BY := {
 }
 ## Какие области тела закрывает шаблон одежды (ключ или его начало): закрытые области кожа не рисует —
 ## тело не просвечивает сквозь ткань (области — альфа цвета вершин, tools/art/build_characters.py REGIONS).
-const REGION_BITS := {"torso": 9, "hips": 8, "upper_arm": 7, "forearm": 6, "hand": 5, "thigh": 4, "shin": 3, "foot": 2}
+const REGION_BITS := {"torso": 19, "hips": 18, "upper_arm": 17, "forearm": 16, "hand": 15, "thigh": 14, "knee": 13,
+	"shin": 12, "ankle": 11, "foot": 10, "shoulder": 9, "wrist": 8, "collar": 7}
+## Запасная таблица (если у модели нет <id>.covers.json — сборка старее покрытия).
 const COVERS := {
 	"upper_body__tshirt": ["torso"],
-	"upper_body__": ["torso", "upper_arm", "forearm"],
-	"outerwear__": ["torso", "upper_arm", "forearm"],
+	"upper_body__": ["torso", "shoulder", "upper_arm", "forearm"],
+	"outerwear__": ["torso", "shoulder", "upper_arm", "forearm"],
 	"lower_body__skirt": ["hips"],
-	"lower_body__": ["hips", "thigh", "shin"],
+	"lower_body__": ["hips", "thigh", "knee", "shin"],
 	"full_body__dress": ["torso", "hips"],
 	"footwear__": ["foot"],
-	"socks__knee": ["foot", "shin"],
-	"gloves__": ["hand"],
+	"socks__knee": ["foot", "ankle"],
+	"gloves__": ["hand", "wrist"],
 }
 var _skin_mats: Array[ShaderMaterial] = []
+var _covers: Dictionary = {}
 var _materials: Dictionary = {}    # кэш материалов по ключу
 var _fallback: PlaceholderAppearance
 var _anim: AnimationPlayer
@@ -75,6 +79,8 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	if _fallback:
 		_fallback.visible = false
 	_root = (load(path) as PackedScene).instantiate()
+	var cov_path := MODEL_DIR + character_id + ".covers.json"
+	_covers = DataLoader.load_json(cov_path) if FileAccess.file_exists(cov_path) else {}
 	add_child(_root)
 	_hair_lock_mats.clear()
 	_face_mats.clear()
@@ -252,6 +258,12 @@ func apply_look(look: Dictionary) -> void:
 func _hide_covered(shown: Array[String]) -> void:
 	var mask := 0
 	for key in shown:
+		# точные данные сборки: какие области закрывает именно эта вещь (art/characters/<id>.covers.json)
+		if _covers.has(key):
+			for r in _covers[key]:
+				if REGION_BITS.has(r):
+					mask |= 1 << int(REGION_BITS[r])
+			continue
 		for prefix in COVERS:
 			if key.begins_with(prefix):
 				for r in COVERS[prefix]:
@@ -311,6 +323,12 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		m.next_pass = ol
 		_materials[key] = m
 		return m
+	if src_name == "eye_shade":
+		# тень века — полупрозрачная лента поверх радужки, без контура
+		m.shader = EYE_SHADE
+		m.set_shader_parameter("albedo", color)
+		_materials[key] = m
+		return m
 	if src_name == "hair":
 		# Карты прядей: отдельный шейдер, без контура (контур на полупрозрачных картах даёт «проволоку»).
 		m.shader = HAIR
@@ -356,11 +374,13 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 				m.set_shader_parameter("shade_color", Color(0.95, 0.8, 0.8))
 				_face_mats.append(m)
 				thickness = 0.0016
-			elif src_name in ["lash", "brow", "crease", "strap", "patch", "skin_line", "nipple", "nipple_tip", "lid_warm"]:
+			elif src_name in ["lash", "lash_hi", "lash_glint", "brow", "crease", "strap", "patch", "skin_line", "nipple", "nipple_tip", "lid_warm"]:
 				# Объёмные ресницы, брови, складка века, повязка и шнурок, «наклейки» на коже (соски, линии рельефа):
 				# ровный цвет, без контура (с контуром повязка читается как дыра, а ресницы — как каракули).
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.9))
 				m.set_shader_parameter("rim_strength", 0.0)
+				if src_name == "brow":
+					m.set_shader_parameter("view_bias", 0.035)    # бровь видна сквозь чёлку
 				thickness = 0.0
 			elif src_name.begins_with("eye"):
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.95))
@@ -380,6 +400,9 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 			outline.set_shader_parameter("outline_color", Color(0.55, 0.45, 0.36))
 		if src_name == "skin":
 			outline.set_shader_parameter("use_regions", true)
+		if src_name == "garment_cloth":
+			# у ткани толщина контура по вершинам: в подмышках и сгибах тоньше (build_characters.outline_width)
+			outline.set_shader_parameter("use_vertex_width", true)
 		if src_name.begins_with("face") and tex:
 			outline.set_shader_parameter("mask_tex", tex)
 			outline.set_shader_parameter("use_mask", true)

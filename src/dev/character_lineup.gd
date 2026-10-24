@@ -67,6 +67,7 @@ func debug_full_hotto() -> void:
 	var cam := get_viewport().get_camera_3d()
 	cam.position = Vector3(0, 1.2, 5.0)
 	cam.rotation_degrees = Vector3.ZERO
+	_cam_override()
 
 
 ## Голова Хотто крупно (KPC_YAW — поворот).
@@ -82,6 +83,8 @@ func _focus(id: String) -> void:
 	var h: float = {"kot": 1.63, "gabi": 1.6, "sora": 2.06, "hotto": 2.35}[id]
 	cam.position = m.position + Vector3(0, h * 0.86, 0.85)
 	cam.rotation_degrees = Vector3(-6, 0, 0)
+	if OS.has_environment("KPC_YAW"):
+		m.rotation_degrees.y = float(OS.get_environment("KPC_YAW"))
 
 
 func debug_head_kot() -> void:
@@ -89,6 +92,7 @@ func debug_head_kot() -> void:
 	var m: Node3D = get_node("kot")
 	cam.position = m.position + Vector3(0, 1.6, 0.75)
 	cam.rotation_degrees = Vector3(-2, 0, 0)
+	_cam_override()
 
 
 func debug_full_kot() -> void:
@@ -245,6 +249,14 @@ func debug_prologue() -> void:
 	var cam := get_viewport().get_camera_3d()
 	cam.position = Vector3(0, 1.0, 9.5)
 	cam.fov = 32
+	_cam_override()
+
+
+## KPC_CAM=«x,y,z» — камера в эту точку (крупный план любого места витрины).
+func _cam_override() -> void:
+	if OS.has_environment("KPC_CAM"):
+		var c := OS.get_environment("KPC_CAM").split_floats(",")
+		get_viewport().get_camera_3d().position = Vector3(c[0], c[1], c[2])
 
 
 ## Кадры анимации: KPC_POSE_ID=<модель> KPC_ANIM=walk|run|idle; 4 копии в разных фазах цикла, вид сбоку и спереди.

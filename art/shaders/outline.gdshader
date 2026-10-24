@@ -22,6 +22,10 @@ void vertex() {
 	region_a = COLOR.a;
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float w = thickness * (use_vertex_width ? COLOR.a : 1.0);
+	// кожа у выреза (область «ворот», 7): контур почти нулевой — иначе он проступает сквозь облегающий ворот
+	if (use_regions && int(round(COLOR.a * 20.0)) == 7) {
+		w *= 0.15;
+	}
 	if (screen_scale > 0.0) {
 		float dist = length((VIEW_MATRIX * vec4(wp, 1.0)).xyz);
 		w *= clamp(dist / screen_scale, 0.6, 2.2);
@@ -32,7 +36,7 @@ void vertex() {
 uniform float mask_margin = 0.045;   // контур не рисуется и рядом с прорезями глаз (иначе — толстая «подводка»)
 
 void fragment() {
-	if (use_regions && ((hide_regions >> int(round(region_a * 10.0))) & 1) == 1) {
+	if (use_regions && ((hide_regions >> int(round(region_a * 20.0))) & 1) == 1) {
 		discard;
 	}
 	if (use_mask) {

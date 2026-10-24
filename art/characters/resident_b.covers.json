@@ -1,0 +1,38 @@
+{
+ "upper_body__long": [
+  "forearm",
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "upper_body__tshirt": [
+  "shoulder",
+  "torso"
+ ],
+ "outerwear__jacket": [
+  "forearm",
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "lower_body__trousers": [
+  "knee",
+  "shin",
+  "thigh"
+ ],
+ "lower_body__skirt": [
+  "thigh"
+ ],
+ "full_body__dress": [
+  "hips",
+  "thigh",
+  "torso"
+ ],
+ "socks__knee": [
+  "ankle",
+  "foot"
+ ],
+ "footwear__shoes": [
+  "foot"
+ ]
+}

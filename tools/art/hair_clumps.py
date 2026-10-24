@@ -229,6 +229,7 @@ def hair_cap(head_obj, H, hp, colors, mat):
     kill = [v for v in bm.verts if (v.co.y < -0.05 * ry and v.co.z < cz + rz * hl and
                                     (abs(v.co.x) < face_x or v.co.y < -0.75 * ry)) or v.co.z < cz - rz * nape]
     bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    smooth_boundary(bm)
     for v in bm.verts:
         v.co += v.normal * hp.get("cap_lift", 0.006)
     col = bm.loops.layers.color.new("Col")
@@ -245,6 +246,26 @@ def hair_cap(head_obj, H, hp, colors, mat):
     me.materials.clear()
     me.materials.append(mat)
     return cap
+
+
+def smooth_boundary(bm, iters=10, k=0.55, clamp=0.01):
+    """Край после удаления вершин — «лесенка» по рёбрам сетки (на затылке и висках шлема видна ступеньками):
+    сглаживаем петлю края, не дальше clamp от исходного положения, и подтягиваем за ней соседний ряд."""
+    bnd = [v for v in bm.verts if v.is_boundary]
+    nb = {v: [e.other_vert(v) for e in v.link_edges if e.is_boundary] for v in bnd}
+    start = {v: v.co.copy() for v in bnd}
+    for _ in range(iters):
+        new = {v: v.co.lerp((a[0].co + a[1].co) * 0.5, k) for v, a in nb.items() if len(a) == 2}
+        for v, co in new.items():
+            d = co - start[v]
+            v.co = start[v] + d * min(1.0, clamp / max(d.length, 1e-9))
+    ring = {e.other_vert(v) for v in bnd for e in v.link_edges} - set(bnd)
+    for _ in range(2):
+        new = {v: v.co.lerp(sum((e.other_vert(v).co for e in v.link_edges), Vector()) / len(v.link_edges), 0.5)
+               for v in ring}
+        for v, co in new.items():
+            v.co = co
+    bm.normal_update()
 
 
 def kot_locks(H):
@@ -285,6 +306,61 @@ def kot_locks(H):
     return L
 
 
+def style_locks(H, style, hp):
+    """Универсальные причёски NPC и семьи: short — короткая (чёлка до середины лба, виски, затылок до шеи),
+    bob — каре до челюсти (чёлка до бровей, концы чуть внутрь), long — длинные распущенные до лопаток."""
+    L = []
+    part = hp.get("part", 0.25)                # куда разобрана чёлка (−1…1: влево/вправо)
+    bang_to = {"short": 1.05, "bob": 1.33, "long": 1.3}[style]
+    n_bang = 7 if style == "short" else 9
+    for k in range(n_bang):
+        th = -0.75 + 1.5 * k / (n_bang - 1)
+        # концы чёлки разной длины и формы (острые и «рубленые»), иначе ровный ряд одинаковых зубцов
+        # читался расчёской (docs/MODEL_STUDY.md «Видео»: split faces → chopped/pointy ends)
+        var = ((k * 5 + 2) % 7) / 6.0
+        L.append({"theta": th * 0.5 + part * 0.15, "phi0": 0.14,
+                  "phi1": bang_to - 0.08 * abs(th - part * 0.5) + 0.07 * (var - 0.5),
+                  "sway": (th - part) * 0.45, "lift": (0.01, 0.025),
+                  "w": (0.036 if style != "short" else 0.04) * (0.9 + 0.25 * var),
+                  "w0": 0.027, "thick": 0.3, "taper": 0.62 if k % 3 else 0.8, "rings": 20, "bulge": 0.4})
+    # макушка: веер от вихра назад и вбок
+    for k in range(12):
+        th = math.pi * (0.32 + 1.36 * k / 11)
+        L.append({"theta": th, "phi0": 0.04, "phi1": 0.9 if style == "short" else 0.95, "sway": 0.15,
+                  "lift": (0.01, 0.028 if style == "short" else 0.035), "w": 0.06, "w0": 0.04, "thick": 0.3,
+                  "taper": 0.72, "rings": 18})
+    # бока и затылок
+    if style == "short":
+        rows = ((0.5, 1.45, 14, 0.05, (0.014, 0.03), 0.0), (0.9, 1.75, 14, 0.042, (0.012, 0.022), 0.0))
+    elif style == "bob":
+        rows = ((0.45, 1.6, 15, 0.055, (0.018, 0.045), 0.02), (0.85, 1.95, 16, 0.046, (0.02, 0.045), 0.03))
+    else:
+        rows = ((0.45, 1.65, 15, 0.055, (0.016, 0.04), 0.18), (0.85, 1.95, 17, 0.048, (0.018, 0.04), 0.24))
+    for row, (ph0, ph1, n, w, lift, drop) in enumerate(rows):
+        for k in range(n):
+            th = math.pi * (0.3 + (2 - 0.6) * (k + 0.4 * row) / n)
+            if math.cos(th) > 0.62:
+                continue
+            var = ((k * 7 + row * 3) % 5) / 4.0
+            spec = {"theta": th, "phi0": ph0, "phi1": ph1 + 0.08 * (var - 0.5), "sway": 0.08 * (1 if k % 2 else -1),
+                    "lift": lift, "w": w, "w0": w * 0.65, "thick": 0.4, "drop": drop * (0.85 + 0.3 * var),
+                    "flare": 0.012 if style != "long" else 0.02, "taper": 0.7 if style == "short" else 0.82,
+                    "rings": 24 if style == "long" else 20, "bulge": 0.45}
+            if style == "bob":
+                spec.update({"curl": -70, "curl_frac": 0.2, "curl_r": 1.2})      # концы каре — чуть внутрь
+            L.append(spec)
+    # пряди у лица: у короткой — височки до уха, у каре и длинных — обрамляют лицо
+    for side in (-1, 1):
+        if style == "short":
+            L.append({"theta": side * 1.2, "phi0": 0.5, "phi1": 1.55, "sway": 0.0, "lift": (0.01, 0.014), "w": 0.03,
+                      "w0": 0.024, "thick": 0.3, "taper": 0.55, "rings": 16})
+        else:
+            L.append({"theta": side * 0.98, "phi0": 0.35, "phi1": 1.65, "sway": -side * 0.1, "lift": (0.014, 0.022),
+                      "w": 0.034, "w0": 0.026, "thick": 0.35, "taper": 0.6, "rings": 22,
+                      "drop": 0.04 if style == "bob" else 0.22, "flare": 0.006})
+    return L
+
+
 LAYOUTS = {"kot": kot_locks, "kot_child": kot_locks}
 
 
@@ -297,22 +373,75 @@ def build_hair_clumps(cid, head_obj, hd, hp, mat_hair, mat_cap):
     c_shadow = tuple(hp.get("c_shadow", (c_tip[0] * 0.72, c_tip[1] * 0.76, c_tip[2] * 0.9)))
     colors = (c_root, c_tip, c_shadow)
     objs = [hair_cap(head_obj, H, hp, colors, mat_cap)]
-    for i, spec in enumerate(LAYOUTS[cid](H)):
+    style = hp.get("clump_style")
+    specs = style_locks(H, style, hp) if style else LAYOUTS[cid](H)
+    for i, spec in enumerate(specs):
         spec = dict(spec)
         spec["w"] *= rnd.uniform(0.9, 1.12)
         pts = lock_spine(H, spec, rnd)
         objs.append(lock_mesh("hair_lock_%02d" % i, H, pts, spec, colors, mat_hair))
-    if hp.get("ahoge_spiral"):
-        objs.append(ahoge(H, hp, colors, mat_hair))
+    if hp.get("ahoge_spiral") or hp.get("ahoge"):
+        objs.append(ahoge(H, hp, colors, mat_hair, spiral=bool(hp.get("ahoge_spiral"))))
+    for side in hp.get("buns", []):
+        objs += bun(H, side, colors, mat_hair)
+    if hp.get("ponytail"):
+        objs += ponytail(H, hp, colors, mat_hair)
     return objs
 
 
-def ahoge(H, hp, colors, mat):
-    """Хохолок-спираль (реф. 16): от макушки вверх и завиток колечком."""
+def bun(H, side, colors, mat):
+    """Пучок сбоку на затылке: несколько прядей-дуг, намотанных вокруг центра в разных плоскостях."""
+    p0, n0 = H.surface(side * 1.95, 0.62, 0.0)
+    r = H.rx * 0.36
+    c = p0 + n0 * (r * 0.75)
+    out = []
+    c_root, c_tip, c_shadow = colors
+    for k in range(6):
+        a0 = k * math.pi / 6
+        ax1 = Vector((math.cos(a0), math.sin(a0) * 0.6, math.sin(a0) * 0.8)).normalized()
+        ax2 = n0.cross(ax1).normalized()
+        if ax2.length < 0.1:
+            ax2 = Vector((0, 0, 1))
+        pts = [c + (ax1 * math.cos(t) + ax2 * math.sin(t)) * r * (1 - 0.15 * math.sin(t * 0.5))
+               for t in (2 * math.pi * 0.85 * i / 20 for i in range(21))]
+        spec = {"w": r * 0.55, "w0": r * 0.5, "thick": 0.5, "taper": 0.85, "bulge": 0.5}
+        mid = _mix(c_root, c_tip, 0.4)
+        out.append(lock_mesh("hair_bun_%d_%d" % (side, k), H, pts, spec, (mid, c_tip, c_shadow), mat))
+    return out
+
+
+def ponytail(H, hp, colors, mat):
+    """Хвост как у ZZZ-моделей (docs/MODEL_STUDY.md «Видео»): один объёмный ствол овального сечения — не веер
+    тонких прядей (читался «расчёской») — и три накладные пряди по нему; кончики расходятся двумя-тремя
+    остриями."""
+    g, n = H.surface(math.pi, 0.95, 0.02)
+    length = H.rz * hp.get("ponytail_len", 2.2)
+
+    def spine(dx, dn, scale):
+        pts = [g + n * 0.01 + Vector((dx * 0.3, 0, 0))]
+        for i in range(1, 9):
+            t = i / 8
+            pts.append(g + n * (0.03 + dn + 0.04 * math.sin(t * math.pi)) + Vector((dx * (0.3 + 0.7 * t), 0.0, -length * scale * t)))
+        return _smooth(pts, 24)
+    out = [lock_mesh("hair_tail_0", H, spine(0.0, 0.0, 1.0),
+                     {"w": H.rx * 0.3, "w0": H.rx * 0.2, "thick": 0.95, "taper": 0.62, "bulge": 0.9}, colors, mat)]
+    for k, (dx, sc) in enumerate(((-0.022, 0.9), (0.0, 1.06), (0.024, 0.95))):
+        out.append(lock_mesh("hair_tail_%d" % (k + 1), H, spine(dx, 0.012, sc),
+                             {"w": H.rx * 0.17, "w0": H.rx * 0.12, "thick": 0.5, "taper": 0.55, "bulge": 0.6}, colors, mat))
+    return out
+
+
+def ahoge(H, hp, colors, mat, spiral=True):
+    """Хохолок: спираль (Кот, реф. 16) — вверх и завиток колечком; иначе — одна прядь дугой вверх-вперёд."""
     base, n = H.surface(0.0, 0.12, 0.02)
     h = H.rz * hp.get("ahoge_h", 0.5)
     pts = [base + n * (h * k / 6) for k in range(7)]
     top = pts[-1]
+    if not spiral:
+        pts = _smooth([base, base + n * h * 0.5, top + Vector((0, -h * 0.25, h * 0.15)), top + Vector((0, -h * 0.55, -h * 0.05))], 18)
+        spec = {"w": H.rx * 0.1, "w0": H.rx * 0.12, "thick": 0.5, "taper": 0.5, "bulge": 0.3}
+        c_root, _c_tip, c_shadow = colors
+        return lock_mesh("hair_ahoge", H, pts, spec, (c_root, c_root, c_shadow), mat)
     r0 = H.rx * 0.22
     c0 = top + Vector((r0, 0, 0))
     for k in range(1, 22):

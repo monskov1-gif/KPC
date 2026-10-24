@@ -1,0 +1,13 @@
+{
+ "upper_body__long": [
+  "shoulder",
+  "torso",
+  "upper_arm"
+ ],
+ "neck_accessory__tie": [],
+ "lower_body__trousers": [
+  "knee",
+  "shin",
+  "thigh"
+ ]
+}

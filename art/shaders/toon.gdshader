@@ -11,14 +11,21 @@ uniform float shade_softness = 0.06;
 uniform vec4 rim_color : source_color = vec4(1.0, 0.9, 0.88, 1.0);
 uniform float rim_strength = 0.28;
 uniform float emission_boost = 0.0;   // самосвечение (окна, фонари локаций)
-// Кожа: области тела под одеждой не рисуются (альфа цвета вершин = область ×0.1, биты маски — CharacterModel).
+// Кожа: области тела под одеждой не рисуются (альфа цвета вершин = номер области / 20, биты маски — CharacterModel).
 uniform bool use_regions = false;
 uniform int hide_regions = 0;
+
+// Бровь поверх чёлки (как в аниме-играх, docs/MODEL_STUDY.md «Видео»): вершины сдвигаются к камере на view_bias
+// метров — прядь в паре сантиметров перед бровью её не закрывает, а голова (толще) по-прежнему закрывает сзади.
+uniform float view_bias = 0.0;
 
 varying vec4 vcol;
 
 void vertex() {
 	vcol = COLOR;
+	vec4 vp = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	vp.xyz += normalize(-vp.xyz) * view_bias;
+	POSITION = PROJECTION_MATRIX * vp;
 }
 
 void fragment() {
@@ -27,7 +34,7 @@ void fragment() {
 		base.rgb *= vcol.rgb;
 	}
 	ALBEDO = base.rgb;
-	if (use_regions && ((hide_regions >> int(round(vcol.a * 10.0))) & 1) == 1) {
+	if (use_regions && ((hide_regions >> int(round(vcol.a * 20.0))) & 1) == 1) {
 		discard;
 	}
 	if (use_alpha_scissor && base.a < 0.5) {
