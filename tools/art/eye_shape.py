@@ -18,6 +18,19 @@ SCLERA = (-0.24, 0.28, -0.29, 0.2)   # склера (x0, x1, z0, z1) — с за
 BROW_Z = (0.2, 0.3)            # бровь над центром радужки
 LASH_WING = 0.11               # «крыло» ресниц за внешним углом
 
+# Формы глаза для сменных лиц (выражение + «немного форма глаз», просьба пользователя 24.10):
+# (масштаб по x, масштаб по z, подъём внешнего угла на единицу x). Внешний угол — x > 0.
+VARIANTS = {
+    "default": (1.0, 1.0, 0.0),
+    "round": (0.94, 1.24, -0.03),     # круглые, «милые»: выше, внешний угол ниже
+    "sharp": (1.05, 0.76, 0.1),       # серьёзные: уже, внешний угол поднят
+}
+
+
+def _vt(p, variant):
+    sx, sz, tilt = VARIANTS[variant]
+    return (p[0] * sx, p[1] * sz + tilt * max(0.0, p[0]))
+
 
 def _catmull(pts, n_per, closed):
     out = []
@@ -37,19 +50,36 @@ def _catmull(pts, n_per, closed):
     return out
 
 
-def contour(n_per=6):
+def contour(n_per=6, variant="default"):
     """Замкнутый гладкий контур прорези (в U): верхнее веко внешний→внутренний, затем нижнее."""
-    return _catmull(UPPER + LOWER, n_per, closed=True)
+    return [_vt(p, variant) for p in _catmull(UPPER + LOWER, n_per, closed=True)]
 
 
-def upper_lid(n_per=6):
+def upper_lid(n_per=6, variant="default"):
     """Верхнее веко от ВНУТРЕННЕГО угла к внешнему (для ресниц и складки)."""
-    return _catmull(UPPER[::-1], n_per, closed=False)
+    return [_vt(p, variant) for p in _catmull(UPPER[::-1], n_per, closed=False)]
 
 
-def lower_lid(n_per=6):
+def lower_lid(n_per=6, variant="default"):
     """Нижнее веко от внутреннего угла к внешнему (внешний угол — общий с верхним)."""
-    return _catmull([UPPER[-1]] + LOWER + [UPPER[0]], n_per, closed=False)
+    return [_vt(p, variant) for p in _catmull([UPPER[-1]] + LOWER + [UPPER[0]], n_per, closed=False)]
+
+
+class Variant:
+    """Тот же модуль, но с формой глаза variant (для build_characters: E.upper_lid(8) и т. п.)."""
+    IRIS, SCLERA, BROW_Z, LASH_WING = IRIS, SCLERA, BROW_Z, LASH_WING
+
+    def __init__(self, name="default"):
+        self.name = name
+
+    def contour(self, n_per=6):
+        return contour(n_per, self.name)
+
+    def upper_lid(self, n_per=6):
+        return upper_lid(n_per, self.name)
+
+    def lower_lid(self, n_per=6):
+        return lower_lid(n_per, self.name)
 
 
 def unit_m(fp):

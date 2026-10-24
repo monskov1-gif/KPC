@@ -20,6 +20,7 @@ config/features=PackedStringArray("4.4", "Forward Plus")
 
 Game="*res://src/core/game.gd"
 Audio="*res://src/core/audio.gd"
+Settings="*res://src/core/settings.gd"
 
 [display]
 

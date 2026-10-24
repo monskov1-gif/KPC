@@ -6,12 +6,16 @@ extends Node3D
 
 const TOON := preload("res://art/shaders/toon.gdshader")
 const EYE_SHADE := preload("res://art/shaders/eye_shade.gdshader")
+const EYE_IRIS := preload("res://art/shaders/eye_iris.gdshader")
+## Насколько бровь тянется к камере (м): видна сквозь чёлку, а голова сзади её по-прежнему закрывает.
+const BROW_BIAS := 0.035
 const OUTLINE := preload("res://art/shaders/outline.gdshader")
 const HAIR_LOCK := preload("res://art/shaders/toon_hair_lock.gdshader")
 const FACE := preload("res://art/shaders/toon_face.gdshader")
 const FACE_SDF := preload("res://art/characters/textures/face_sdf.png")
 const HAIR := preload("res://art/shaders/toon_hair.gdshader")
 const MODEL_DIR := "res://art/characters/"
+const FACE_SLOT := "face_style"
 
 var character_id := ""
 var _root: Node3D
@@ -49,8 +53,12 @@ var _anim: AnimationPlayer
 var _height_cache := 0.0
 ## Поворот головы поверх анимации: look.target = точка в мире или null (см. HeadLook).
 var look: HeadLook
+## Сменное лицо (выражение, форма глаз, макияж, узор глаз) — если у модели есть слои лица (faces/<id>.json).
+var face: FaceRig
+var _iris_mats: Array[ShaderMaterial] = []
 var _hair_lock_mats: Array[ShaderMaterial] = []
 var _face_mats: Array[ShaderMaterial] = []
+var _brow_patch_mats: Array[ShaderMaterial] = []   # бровь над повязкой (см. _update_brows)
 ## Текущая поза отдыха ("sit", "sleep") или "" — обычное движение.
 var _rest := ""
 var _rest_tween: Tween
@@ -84,8 +92,19 @@ func setup(p_character_id: String, characters: CharacterCatalog) -> void:
 	add_child(_root)
 	_hair_lock_mats.clear()
 	_face_mats.clear()
+	_brow_patch_mats.clear()
+	_iris_mats.clear()
 	_skin_mats.clear()
 	_prepare(_root)
+	if face:
+		face.queue_free()
+		face = null
+	var face_id := character_id.replace("bases/", "base_")     # базы тела для просмотра: bases/teen_m → base_teen_m
+	if FileAccess.file_exists(FaceRig.info_path(face_id)):
+		face = FaceRig.new()
+		face.name = "FaceRig"
+		add_child(face)
+		face.setup(_root, face_id, _face_mats, _iris_mats)
 	# «нимб» на волосах — чуть ниже макушки (по росту модели)
 	if not _hair_lock_mats.is_empty():
 		var top := _root_top()
@@ -170,6 +189,28 @@ func set_rest(kind: String, seconds := 0.8) -> void:
 	_rest_tween.tween_property(_root, "position", pos, seconds)
 
 
+## Замереть в текущей позе, усилив или ослабив сгиб костей: {"forearm.L": 1.4} — локоть согнут в 1.4 раза
+## сильнее, чем в клипе (поворот от позы покоя кости). Для постановочных кадров (титульный экран).
+func hold_pose(bend: Dictionary) -> void:
+	if _anim == null or _root == null:
+		return
+	_anim.advance(0.0)
+	_anim.pause()
+	var found := _root.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty():
+		return
+	var sk := found[0] as Skeleton3D
+	for bn in bend:
+		var i := sk.find_bone(bn)
+		if i < 0:
+			continue
+		var rest := sk.get_bone_rest(i).basis.get_rotation_quaternion()
+		var d := rest.inverse() * sk.get_bone_pose_rotation(i)
+		if d.get_angle() < 0.001:
+			continue
+		sk.set_bone_pose_rotation(i, rest * Quaternion(d.get_axis(), d.get_angle() * float(bend[bn])))
+
+
 ## Верх модели в её координатах (до масштаба узла) — для «нимба» на волосах.
 func _root_top() -> float:
 	var top := 0.0
@@ -222,6 +263,8 @@ func apply_items(items: Array[ClothingItem]) -> void:
 		shown.append(key)
 		_tint(mi, it.placeholder_color)
 	_hide_covered(shown)
+	_update_brows(shown)
+	_apply_face_style(items)
 	for part in _underwear:
 		var covered := false
 		for slot in UNDERWEAR_COVERED_BY.get(part, []):
@@ -247,11 +290,38 @@ func apply_look(look: Dictionary) -> void:
 		shown.append(str(key))
 		_tint(mi, Color(str(look[key])))
 	_hide_covered(shown)
+	_update_brows(shown)
 	for part in _underwear:
 		var covered := false
 		for slot in UNDERWEAR_COVERED_BY.get(part, []):
 			covered = covered or slots.has(slot)
 		(_underwear[part] as MeshInstance3D).visible = not covered
+
+
+## Стиль лица — вещь слота face_style (если надета), иначе стиль героя по умолчанию.
+func _apply_face_style(items: Array[ClothingItem]) -> void:
+	if face == null:
+		return
+	var st := {}
+	for it in items:
+		if it.slot == FACE_SLOT:
+			st = it.face_style
+	face.apply_style(st)
+
+
+## Выражение лица поверх стиля (реплика, кат-сцена); "" — вернуть выражение стиля.
+func set_expression(expr: String) -> void:
+	if face:
+		face.set_expression(expr)
+
+
+## Бровь над повязкой ложилась бы поверх неё: пока повязка надета, эта бровь остаётся на своей глубине.
+func _update_brows(shown: Array[String]) -> void:
+	var patched := false
+	for key in shown:
+		patched = patched or key.begins_with("face_accessory__eyepatch")
+	for m in _brow_patch_mats:
+		m.set_shader_parameter("view_bias", 0.0 if patched else BROW_BIAS)
 
 
 ## Маска скрытых областей кожи по показанной одежде (первое совпадение в COVERS — от частного к общему).
@@ -323,6 +393,14 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 		m.next_pass = ol
 		_materials[key] = m
 		return m
+	if src_name.begins_with("eye_iris"):
+		# радужка — свой шейдер: перекраска, радуга и узор зрачка у сменных лиц (FaceRig)
+		m.shader = EYE_IRIS
+		if tex:
+			m.set_shader_parameter("iris_tex", tex)
+		_iris_mats.append(m)
+		_materials[key] = m
+		return m
 	if src_name == "eye_shade":
 		# тень века — полупрозрачная лента поверх радужки, без контура
 		m.shader = EYE_SHADE
@@ -374,19 +452,21 @@ func _toon_for(src: Material, mesh_name: String) -> ShaderMaterial:
 				m.set_shader_parameter("shade_color", Color(0.95, 0.8, 0.8))
 				_face_mats.append(m)
 				thickness = 0.0016
-			elif src_name in ["lash", "lash_hi", "lash_glint", "brow", "crease", "strap", "patch", "skin_line", "nipple", "nipple_tip", "lid_warm"]:
+			elif src_name in ["lash", "lash_hi", "lash_glint", "brow", "brow_patch", "crease", "strap", "patch", "skin_line", "nipple", "nipple_tip", "lid_warm"]:
 				# Объёмные ресницы, брови, складка века, повязка и шнурок, «наклейки» на коже (соски, линии рельефа):
 				# ровный цвет, без контура (с контуром повязка читается как дыра, а ресницы — как каракули).
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.9))
 				m.set_shader_parameter("rim_strength", 0.0)
-				if src_name == "brow":
-					m.set_shader_parameter("view_bias", 0.035)    # бровь видна сквозь чёлку
+				if src_name in ["brow", "brow_patch"]:
+					m.set_shader_parameter("view_bias", BROW_BIAS)    # бровь видна сквозь чёлку
+				if src_name == "brow_patch":
+					_brow_patch_mats.append(m)
 				thickness = 0.0
 			elif src_name.begins_with("eye"):
 				m.set_shader_parameter("shade_color", Color(0.85, 0.85, 0.95))
 				m.set_shader_parameter("rim_strength", 0.0)
 				thickness = 0.0
-	if thickness > 0.0:
+	if thickness > 0.0 and bool(Settings.get_value("outlines")):
 		var outline := ShaderMaterial.new()
 		outline.shader = OUTLINE
 		outline.set_shader_parameter("thickness", thickness)

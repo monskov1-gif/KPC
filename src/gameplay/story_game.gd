@@ -411,19 +411,11 @@ func open_pause() -> void:
 	get_tree().paused = true
 	_pause.clear()
 	_pause.content.add_child(UiTheme.label("Прогресс сохранён с начала текущей сцены.", 18, UiTheme.TEXT_DIM))
-	_pause.content.add_child(UiTheme.title("Звук", 22))
-	for row in [["Music", "Музыка", "note"], ["Ambient", "Окружение", "wind"], ["SFX", "Эффекты", "speaker"], ["Voice", "Голоса", "voice"]]:
-		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 12)
-		h.add_child(UiTheme.icon(row[2], 26, UiTheme.GOLD_DEEP))
-		var l := UiTheme.label(row[1], 18)
-		l.custom_minimum_size.x = 120
-		h.add_child(l)
-		var bus: String = row[0]
-		var sl := UiTheme.slider(Audio.get_volume(bus), func(v: float): Audio.set_volume(bus, v, false))
-		sl.drag_ended.connect(func(_changed: bool): Audio.save_settings())
-		h.add_child(sl)
-		_pause.content.add_child(h)
+	var st := UiTheme.secondary(UiTheme.button("Настройки", func(): SettingsSheet.open(_pause, func():
+		_pause.close()
+		open_pause())))
+	st.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_pause.content.add_child(st)
 	_pause.add_footer(UiTheme.secondary(UiTheme.button("В главное меню", to_title)))
 	_pause.add_footer(UiTheme.primary(UiTheme.button("Продолжить", _pause.close)))
 	_pause.open("Пауза", "menu")

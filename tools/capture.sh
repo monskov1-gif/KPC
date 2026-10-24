@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 SCENE="$1"; OUT="$2"; RES="${3:-1600x900}"; FRAMES="${4:-30}"; METHOD="${5:-}"
 # Отдельное сохранение для снимков: каждый снимок начинается с новой игры.
 export KPC_SAVE_PATH="user://capture_save.json"
+export KPC_CAPTURE=1     # снимок детерминирован: персонажи не моргают (FaceRig)
 rm -f "$HOME/.local/share/godot/app_userdata/KPC — Kot's photo collection/capture_save.json"*
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || true   # новые текстуры должны быть импортированы
 W="${RES%x*}"; H="${RES#*x}"

@@ -135,6 +135,15 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 			_ellipse(ci, _p(r, 0.42, 0.52), Vector2(w * 0.24, w * 0.20), c)
 			if outline.a > 0.0:
 				_ellipse_outline(ci, _p(r, 0.42, 0.52), Vector2(w * 0.24, w * 0.20), outline, maxf(1.5, w * 0.035))
+		"face_style":
+			# лицо: овал, глаза-дуги и улыбка (сменное лицо — выражение и макияж)
+			ci.draw_circle(_p(r, 0.5, 0.5), w * 0.42, c)
+			var ink := outline if outline.a > 0.0 else c.darkened(0.45)
+			ci.draw_arc(_p(r, 0.34, 0.46), w * 0.08, PI * 1.1, PI * 1.9, 10, ink, lw * 0.5, true)
+			ci.draw_arc(_p(r, 0.66, 0.46), w * 0.08, PI * 1.1, PI * 1.9, 10, ink, lw * 0.5, true)
+			ci.draw_arc(_p(r, 0.5, 0.56), w * 0.14, PI * 0.2, PI * 0.8, 12, ink, lw * 0.5, true)
+			ci.draw_circle(_p(r, 0.27, 0.62), w * 0.06, Color(0.95, 0.6, 0.65, 0.8))
+			ci.draw_circle(_p(r, 0.73, 0.62), w * 0.06, Color(0.95, 0.6, 0.65, 0.8))
 		"neck_accessory":
 			ci.draw_arc(_p(r, 0.5, 0.30), w * 0.32, PI * 0.15, PI * 0.85, 24, c, lw * 0.7, true)
 			ci.draw_circle(_p(r, 0.5, 0.70), w * 0.11, c)
@@ -147,6 +156,76 @@ static func draw(ci: CanvasItem, name: String, r: Rect2, c: Color, outline := Co
 		"wrist_accessory":
 			ci.draw_arc(_p(r, 0.5, 0.5), w * 0.30, 0, TAU, 32, c, lw, true)
 			ci.draw_circle(_p(r, 0.5, 0.2), w * 0.08, c.lightened(0.3))
+		"dots":
+			for x in [0.22, 0.5, 0.78]:
+				ci.draw_circle(_p(r, x, 0.5), w * 0.085, c)
+		"globe":
+			ci.draw_arc(_p(r, 0.5, 0.5), w * 0.38, 0, TAU, 32, c, lw * 0.6, true)
+			_ellipse_outline(ci, _p(r, 0.5, 0.5), Vector2(w * 0.16, w * 0.38), c, lw * 0.5)
+			ci.draw_line(_p(r, 0.12, 0.5), _p(r, 0.88, 0.5), c, lw * 0.5, true)
+			ci.draw_line(_p(r, 0.2, 0.3), _p(r, 0.8, 0.3), c, lw * 0.4, true)
+			ci.draw_line(_p(r, 0.2, 0.7), _p(r, 0.8, 0.7), c, lw * 0.4, true)
+		"gear":
+			var cg := _p(r, 0.5, 0.5)
+			for k in 8:
+				var a := TAU * k / 8.0
+				ci.draw_line(cg + Vector2(cos(a), sin(a)) * w * 0.28, cg + Vector2(cos(a), sin(a)) * w * 0.44, c, lw * 0.9, true)
+			ci.draw_arc(cg, w * 0.27, 0, TAU, 28, c, lw * 0.8, true)
+			ci.draw_arc(cg, w * 0.1, 0, TAU, 16, c, lw * 0.6, true)
+		"display":
+			ci.draw_rect(Rect2(_p(r, 0.12, 0.2), Vector2(w * 0.76, w * 0.5)), c, false, lw * 0.6)
+			ci.draw_line(_p(r, 0.5, 0.7), _p(r, 0.5, 0.82), c, lw * 0.6, true)
+			ci.draw_line(_p(r, 0.32, 0.84), _p(r, 0.68, 0.84), c, lw * 0.6, true)
+		"gamepad":
+			_ellipse(ci, _p(r, 0.5, 0.52), Vector2(w * 0.4, w * 0.22), c)
+			var ink := outline if outline.a > 0.0 else c.darkened(0.45)
+			ci.draw_line(_p(r, 0.25, 0.52), _p(r, 0.39, 0.52), ink, lw * 0.4, true)
+			ci.draw_line(_p(r, 0.32, 0.45), _p(r, 0.32, 0.59), ink, lw * 0.4, true)
+			ci.draw_circle(_p(r, 0.66, 0.47), w * 0.04, ink)
+			ci.draw_circle(_p(r, 0.74, 0.56), w * 0.04, ink)
+		"person":
+			ci.draw_circle(_p(r, 0.5, 0.26), w * 0.14, c)
+			_ellipse(ci, _p(r, 0.5, 0.72), Vector2(w * 0.28, w * 0.22), c)
+		"map":
+			ci.draw_colored_polygon(_poly([[0.1, 0.22], [0.36, 0.12], [0.64, 0.22], [0.9, 0.12], [0.9, 0.78], [0.64, 0.88],
+				[0.36, 0.78], [0.1, 0.88]], r), c)
+			var ink2 := outline if outline.a > 0.0 else c.darkened(0.3)
+			ci.draw_line(_p(r, 0.36, 0.12), _p(r, 0.36, 0.78), ink2, lw * 0.35, true)
+			ci.draw_line(_p(r, 0.64, 0.22), _p(r, 0.64, 0.88), ink2, lw * 0.35, true)
+		"compass":
+			ci.draw_arc(_p(r, 0.5, 0.5), w * 0.4, 0, TAU, 32, c, lw * 0.5, true)
+			ci.draw_colored_polygon(_poly([[0.5, 0.16], [0.58, 0.5], [0.42, 0.5]], r), Color("e07a7a"))
+			ci.draw_colored_polygon(_poly([[0.5, 0.84], [0.58, 0.5], [0.42, 0.5]], r), c)
+		"sword":
+			ci.draw_line(_p(r, 0.22, 0.78), _p(r, 0.8, 0.2), c, lw * 0.9, true)
+			ci.draw_line(_p(r, 0.16, 0.6), _p(r, 0.4, 0.84), c, lw * 0.8, true)
+			ci.draw_line(_p(r, 0.12, 0.88), _p(r, 0.24, 0.76), c, lw * 1.1, true)
+		"shield":
+			ci.draw_colored_polygon(_poly([[0.5, 0.1], [0.84, 0.22], [0.8, 0.56], [0.5, 0.9], [0.2, 0.56], [0.16, 0.22]], r), c)
+		"jump":
+			ci.draw_colored_polygon(_poly([[0.5, 0.1], [0.82, 0.46], [0.62, 0.46], [0.62, 0.72], [0.38, 0.72], [0.38, 0.46],
+				[0.18, 0.46]], r), c)
+			ci.draw_line(_p(r, 0.24, 0.88), _p(r, 0.76, 0.88), c, lw * 0.6, true)
+		"dodge":
+			for k in 3:
+				ci.draw_arc(_p(r, 0.36 + k * 0.12, 0.5), w * 0.26, -PI * 0.4, PI * 0.4, 12, Color(c, 1.0 - k * 0.3), lw * 0.6, true)
+		"gacha":
+			_sparkle(ci, _p(r, 0.42, 0.44), w * 0.36, c)
+			_sparkle(ci, _p(r, 0.76, 0.76), w * 0.16, c)
+			_sparkle(ci, _p(r, 0.78, 0.2), w * 0.12, c)
+		"calendar":
+			ci.draw_rect(Rect2(_p(r, 0.14, 0.2), Vector2(w * 0.72, w * 0.66)), c, false, lw * 0.6)
+			ci.draw_rect(Rect2(_p(r, 0.14, 0.2), Vector2(w * 0.72, w * 0.16)), c)
+			for x in [0.32, 0.5, 0.68]:
+				for y in [0.52, 0.7]:
+					ci.draw_circle(_p(r, x, y), w * 0.04, c)
+		"chest":
+			ci.draw_rect(Rect2(_p(r, 0.12, 0.42), Vector2(w * 0.76, w * 0.42)), c)
+			ci.draw_arc(_p(r, 0.5, 0.42), w * 0.38, PI, TAU, 16, c, lw * 0.8, true)
+			ci.draw_rect(Rect2(_p(r, 0.44, 0.38), Vector2(w * 0.12, w * 0.16)), c.darkened(0.35))
+		"mail":
+			ci.draw_rect(Rect2(_p(r, 0.12, 0.24), Vector2(w * 0.76, w * 0.52)), c, false, lw * 0.6)
+			ci.draw_polyline(_poly([[0.12, 0.24], [0.5, 0.54], [0.88, 0.24]], r), c, lw * 0.6, true)
 		"all":
 			for x in [0.14, 0.54]:
 				for y in [0.14, 0.54]:

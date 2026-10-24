@@ -30,6 +30,8 @@ var model_template := ""
 var icon_asset := ""
 var placeholder_color := Color(0.6, 0.6, 0.6)
 var sort_order := 0
+## Слот face_style — сменное лицо: выражение, форма глаз, макияж, глаза (см. src/visual/face_rig.gd).
+var face_style: Dictionary = {}
 var parse_errors: Array[String] = []
 
 
@@ -63,6 +65,7 @@ static func from_dict(d: Dictionary) -> ClothingItem:
 	if d.has("placeholder_color"):
 		it.placeholder_color = Color.from_string(str(d["placeholder_color"]), it.placeholder_color)
 	it.sort_order = int(d.get("sort_order", 0))
+	it.face_style = _dict_field(d, "face_style", it)
 	return it
 
 

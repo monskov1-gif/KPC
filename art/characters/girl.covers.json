@@ -1,11 +1,13 @@
 {
  "upper_body__long": [
   "forearm",
+  "hips",
   "shoulder",
   "torso",
   "upper_arm"
  ],
  "upper_body__tshirt": [
+  "hips",
   "shoulder",
   "torso"
  ],

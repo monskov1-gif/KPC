@@ -10,6 +10,14 @@
         { "item_id": "clothing_tailored_trousers_001", "price": { "coins": 280 }, "purchase_limit": 1 },
         { "item_id": "clothing_silk_blouse_001", "price": { "coins": 320 }, "purchase_limit": 1 },
         { "item_id": "clothing_gabi_red_patterned_sweater_001", "price": { "coins": 220 }, "purchase_limit": 1 },
+        { "item_id": "face_cat_001", "price": { "coins": 180 }, "purchase_limit": 1 },
+        { "item_id": "face_star_001", "price": { "coins": 220 }, "purchase_limit": 1 },
+        { "item_id": "face_heart_001", "price": { "coins": 220 }, "purchase_limit": 1 },
+        { "item_id": "face_butterfly_001", "price": { "coins": 340 }, "purchase_limit": 1 },
+        { "item_id": "face_rainbow_001", "price": { "coins": 360 }, "purchase_limit": 1 },
+        { "item_id": "face_moon_001", "price": { "coins": 240 }, "purchase_limit": 1 },
+        { "item_id": "face_evening_001", "price": { "coins": 380 }, "purchase_limit": 1 },
+        { "item_id": "face_fairytale_001", "price": { "coins": 520 }, "purchase_limit": 1 },
         { "item_id": "thread_silk", "resource": true, "price": { "coins": 40 }, "purchase_limit": 0 },
         { "item_id": "fabric_velvet", "resource": true, "price": { "coins": 80 }, "purchase_limit": 0 }
       ]

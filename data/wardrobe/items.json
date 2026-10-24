@@ -1411,6 +1411,566 @@
    "placeholder_color": "#f6f6f0",
    "sort_order": 909,
    "model_template": "upper_body__tshirt"
+  },
+  {
+   "id": "face_calm_001",
+   "name_key": "item.face_calm.name",
+   "description_key": "item.face_calm.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "common",
+   "style_tags": [
+    "casual",
+    "cozy"
+   ],
+   "attributes": {
+    "simplicity": 60,
+    "casualness": 50,
+    "coolness": 20
+   },
+   "color_tags": [
+    "light"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 500,
+   "model_template": "",
+   "face_style": {
+    "expression": "neutral"
+   }
+  },
+  {
+   "id": "face_smile_001",
+   "name_key": "item.face_smile.name",
+   "description_key": "item.face_smile.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "common",
+   "style_tags": [
+    "casual",
+    "cute",
+    "romantic"
+   ],
+   "attributes": {
+    "cuteness": 45,
+    "romance": 35,
+    "casualness": 40
+   },
+   "color_tags": [
+    "pink"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 501,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "makeup": {
+     "blush_amount": 0.6
+    }
+   }
+  },
+  {
+   "id": "face_serious_001",
+   "name_key": "item.face_serious.name",
+   "description_key": "item.face_serious.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "uncommon",
+   "style_tags": [
+    "formal",
+    "elegant"
+   ],
+   "attributes": {
+    "formality": 60,
+    "elegance": 45,
+    "coolness": 50
+   },
+   "color_tags": [
+    "grey"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 502,
+   "model_template": "",
+   "face_style": {
+    "expression": "serious",
+    "eye_shape": "sharp",
+    "makeup": {
+     "blush_amount": 0.08,
+     "eyeshadow": "#8a7a8c",
+     "eyeshadow_amount": 0.45,
+     "lips_amount": 0.25
+    }
+   }
+  },
+  {
+   "id": "face_happy_001",
+   "name_key": "item.face_happy.name",
+   "description_key": "item.face_happy.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "common",
+   "style_tags": [
+    "cute",
+    "festival",
+    "cozy"
+   ],
+   "attributes": {
+    "cuteness": 60,
+    "casualness": 35,
+    "drama": 15
+   },
+   "color_tags": [
+    "pink"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "starter"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 503,
+   "model_template": "",
+   "face_style": {
+    "expression": "happy",
+    "makeup": {
+     "blush_amount": 0.7
+    }
+   }
+  },
+  {
+   "id": "face_cat_001",
+   "name_key": "item.face_cat.name",
+   "description_key": "item.face_cat.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "rare",
+   "style_tags": [
+    "cute",
+    "casual"
+   ],
+   "attributes": {
+    "cuteness": 70,
+    "casualness": 30
+   },
+   "color_tags": [
+    "pink"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 504,
+   "model_template": "",
+   "face_style": {
+    "expression": "cat",
+    "eye_shape": "round",
+    "makeup": {
+     "blush_amount": 0.65
+    }
+   }
+  },
+  {
+   "id": "face_star_001",
+   "name_key": "item.face_star.name",
+   "description_key": "item.face_star.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "rare",
+   "style_tags": [
+    "cute",
+    "festival"
+   ],
+   "attributes": {
+    "cuteness": 50,
+    "theatricality": 40,
+    "fantasy": 30
+   },
+   "color_tags": [
+    "gold"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 505,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "iris": {
+     "pattern": "star",
+     "pattern_color": "#fff2b0"
+    }
+   }
+  },
+  {
+   "id": "face_heart_001",
+   "name_key": "item.face_heart.name",
+   "description_key": "item.face_heart.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "rare",
+   "style_tags": [
+    "romantic",
+    "cute"
+   ],
+   "attributes": {
+    "romance": 65,
+    "cuteness": 45
+   },
+   "color_tags": [
+    "pink"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 506,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "makeup": {
+     "blush_amount": 0.55,
+     "lips": "#e8768c",
+     "lips_amount": 0.7
+    },
+    "iris": {
+     "pattern": "heart",
+     "pattern_color": "#ff9ab8"
+    }
+   }
+  },
+  {
+   "id": "face_butterfly_001",
+   "name_key": "item.face_butterfly.name",
+   "description_key": "item.face_butterfly.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "epic",
+   "style_tags": [
+    "romantic",
+    "floral",
+    "cute"
+   ],
+   "attributes": {
+    "romance": 55,
+    "fantasy": 55,
+    "cuteness": 50
+   },
+   "color_tags": [
+    "pink",
+    "purple"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 507,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "eye_shape": "round",
+    "makeup": {
+     "blush_amount": 0.55,
+     "eyeshadow": "#d88ab8",
+     "eyeshadow_amount": 0.5
+    },
+    "iris": {
+     "tint": 1.0,
+     "top": "#7a3a8a",
+     "bottom": "#f0a0d8",
+     "pattern": "butterfly",
+     "pattern_color": "#fff4fb"
+    }
+   }
+  },
+  {
+   "id": "face_rainbow_001",
+   "name_key": "item.face_rainbow.name",
+   "description_key": "item.face_rainbow.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "epic",
+   "style_tags": [
+    "festival",
+    "futuristic"
+   ],
+   "attributes": {
+    "fantasy": 60,
+    "futurism": 45,
+    "drama": 40
+   },
+   "color_tags": [
+    "light"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 508,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "iris": {
+     "rainbow": 1.0,
+     "sparkle": 0.5
+    }
+   }
+  },
+  {
+   "id": "face_moon_001",
+   "name_key": "item.face_moon.name",
+   "description_key": "item.face_moon.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "rare",
+   "style_tags": [
+    "mysterious",
+    "elegant"
+   ],
+   "attributes": {
+    "mystery": 60,
+    "coolness": 50,
+    "elegance": 35
+   },
+   "color_tags": [
+    "blue",
+    "silver"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 509,
+   "model_template": "",
+   "face_style": {
+    "expression": "neutral",
+    "eye_shape": "sharp",
+    "makeup": {
+     "blush_amount": 0.1,
+     "eyeshadow": "#6a6a9a",
+     "eyeshadow_amount": 0.5
+    },
+    "iris": {
+     "tint": 1.0,
+     "top": "#1c2650",
+     "bottom": "#6a86c8",
+     "pattern": "moon",
+     "pattern_color": "#e8eeff"
+    }
+   }
+  },
+  {
+   "id": "face_evening_001",
+   "name_key": "item.face_evening.name",
+   "description_key": "item.face_evening.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "epic",
+   "style_tags": [
+    "evening",
+    "luxurious",
+    "mysterious"
+   ],
+   "attributes": {
+    "elegance": 55,
+    "luxury": 50,
+    "mystery": 45,
+    "drama": 45
+   },
+   "color_tags": [
+    "burgundy",
+    "dark"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 510,
+   "model_template": "",
+   "face_style": {
+    "expression": "smirk",
+    "eye_shape": "sharp",
+    "makeup": {
+     "blush_amount": 0.2,
+     "eyeshadow": "#6a3050",
+     "eyeshadow_amount": 0.8,
+     "lips": "#b82838",
+     "lips_amount": 0.9
+    }
+   }
+  },
+  {
+   "id": "face_fairytale_001",
+   "name_key": "item.face_fairytale.name",
+   "description_key": "item.face_fairytale.description",
+   "category": "face",
+   "slot": "face_style",
+   "rarity": "legendary",
+   "style_tags": [
+    "romantic",
+    "theatrical",
+    "floral",
+    "cute"
+   ],
+   "attributes": {
+    "fantasy": 75,
+    "cuteness": 50,
+    "theatricality": 45,
+    "romance": 40
+   },
+   "color_tags": [
+    "purple",
+    "pink"
+   ],
+   "material_tags": [],
+   "compatible_body_types": [
+    "compact",
+    "tall",
+    "child"
+   ],
+   "acquisition_sources": [
+    "shop"
+   ],
+   "model_asset": "",
+   "icon_asset": "",
+   "is_signature_item": false,
+   "compatible_character_ids": [],
+   "placeholder_color": "#f4d8d4",
+   "sort_order": 511,
+   "model_template": "",
+   "face_style": {
+    "expression": "smile",
+    "eye_shape": "round",
+    "makeup": {
+     "blush_amount": 0.6,
+     "eyeshadow": "#c89ae0",
+     "eyeshadow_amount": 0.55
+    },
+    "iris": {
+     "tint": 1.0,
+     "top": "#4a3a9a",
+     "bottom": "#d8c0ff",
+     "pattern": "sparkles",
+     "pattern_color": "#ffffff",
+     "sparkle": 1.0
+    }
+   }
   }
  ]
 }

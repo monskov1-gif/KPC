@@ -252,6 +252,73 @@ func debug_prologue() -> void:
 	_cam_override()
 
 
+## Шесть баз тела (build_characters.py base_*): спереди и сбоку (KPC_YAW), без одежды.
+func debug_bases() -> void:
+	for id in IDS:
+		get_node(id).visible = false
+	var kinds := ["child", "teen_f", "teen_m", "adult_f", "adult_m", "muscular_m"]
+	var x := -2.5
+	for k in kinds:
+		var m := CharacterModel.new()
+		add_child(m)
+		m.position = Vector3(x, 0, 0)
+		m.setup("bases/" + k, Game.session.characters)
+		m.apply_look({})
+		if OS.has_environment("KPC_YAW"):
+			m.rotation_degrees.y = float(OS.get_environment("KPC_YAW"))
+		x += 1.0
+	var cam := get_viewport().get_camera_3d()
+	cam.position = Vector3(0, 1.1, 8.6)
+	cam.rotation_degrees = Vector3.ZERO
+	cam.fov = 32
+	_cam_override()
+
+
+## Сменные лица: 4 копии героя (KPC_POSE_ID, по умолчанию kot) с разными стилями лица — головы крупно.
+func debug_face_styles() -> void:
+	for id in IDS:
+		get_node(id).visible = false
+	var id := OS.get_environment("KPC_POSE_ID") if OS.has_environment("KPC_POSE_ID") else "kot"
+	var styles := [
+		{},
+		{"expression": "smile", "eye_shape": "round", "makeup": {"blush_amount": 0.75},
+		 "iris": {"tint": 1.0, "top": "#7a3a8a", "bottom": "#f0a0d8", "pattern": "butterfly", "pattern_color": "#fff4fb"}},
+		{"expression": "serious", "eye_shape": "sharp", "makeup": {"blush_amount": 0.1, "eyeshadow": "#8a6a7a", "eyeshadow_amount": 0.6}},
+		{"expression": "happy", "iris": {"rainbow": 1.0}, "makeup": {"blush_amount": 0.8}},
+	]
+	if OS.has_environment("KPC_FACE_SET") and OS.get_environment("KPC_FACE_SET") == "2":
+		styles = [
+			{"expression": "surprised", "iris": {"pattern": "star", "pattern_color": "#fff6c0"}},
+			{"expression": "cat", "eye_shape": "round", "iris": {"tint": 1.0, "top": "#2a6a5a", "bottom": "#a0f0d0", "pattern": "heart", "pattern_color": "#ff9ab8"}},
+			{"expression": "smirk", "makeup": {"lips": "#c0303c", "lips_amount": 0.9, "eyeshadow": "#6a3050", "eyeshadow_amount": 0.8}},
+			{"expression": "pout", "iris": {"pattern": "sparkles", "sparkle": 1.0, "tint": 1.0, "top": "#2a3a9a", "bottom": "#c0d0ff"}},
+		]
+	var models := []
+	for i in styles.size():
+		var m := CharacterModel.new()
+		add_child(m)
+		m.position = Vector3(-0.9 + i * 0.6, 0, 0)
+		m.setup(id, Game.session.characters)
+		if Game.session.outfit_items(id).is_empty():
+			Game.session.equipment.equip_signature(id)
+		m.apply_items(Game.session.outfit_items(id))
+		if m.face:
+			m.face.blinking = false
+			m.face.apply_style(styles[i])
+		models.append(m)
+	await get_tree().process_frame
+	var cam := get_viewport().get_camera_3d()
+	var h: float = (models[0] as CharacterModel).height()
+	cam.position = Vector3(0, h * 0.9, 2.6)
+	cam.rotation_degrees = Vector3.ZERO
+	cam.fov = 30
+	if OS.has_environment("KPC_FACE_IDX"):    # крупно одну голову
+		var mi: CharacterModel = models[int(OS.get_environment("KPC_FACE_IDX"))]
+		cam.position = Vector3(mi.position.x, h * 0.89, 0.66)
+		cam.fov = 32
+	_cam_override()
+
+
 ## KPC_CAM=«x,y,z» — камера в эту точку (крупный план любого места витрины).
 func _cam_override() -> void:
 	if OS.has_environment("KPC_CAM"):

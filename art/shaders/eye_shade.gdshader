@@ -4,7 +4,7 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_back;
 
 uniform vec4 albedo : source_color = vec4(0.2, 0.18, 0.4, 1.0);
-uniform float strength = 0.7;
+uniform float strength = 0.45;
 
 void fragment() {
 	ALBEDO = albedo.rgb;

@@ -1,0 +1,30 @@
+{
+ "_comment": "Сгенерировано tools/art/gen_faces.py: рот (центр u, v; полуширина, полувысота в UV лица) и стиль лица по умолчанию (src/visual/face_rig.gd).",
+ "mouth_rect": [
+  0.5,
+  0.845,
+  0.1144,
+  0.0728
+ ],
+ "default": {
+  "expression": "smile",
+  "eye_shape": "default",
+  "makeup": {
+   "blush": "#f296a0",
+   "blush_amount": 0.425,
+   "eyeshadow": "#cf8486",
+   "eyeshadow_amount": 0.38,
+   "lips": "#e48a96",
+   "lips_amount": 0.5
+  },
+  "iris": {
+   "tint": 0.0,
+   "top": "#3e2646",
+   "bottom": "#9670a0",
+   "pattern": "none",
+   "pattern_color": "#ffffff",
+   "rainbow": 0.0,
+   "sparkle": 0.0
+  }
+ }
+}

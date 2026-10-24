@@ -20,7 +20,9 @@
   "shin",
   "thigh"
  ],
- "lower_body__skirt": [],
+ "lower_body__skirt": [
+  "thigh"
+ ],
  "full_body__dress": [
   "hips",
   "thigh",

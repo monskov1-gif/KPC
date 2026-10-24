@@ -11,6 +11,7 @@
  ],
  "outerwear__jacket": [
   "forearm",
+  "hips",
   "shoulder",
   "torso",
   "upper_arm"
@@ -20,7 +21,9 @@
   "shin",
   "thigh"
  ],
- "lower_body__skirt": [],
+ "lower_body__skirt": [
+  "thigh"
+ ],
  "full_body__dress": [
   "hips",
   "thigh",

@@ -15,6 +15,7 @@
 Бельё — «underwear__*»: всегда на персонаже, раздеть полностью нельзя.
 Внешность — по референсам пользователя (art/references/README.md); спорное — docs/OPEN_QUESTIONS.md.
 """
+import copy
 import math
 import os
 import random
@@ -32,14 +33,16 @@ TEX = os.path.join(OUT, "textures")
 SKIN_DEFAULT = (0.98, 0.88, 0.83, 1)
 SKIN = SKIN_DEFAULT          # текущий цвет кожи/меха (у Хотто — мех; задаётся в build())
 import json  # noqa: E402
-_FACE = json.load(open(os.path.join(os.path.dirname(__file__), "face_params.json"), encoding="utf-8"))
-FP = dict(_FACE["default"])   # параметры лица текущего персонажа (face_params.json; задаются в build())
+sys.path.insert(0, os.path.dirname(__file__))
+import face_table  # noqa: E402
+_FACE = face_table.load()
+FP = face_table.resolve(_FACE, "default")   # параметры лица текущего персонажа (face_params.json; задаются в build())
 
 
-def set_face(cid):
+def set_face(cid, preset=None):
+    """Лицо героя: его запись в face_params.json, а если её нет — пресет его базы тела (c["face"])."""
     global FP
-    FP = dict(_FACE["default"])
-    FP.update(_FACE.get(cid, {}))
+    FP = face_table.resolve(_FACE, cid, fallback=preset)
 
 
 # ------------------------------------------------------------------ утилиты
@@ -1044,6 +1047,9 @@ def build_head(cid, J, p):
     s = p["s"]
     rx, ry, rz = 0.08 * s * p["head"], 0.094 * s * p["head"], 0.106 * s * p["head"]
     cz = J["head"].z + rz * FP.get("head_lift", 1.12)
+    if FP.get("eye_shape"):
+        # глаз в U (глаз–подбородок) — от размера именно этой головы (пресеты лица общие для разных ростов)
+        FP["eye_shape"]["head_rx"], FP["eye_shape"]["head_rz"] = rx, rz
     if FP.get("loft"):
         vs, fs = loft_head_mesh(rx, ry, rz, cz, FP["loft"])
         me = bpy.data.meshes.new("head")
@@ -1470,11 +1476,13 @@ def build_eyes_v2(cid, head_obj, hd):
     return out
 
 
-def build_lashes_v2(head_obj, hd, c, cid):
+def build_lashes_v2(head_obj, hd, c, cid, variant="default"):
     """Ресницы по образцу Silver Palace (изучено, не скопировано), размеры — по модели-подростку (в U):
     плотная тёмная кромка верхнего века (~0.045 U), к внешнему углу толще, «крыло» на 0.11 U за угол и вниз,
     над кромкой острые ресницы вверх-наружу; нижнее веко — тонкая линия с короткими ресничками и тёплая
-    полоска; складка века ~0.07 U над веком; бровь 0.2–0.3 U над центром глаза."""
+    полоска; складка века ~0.07 U над веком; бровь 0.2–0.3 U над центром глаза.
+    variant — форма глаза сменного лица (eye_shape.VARIANTS): у не-основной формы свои ресницы, складка и тень
+    века (имена «…__<форма>», игра показывает нужный набор — src/visual/face_rig.gd); брови — только у основной."""
     m_lash = mat("lash", c["lash"] + (1,), rough=0.4)
     m_brow = mat("brow", c["brow"] + (1,), rough=0.6)
     m_crease = mat("crease", (0.66, 0.44, 0.46, 1), rough=0.7)
@@ -1482,10 +1490,12 @@ def build_lashes_v2(head_obj, hd, c, cid):
     m_lash_hi = mat("lash_hi", c.get("lash_hi", tuple(min(1.0, x * 2.6 + 0.04) for x in c["lash"])) + (1,), rough=0.4)
     m_glint = mat("lash_glint", c.get("lash_glint", tuple(min(1.0, x * 5.0 + 0.2) for x in c["lash"])) + (1,), rough=0.4)
     m_shade = mat("eye_shade", c.get("eye_shade", (0.2, 0.18, 0.4)) + (1,), rough=0.7)
+    m_brow_p = mat("brow_patch", c["brow"] + (1,), rough=0.6)
     rnd = random.Random(31)
     out = []
     for side in (-1, 1):
         E, um, on_face = _eye_frame(head_obj, hd, side)
+        E = E.Variant(variant)
         lift = 0.0004
 
         def lid(pts, outward_up):
@@ -1585,6 +1595,8 @@ def build_lashes_v2(head_obj, hd, c, cid):
             wd = um * (0.002 + 0.004 * math.sin(math.pi * (t - 0.1) / 0.78))
             rows.append((cq - o * wd, cq + o * wd))
         out.append(_strip(rows, m_crease, "crease"))
+        if variant != "default":
+            continue
         # Бровь: дуга 0.2–0.3 U над центром глаза, от переносицы толще, к виску тоньше и ниже.
         rows = []
         b0, b1 = E.BROW_Z
@@ -1599,8 +1611,31 @@ def build_lashes_v2(head_obj, hd, c, cid):
                 o = -o
             wd = um * (0.008 + 0.014 * (1 - t))
             rows.append((q - o * wd + n * 0.0005, q + o * wd + n * 0.0005))
-        out.append(_strip(rows, m_brow, "brow"))
+        # бровь над повязкой — свой материал: пока повязка надета, бровь не тянется к камере (иначе ложится
+        # поверх повязки), без повязки — видна сквозь чёлку, как вторая (CharacterModel._update_brows)
+        brow = _strip(rows, m_brow_p if side == FP.get("patch_side") else m_brow, "brow")
+        brow_shape_keys(brow, um)
+        out.append(brow)
+    if variant != "default":
+        for o in out:
+            o.name = o.name.split(".")[0] + "__" + variant
     return out
+
+
+def brow_shape_keys(o, um):
+    """Выражения бровей (сменные лица): подъём, опускание, «сердито» (внутренний край вниз), «грустно» (вверх).
+    Сдвиг — по высоте, внутренний край (у переносицы) — ближе к x = 0."""
+    vs = o.data.vertices
+    ax = [abs(v.co.x) for v in vs]
+    a0, a1 = min(ax), max(ax)
+    o.shape_key_add(name="Basis")
+    keys = {"brow_up": (0.06, 0.04), "brow_down": (-0.035, -0.03), "brow_angry": (-0.07, 0.02),
+            "brow_sad": (0.07, -0.02)}
+    for name, (inner, outer) in keys.items():
+        sk = o.shape_key_add(name=name, from_mix=False)
+        for i, v in enumerate(vs):
+            t = (ax[i] - a0) / max(a1 - a0, 1e-6)              # 0 — у переносицы, 1 — у виска
+            sk.data[i].co = v.co + Vector((0, 0, um * (inner + (outer - inner) * t)))
 
 
 def build_eyes(cid, head_obj, hd):
@@ -3822,6 +3857,72 @@ def run_animation(rig):
 
 # ------------------------------------------------------------------ персонажи
 
+# ------------------------------------------------------------------ базы тела
+# Шесть баз тела (просьба пользователя 24.10): на их основе «долепливаются» все герои — герой = база + свои
+# правки (рост, ширина, мускулы, замеры по рефам). У каждой базы — свой пресет лица в face_params.json
+# (лицо Кота с поправками на возраст и пол). Тела — открытая база MakeHuman (CC0, tools/art/mh_body.py).
+# Просмотр баз без одежды: build_characters.py base_teen_m … → art/characters/bases/ (в игру не входят).
+_NECK_STEPS = [(0.98, 0.95, 0.0, 0.03), (0.97, 0.92, 0.003, 0.03), (0.97, 0.9, 0.005, 0.03)]
+BODY_BASES = {
+    # подросток-парень (~16 лет, 163 см) — снята с Кота (реф. 16, Meshy-лист): худощавый, ключицы приподняты
+    "teen_m": {"sex": "male", "face": "teen_m",
+               "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
+                        "waist": 0.078, "chest": 0.094, "hip_r": 0.098,
+                        "mh": {"teen": 0.5, "thin": 0.45, "clav": 14, "arm_len": 1.1, "spine_back": 8, "knee_back": 4,
+                               "legs_back": 2.5, "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.86, "neck_round": 0.6,
+                               "neck_steps": _NECK_STEPS, "neck_submental": (0, 0.04, 2.0)}}},
+    # подросток-девушка (~15 лет, 160 см): узкие плечи, тонкая талия, небольшая грудь
+    "teen_f": {"sex": "female", "face": "teen_f",
+               "body": {"s": 0.98, "shoulder": 0.13, "hip": 0.084, "head": 1.03, "waist": 0.07, "chest": 0.092,
+                        "chest_d": 0.08, "hip_r": 0.106,
+                        "mh": {"teen": 0.4, "thin": 0.6, "bust": 0.55, "clav": 12, "arm_len": 1.08, "spine_back": 5,
+                               "knee_back": 3, "legs_back": 2.0, "neck_z": 1.385, "pelvis_z": 0.9, "slim": 0.92,
+                               "neck_round": 0.6, "neck_steps": _NECK_STEPS, "neck_submental": (0, 0.03, 2.0)}}},
+    # взрослый мужчина (178 см): шире плечи, голова меньше относительно роста
+    "adult_m": {"sex": "male", "face": "adult_m",
+                "body": {"s": 178 / 163, "shoulder": 0.152, "hip": 0.08, "head": 0.97, "waist": 0.082, "chest": 0.1,
+                         "hip_r": 0.098,
+                         "mh": {"teen": 0.0, "thin": 0.45, "clav": 12, "arm_len": 1.12, "spine_back": 4, "knee_back": 3,
+                                "legs_back": 1.5, "neck_z": 1.38, "pelvis_z": 0.9, "slim": 0.95, "neck_round": 0.5,
+                                "neck_steps": _NECK_STEPS, "neck_submental": (0, 0.04, 2.0)}}},
+    # взрослая женщина (166 см)
+    "adult_f": {"sex": "female", "face": "adult_f",
+                "body": {"s": 166 / 163, "shoulder": 0.13, "hip": 0.086, "head": 0.99, "waist": 0.072, "chest": 0.09,
+                         "chest_d": 0.08, "hip_r": 0.106,
+                         "mh": {"teen": 0.0, "thin": 0.6, "bust": 0.6, "clav": 10, "arm_len": 1.1, "spine_back": 4,
+                                "knee_back": 3, "legs_back": 1.5, "neck_z": 1.375, "pelvis_z": 0.9, "slim": 0.94,
+                                "neck_round": 0.6, "neck_steps": _NECK_STEPS, "neck_submental": (0, 0.03, 2.0)}}},
+    # накачанный высокий мужчина (205 см): максимальная мускулатура, широкие плечи, мощная шея
+    "muscular_m": {"sex": "male", "face": "adult_m",
+                   "body": {"s": 205 / 163, "shoulder": 0.19, "hip": 0.095, "head": 0.88, "waist": 0.1, "chest": 0.13,
+                            "hip_r": 0.11,
+                            # мускулатура сверх максимума MakeHuman (×1.7 цели): у героя-атлета мышцы читаются под одеждой
+                            "mh": {"teen": 0.0, "thin": 0.0, "muscle": 1.7, "heavy": 0.35, "clav": 8, "arm_len": 1.1,
+                                   "spine_back": 2, "knee_back": 2, "neck_z": 1.4, "pelvis_z": 0.9, "slim": 1.12,
+                                   "neck_round": 0.6,
+                                   # срез шеи у накачанной базы широкий (трапеции) — сужаем к челюсти, иначе
+                                   # шея поднималась к подбородку «трубой» шире лица
+                                   "neck_steps": [(0.86, 0.9, 0.0, 0.03), (0.86, 0.9, 0.004, 0.03), (0.92, 0.92, 0.005, 0.03)],
+                                   "neck_submental": (0, 0.04, 2.0)}}},
+    # ребёнок (~6 лет, 116 см): крупная голова, короткие руки и ноги
+    "child": {"sex": "male", "face": "child",
+              "body": {"s": 116 / 163, "shoulder": 0.128, "hip": 0.078, "head": 1.42, "neck": 0.034, "hem_drop": 0.1,
+                       "waist": 0.078, "chest": 0.094, "hip_r": 0.098,
+                       "mh": {"teen": 1.0, "thin": 0.35, "clav": 10, "arm_len": 1.0, "spine_back": 4, "knee_back": 3,
+                              "legs_back": 1.5, "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.9, "neck_round": 0.6,
+                              "neck_steps": _NECK_STEPS, "neck_submental": (0, 0.03, 2.0)}}},
+}
+
+
+def base_body(kind, body=None, mh=None):
+    """Тело героя = база kind + правки (body — размеры, mh — форма MakeHuman)."""
+    b = copy.deepcopy(BODY_BASES[kind]["body"])
+    b.update(copy.deepcopy(body or {}))
+    b["mh"].update(copy.deepcopy(mh or {}))
+    b["kind"] = kind
+    return b
+
+
 CHARACTERS = {
     # Хотто Дарака (реф. hotto_sheet / hotto_outfit, 23.10): антропоморфный волк 235 см, очень мускулистый; кремовый мех,
     # длинная светлая грива, уши с тёмными кончиками, серо-голубые прищуренные глаза, чёрные когти, пушистый хвост.
@@ -3829,28 +3930,18 @@ CHARACTERS = {
     # (docs/source/story_and_chapter1_script.txt, сцены 10–11); роль в новом сценарии — docs/OPEN_QUESTIONS.md, 29.
     "hotto": {
         "sex": "male",
-        "skin": (0.92, 0.84, 0.8, 1),                  # мех тёплый кремово-розовый (реф.)
-        # Тело — готовая мускулистая модель волка (автор — art/characters/src/CREDITS.md), подготовлена
-        # tools/art/prep_base.py: 235 см, руки опущены, суставы по геометрии.
-        "body": {"s": 1.0, "base": "hotto_base.glb", "shoulder": 0.2, "hip": 0.1, "head": 1.0, "garment_smooth": 6,
-                 "shirt": {"hem_drop": -0.08, "sleeve_t": 0.38, "v_depth": 0.2, "v_width": 0.07},
-                 "waist": 0.13, "chest": 0.17, "hip_r": 0.14},
-        "wolf": {"mz_z": -0.38, "mz_h": 0.36, "mz_w": 0.42, "mz_len": 1.5, "mz_drop": 0.22,
-                 "fur": (0.88, 0.8, 0.76), "fur_tip": (0.74, 0.62, 0.58), "tail_r": 0.055},
-        "hair": {"ribbons": True, "solid": True, "hairline": 0.3, "nape": 1.0, "thick_top": 0.035, "thick_side": 0.025,
-                 "cheek_puff": 0.2, "face_open_x": 0.5, "thick": 1.0, "whorl": (0.05, 1.0),
-                 # грива: веер прядей от головы на плечи и до середины спины (mane_strands)
-                 "mane": {"count": 320, "phi": (0.1, 1.45), "drop": (4.2, 6.2), "spread": (1.3, 2.3), "w": (0.07, 0.13),
-                          "gap": 0.035, "puff": 0.65, "skip_front": 0.75, "face_clear": 1.35},
-                 "groups": [
-                     # верх головы — короткие пряди от вихра (под гривой)
-                     {"count": 40, "theta": (-3.14, 3.14), "phi": (0.15, 0.9), "length": (0.18, 0.3), "w": (0.05, 0.08),
-                      "sway": 0.2, "curl": (10, 40), "curl_frac": 0.15, "bias": 0.7, "lift": 0.006, "skip_front": 0.75},
-                     # чёлка, разобранная набок
-                     {"count": 12, "theta": (-0.85, 0.85), "phi": (0.12, 0.4), "length": (0.2, 0.32), "w": (0.03, 0.045),
-                      "sway": 0.3, "curl": (10, 30), "curl_frac": 0.2, "bias": 0.5, "lift": 0.007},
-                 ],
-                 "c_root": (0.9, 0.84, 0.8), "c_tip": (0.78, 0.68, 0.63), "cap_shade": 0.85},
+        "skin": (0.93, 0.86, 0.81, 1),                 # мех тёплый кремовый (реф.)
+        # С нуля (просьба пользователя 24.10): база «накачанный высокий мужчина», 235 см, своя голова волка
+        # с открытыми глазами, грива легче; чужая готовая модель волка больше не используется.
+        "body": base_body("muscular_m", body={"s": 235 / 163, "head": 1.0, "waist": 0.13, "chest": 0.17, "hip_r": 0.14,
+                                               "shirt": {"hem_drop": 0.03, "sleeve_t": 0.38, "v_depth": 0.2, "v_width": 0.07}},
+                          mh={"heavy": 0.35}),
+        "wolf": {"mz_z": -0.38, "mz_h": 0.36, "mz_w": 0.42, "mz_len": 1.3, "mz_drop": 0.2,
+                 "fur": (0.9, 0.82, 0.78), "fur_tip": (0.76, 0.64, 0.6), "tail_r": 0.055},
+        "hair": {"clumps": True, "clump_style": "mane", "cap_hairline": 0.75, "nape": 1.0, "face_open_x": 0.55,
+                 "c_lock_root": (0.97, 0.9, 0.78), "c_lock_tip": (0.88, 0.76, 0.62),
+                 "c_root": (0.95, 0.88, 0.78), "c_tip": (0.86, 0.74, 0.62)},
+        "geo_lashes": {"lash": (0.24, 0.2, 0.2), "brow": (0.82, 0.74, 0.62)},
         "ears": (0.95, 0.9, 0.84), "ear_inner": (0.36, 0.28, 0.26),
         "ear": {"theta": 0.72, "phi": 0.42, "lift": 1.18, "w": 0.55, "h": 1.15, "d": 0.3, "tilt": 8, "yaw": 0},
         "garments": ["top_long", "neck_tie", "legs_trousers"],
@@ -3859,30 +3950,24 @@ CHARACTERS = {
     # кошачьи уши, хохолок. Свитер с высоким воротом и цветами — оверсайз, рукава до костяшек.
     "kot": {
         "sex": "male",
-        "body": {"s": 1.0, "shoulder": 0.137, "hip": 0.078, "head": 1.05, "neck": 0.04, "arm_out": (0.032, 0.1),
-                 # тело — открытая базовая модель MakeHuman (CC0), подросток, худощавый (Meshy-лист, реф. 16)
-                 "mh": {"teen": 0.5, "thin": 0.45, "arms_down": -2, "clav": 14, "arm_len": 1.1, "spine_back": 8, "knee_back": 4, "legs_back": 2.5,
-                        "neck_z": 1.39, "pelvis_z": 0.9, "slim": 0.86,
-                        # ширина ног и глубина торса — по наложению на Meshy-лист (tools/art/body_overlay.sh)
-                        "leg_xs": [(0.0, 1.0), (0.1, 1.0), (0.2, 0.95), (0.33, 0.74), (0.46, 0.85), (0.555, 0.88),
-                                   (0.72, 0.75), (0.82, 0.9), (0.92, 0.95), (1.0, 1.0)],
-                        "torso_ys": [(0.0, 1.0), (0.17, 1.03), (0.38, 0.86), (0.59, 0.88), (0.77, 1.0), (1.0, 1.0)],
-                        "torso_xs": [(0.0, 1.0), (0.3, 1.0), (0.4, 0.95), (0.5, 1.0), (0.84, 1.0), (0.9, 0.93), (0.95, 0.85),
-                                     (1.0, 0.9)],
-                        "neck_round": 0.6,
-                        # шея: передняя линия к челюсти уходит назад-вверх (под подбородком — косая линия, а не «полка»)
-                        "neck_steps": [(0.98, 0.95, 0.0, 0.03), (0.97, 0.92, 0.003, 0.03), (0.97, 0.9, 0.005, 0.03)],
-                        "neck_submental": (0, 0.04, 2.0),
-                        # анатомия по Meshy-листу: соски, пупок и тонкие линии рельефа (x в м, t — доля таз→шея)
-                        "anat": {"marks": True, "nipple_x": 0.084, "nipple_t": 0.647, "navel_t": 0.255, "areola_r": 0.006,
-                                 "pec_t": 0.585, "abs_t": (0.5, 0.42, 0.34), "line": (0.8, 0.58, 0.58),
-                                 "areola": (0.92, 0.66, 0.64), "tip": (0.85, 0.55, 0.56),
-                                 "lines": [
-                                     ([(0.035, 0.895), (0.07, 0.91), (0.1, 0.905), (0.125, 0.885)], 0.0016),   # ключица
-                                     ([(0.05, 0.575), (0.08, 0.568), (0.105, 0.59), (0.122, 0.625)], 0.0014),  # низ грудной
-                                     ([(0.1, 0.53), (0.083, 0.505)], 0.001),                                   # рёбра
-                                     ([(0.098, 0.465), (0.082, 0.44)], 0.001),
-                                     ([(0.094, 0.4), (0.079, 0.38)], 0.0009)]}}, "waist": 0.078, "chest": 0.094, "hip_r": 0.098},
+        # тело — база «подросток-парень» (BODY_BASES, она снята с Кота) + его замеры по Meshy-листу (реф. 16)
+        "body": base_body("teen_m", mh={
+            # ширина ног и глубина торса — по наложению на Meshy-лист (tools/art/body_overlay.sh)
+            "leg_xs": [(0.0, 1.0), (0.1, 1.0), (0.2, 0.95), (0.33, 0.74), (0.46, 0.85), (0.555, 0.88),
+                       (0.72, 0.75), (0.82, 0.9), (0.92, 0.95), (1.0, 1.0)],
+            "torso_ys": [(0.0, 1.0), (0.17, 1.03), (0.38, 0.86), (0.59, 0.88), (0.77, 1.0), (1.0, 1.0)],
+            "torso_xs": [(0.0, 1.0), (0.3, 1.0), (0.4, 0.95), (0.5, 1.0), (0.84, 1.0), (0.9, 0.93), (0.95, 0.85),
+                         (1.0, 0.9)],
+            # анатомия по Meshy-листу: соски, пупок и тонкие линии рельефа (x в м, t — доля таз→шея)
+            "anat": {"marks": True, "nipple_x": 0.084, "nipple_t": 0.647, "navel_t": 0.255, "areola_r": 0.006,
+                     "pec_t": 0.585, "abs_t": (0.5, 0.42, 0.34), "line": (0.8, 0.58, 0.58),
+                     "areola": (0.92, 0.66, 0.64), "tip": (0.85, 0.55, 0.56),
+                     "lines": [
+                         ([(0.035, 0.895), (0.07, 0.91), (0.1, 0.905), (0.125, 0.885)], 0.0016),   # ключица
+                         ([(0.05, 0.575), (0.08, 0.568), (0.105, 0.59), (0.122, 0.625)], 0.0014),  # низ грудной
+                         ([(0.1, 0.53), (0.083, 0.505)], 0.001),                       # рёбра
+                         ([(0.098, 0.465), (0.082, 0.44)], 0.001),
+                         ([(0.094, 0.4), (0.079, 0.38)], 0.0009)]}}),
         # Пышная кудрявая копна (реф. 16): шире головы в ~1.5 раза, до линии подбородка; чёлка до глаз.
         # Причёска «поверх» вылепленной головы (объём даёт сам череп): крупные острые пряди, без кудряшек;
         # чёлка до глаз, прядь на глаз под повязкой, хохолок-спираль.
@@ -3947,9 +4032,8 @@ CHARACTERS = {
     # Габи (реф. 05–07): рост не задан — близко к Коту. Два пучка вместе с распущенными волосами (ответ пользователя).
     "gabi": {
         "sex": "female",
-        "body": {"s": 0.98, "shoulder": 0.135, "hip": 0.084, "head": 1.0,
-                 # тело — та же открытая база (CC0), женская форма; пропорции Silver Palace — только как замеры
-                 "mh": {"teen": 0.35, "thin": 0.6, "bust": 0.65, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 0.95}, "waist": 0.07, "chest": 0.092, "chest_d": 0.08, "hip_r": 0.108},
+        # база «подросток-девушка»; рост близко к Коту
+        "body": base_body("teen_f", body={"s": 0.98}, mh={"bust": 0.65}),
         "hair": {"clumps": True, "clump_style": "long", "cap_hairline": 1.0, "part": -0.2,
                  "layers": [(0.15, 20, 1.06), (0.45, 28, 1.1), (0.8, 30, 1.14)], "bang_front": 0.6, "bang_len": 1.2,
                  "side_len": 2.0, "long": 0.22, "curl": 0.1, "w": 0.95, "cap_low": 0.75, "buns": [-1, 1],
@@ -3961,8 +4045,9 @@ CHARACTERS = {
     # Сора (реф. 12): 206 см, шире в плечах; растрёпанные бирюзовые волосы с хвостом, уши, хохолок.
     "sora": {
         "sex": "male",
-        "body": {"s": 206 / 163, "shoulder": 0.16, "hip": 0.082, "head": 0.95,
-                 "mh": {"teen": 0.0, "thin": 0.5, "neck_z": 1.335, "pelvis_z": 0.9, "slim": 1.0}, "waist": 0.084, "chest": 0.104, "hip_r": 0.1},
+        # база «взрослый мужчина», 206 см (реф. 12): стройный, длинные ноги
+        "body": base_body("adult_m", body={"s": 206 / 163, "shoulder": 0.16, "hip": 0.082, "head": 0.95, "waist": 0.084,
+                                           "chest": 0.104, "hip_r": 0.1}, mh={"thin": 0.5, "slim": 1.0}),
         "hair": {"clumps": True, "clump_style": "short", "cap_hairline": 1.0, "part": 0.35,
                  "layers": [(0.12, 18, 1.07), (0.4, 26, 1.12), (0.75, 28, 1.17)], "bang_front": 0.55, "bang_len": 1.3,
                  "side_len": 1.85, "long": 0.04, "curl": 0.3, "w": 0.95, "cap_low": 0.6, "ahoge": True, "ponytail": True,
@@ -3976,10 +4061,8 @@ CHARACTERS = {
 
 # ------------------------------------------------------------------ персонажи пролога (docs/STORY.md)
 # Возраст по ответу пользователя 23.10: в начале пролога Коту 6, Габриэль 12, Соре 18.
-# Дети и подростки — те же персонажи (причёска, цвета, уши), тело — детская форма базы MakeHuman (CC0),
-# голова крупнее. Родители и прохожие не описаны в сценарии: внешность — ЧЕРНОВАЯ (docs/OPEN_QUESTIONS.md).
+# Дети и подростки — те же персонажи (причёска, цвета, уши) на базе своего возраста (BODY_BASES). Родители и прохожие не описаны в сценарии: внешность — ЧЕРНОВАЯ (docs/OPEN_QUESTIONS.md).
 # Одежда NPC — шаблоны garment__*, цвета задаёт data/story/looks.json.
-import copy  # noqa: E402
 
 NPC_GARMENTS = ["top_long", "top_tshirt", "outer_jacket", "legs_trousers", "legs_skirt", "dress", "socks", "shoes"]
 
@@ -3990,6 +4073,16 @@ def _variant(base, body=None, mh=None, hair=None, **kw):
         c["body"].update(body)
     if mh:
         c["body"]["mh"].update(mh)
+    if hair:
+        c["hair"].update(hair)
+    c.update(kw)
+    return c
+
+
+def _rebase(src, kind, body=None, mh=None, hair=None, **kw):
+    """Тот же герой (причёска, цвета, уши, лицо) на другой базе тела — например, в детстве."""
+    c = copy.deepcopy(CHARACTERS[src])
+    c["body"] = base_body(kind, body, mh)
     if hair:
         c["hair"].update(hair)
     c.update(kw)
@@ -4012,61 +4105,63 @@ def _hair(style, root, tip, **kw):
     return h
 
 
-def _npc(sex, height_cm, teen, hair, thin=0.5, head=1.0, ears=None, **kw):
-    s = height_cm / 163
-    female = sex == "female"
-    kid = teen > 0.8
-    c = {"sex": sex,
-         "body": {"s": s, "shoulder": 0.128 if female else 0.15, "hip": 0.084 if female else 0.08, "head": head,
-                  "mh": {"teen": teen, "thin": thin, "bust": 0.4 if female and teen < 0.6 else 0.0, "neck_z": 1.335,
-                         "arms_down": 26,                       # руки свободно опущены (не А-поза витрины)
-                         "pelvis_z": 0.9, "slim": 0.95},
-                  "waist": 0.072 if female else 0.082, "chest": 0.09 if female else 0.1, "hip_r": 0.104 if female else 0.098},
+def _npc(kind, height_cm, hair, thin=None, head=None, ears=None, **kw):
+    """Эпизодический герой на базе kind (adult_m, adult_f, child …): свой рост, худоба, голова."""
+    body = {"s": height_cm / 163}
+    if head:
+        body["head"] = head
+    c = {"sex": BODY_BASES[kind]["sex"] if kind != "child" else kw.pop("sex", "male"),
+         "body": base_body(kind, body, {"thin": thin} if thin is not None else None),
          "hair": hair, "ears": ears, "garments": list(NPC_GARMENTS)}
-    if female:
-        c["body"]["chest_d"] = 0.08
-    if kid:
-        c["body"]["hem_drop"] = 0.09
     c.update(kw)
     return c
 
 
 CHARACTERS.update({
     # Кот в 6 лет: та же копна, уши и глаза; детская база, крупная голова; без рисунка рельефа тела.
-    "kot_child": _variant("kot", body={"s": 116 / 163, "head": 1.42, "shoulder": 0.128, "neck": 0.034, "hem_drop": 0.1},
-                          mh={"teen": 1.0, "thin": 0.35, "arm_len": 1.0, "clav": 10, "spine_back": 4, "anat": {}, "arms_down": 24},
-                          garments=list(NPC_GARMENTS) + ["top_oversize", "legs_wide", "gloves"]),
-    # Габриэль в 12 лет: два пучка и те же цвета, детская база.
-    "gabi_child": _variant("gabi", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07},
-                           mh={"teen": 0.9, "bust": 0.0, "thin": 0.55, "arms_down": 26},
-                           garments=list(NPC_GARMENTS) + ["head_clips"]),
-    # Сора в 18 лет: те же волосы с хвостом и уши, тоньше и ниже, чем в 29.
-    "sora_young": _variant("sora", body={"s": 194 / 163, "shoulder": 0.15, "head": 0.98},
-                           mh={"teen": 0.3, "thin": 0.6, "arms_down": 26},
-                           garments=list(NPC_GARMENTS)),
+    "kot_child": _rebase("kot", "child", garments=list(NPC_GARMENTS) + ["top_oversize", "legs_wide", "gloves"]),
+    # Габриэль в 12 лет: два пучка и те же цвета; база «ребёнок», но старше (выше, голова меньше).
+    "gabi_child": _rebase("gabi", "child", body={"s": 150 / 163, "head": 1.18, "hem_drop": 0.07},
+                          mh={"teen": 0.75, "thin": 0.55}, garments=list(NPC_GARMENTS) + ["head_clips"]),
+    # Сора в 18 лет: те же волосы с хвостом и уши; база «подросток-парень», высокий (194 см).
+    "sora_young": _rebase("sora", "teen_m", body={"s": 194 / 163, "shoulder": 0.15, "head": 0.98},
+                          mh={"teen": 0.3, "thin": 0.6}, garments=list(NPC_GARMENTS)),
     # Родители (черновик): папа — бирюзово-тёмные волосы и кошачьи уши (как у Соры и Кота), мама — тёплые
     # розово-каштановые длинные волосы (тона Габриэль).
-    "papa": _npc("male", 184, 0.0, _hair("short", (0.14, 0.36, 0.4), (0.12, 0.28, 0.36), ahoge=True), thin=0.45,
+    "papa": _npc("adult_m", 184, _hair("short", (0.14, 0.36, 0.4), (0.12, 0.28, 0.36), ahoge=True), thin=0.45,
                  head=0.95, ears=(0.16, 0.36, 0.4), ear_inner=(0.92, 0.7, 0.74),
                  ear={"w": 0.5, "h": 0.6, "d": 0.12, "tilt": 18, "yaw": 12}),
-    "mama": _npc("female", 168, 0.0, _hair("long", (0.62, 0.32, 0.36), (0.86, 0.56, 0.44)), thin=0.6),
+    "mama": _npc("adult_f", 168, _hair("long", (0.62, 0.32, 0.36), (0.86, 0.56, 0.44)), thin=0.6),
     # Девочка, которая рисует (сцена 1): ровесница Кота, каре.
-    "girl": _npc("female", 114, 1.0, _hair("bob", (0.32, 0.2, 0.2), (0.44, 0.28, 0.24)), thin=0.4, head=1.4),
+    "girl": _npc("child", 114, _hair("bob", (0.32, 0.2, 0.2), (0.44, 0.28, 0.24)), thin=0.4, head=1.4, sex="female"),
 
     # Взрослые эпизодические: продавщица, прохожий, врач, медсестра, жильцы.
-    "passerby_a": _npc("female", 160, 0.0, _hair("bob", (0.42, 0.3, 0.26), (0.5, 0.36, 0.3)), thin=0.35),
-    "passerby_b": _npc("male", 176, 0.0, _hair("short", (0.2, 0.18, 0.2), (0.26, 0.22, 0.24)), thin=0.4),
-    "doctor": _npc("male", 178, 0.0, _hair("short", (0.5, 0.5, 0.54), (0.62, 0.62, 0.66)), thin=0.5, head=0.97),
-    "nurse": _npc("female", 162, 0.0, _hair("bob", (0.22, 0.16, 0.18), (0.3, 0.22, 0.24)), thin=0.6),
-    "resident_a": _npc("male", 172, 0.0, _hair("short", (0.34, 0.28, 0.24), (0.42, 0.34, 0.3)), thin=0.35),
-    "resident_b": _npc("female", 158, 0.0, _hair("long", (0.18, 0.16, 0.2), (0.28, 0.24, 0.3)), thin=0.5),
+    "passerby_a": _npc("adult_f", 160, _hair("bob", (0.42, 0.3, 0.26), (0.5, 0.36, 0.3)), thin=0.35),
+    "passerby_b": _npc("adult_m", 176, _hair("short", (0.2, 0.18, 0.2), (0.26, 0.22, 0.24)), thin=0.4),
+    "doctor": _npc("adult_m", 178, _hair("short", (0.5, 0.5, 0.54), (0.62, 0.62, 0.66)), thin=0.5, head=0.97),
+    "nurse": _npc("adult_f", 162, _hair("bob", (0.22, 0.16, 0.18), (0.3, 0.22, 0.24)), thin=0.6),
+    "resident_a": _npc("adult_m", 172, _hair("short", (0.34, 0.28, 0.24), (0.42, 0.34, 0.3)), thin=0.35),
+    "resident_b": _npc("adult_f", 158, _hair("long", (0.18, 0.16, 0.2), (0.28, 0.24, 0.3)), thin=0.5),
 })
+
+# Базы тела для просмотра (без одежды, простая причёска): art/characters/bases/<база>.glb — в игру не входят.
+for _kind, _hs in (("teen_m", "short"), ("teen_f", "long"), ("adult_m", "short"), ("adult_f", "bob"),
+                   ("muscular_m", "short"), ("child", "bob")):
+    CHARACTERS["base_" + _kind] = {"sex": BODY_BASES[_kind]["sex"], "body": base_body(_kind),
+                                   "hair": _hair(_hs, (0.3, 0.24, 0.24), (0.38, 0.3, 0.28)), "ears": None,
+                                   "garments": [], "preview": True}
 
 
 def build(cid):
     reset()
-    set_face(cid)
     c = CHARACTERS[cid]
+    kind = c["body"].get("kind")
+    set_face(cid, BODY_BASES[kind]["face"] if kind else None)
+    if not c.get("geo_lashes"):
+        # ресницы и брови — геометрией у всех (как у Кота): ресницы — тёмный тон волос, брови — тон корней
+        hr = c["hair"].get("c_root", (0.3, 0.24, 0.24))
+        c = dict(c, geo_lashes={"lash": tuple(round(x * 0.32, 3) for x in hr),
+                                "brow": tuple(round(x * 0.62, 3) for x in hr)})
     p = c["body"]
     s = p["s"]
     global SKIN
@@ -4117,7 +4212,9 @@ def build(cid):
         else:
             head, hd = build_head(cid, J, p)
         if FP.get("eye_shape"):
-            eyes = build_eyes_v2(cid, head, hd) + build_lashes_v2(head, hd, c["geo_lashes"], cid)
+            eyes = build_eyes_v2(cid, head, hd)
+            for ev in ("default", "round", "sharp"):
+                eyes += build_lashes_v2(head, hd, c["geo_lashes"], cid, ev)
         else:
             eyes = build_eyes(cid, head, hd)
             if c.get("geo_lashes"):
@@ -4277,7 +4374,7 @@ def build(cid):
             bm.to_mesh(pm)
             bm.free()
             pm.materials.clear()
-            pm.materials.append(mat("patch", (0.05, 0.045, 0.05, 1), rough=0.5))   # без контура (иначе читается дырой)
+            pm.materials.append(mat("patch", (0.11, 0.1, 0.12, 1), rough=0.5))   # без контура (иначе читается дырой)
             patch.modifiers.new("sol", "SOLIDIFY").thickness = 0.003
             apply_mods(patch)
             shade_smooth(patch)
@@ -4288,14 +4385,17 @@ def build(cid):
                 # Шнурок в наклонной плоскости (реф. 16): от повязки через переносицу вниз под другой глаз,
                 # ниже уха, вокруг затылка и над правым ухом обратно к повязке.
                 ezn = 1 - 2 * FP["eye_v"]
-                ring.append(Vector((xn * rx * 1.07, yn * ry * 1.07, cz + rz * (0.35 * ps * xn + 0.195 * yn + ezn + 0.155))))
+                # кольцо — снаружи головы (лицо выступает дальше ry): иначе луч к оси шёл изнутри и шнурок
+                # оставался под кожей лица — его не было видно
+                ring.append(Vector((xn * rx * 1.8, yn * ry * 1.8, cz + rz * (0.42 * ps * xn + 0.195 * yn + ezn + 0.1))))
             proj = []
             for q in ring:   # проекция по радиусу к оси головы — шнурок ложится ровно, без изломов на носу
                 d = (Vector((0, 0, q.z)) - q).normalized()
                 hit = tree.ray_cast(q, d)
                 proj.append(hit[0] + hit[1] * 0.0025 if hit[0] else q)
             ring = proj
-            strap = curve_tube(ring, 0.0013, mat("strap", (0.08, 0.07, 0.08, 1), rough=0.4), taper=1.0)   # тонкий шнурок
+            # шнурок (реф. 04, 16 — тонкая тёмная линия наискось через лицо): толще, чтобы читался в игре
+            strap = curve_tube(ring, 0.0016, mat("strap", (0.08, 0.07, 0.08, 1), rough=0.4), taper=1.0)
             o = join([patch, strap], "garment__face_accessory__eyepatch")
         elif g == "neck_necklace":
             beads = []
@@ -4348,8 +4448,9 @@ def build(cid):
     run_animation(rig)
     rest_animations(rig)
 
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, f"{cid}.glb")
+    out_dir = os.path.join(OUT, "bases") if c.get("preview") else OUT
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{cid.removeprefix('base_') if c.get('preview') else cid}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_animations=True, export_skins=True, export_yup=True)
     # какие области тела закрывает каждая вещь — игра их не рисует (CharacterModel._hide_covered)
     with open(path.replace(".glb", ".covers.json"), "w", encoding="utf-8") as f:

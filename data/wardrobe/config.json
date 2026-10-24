@@ -37,7 +37,8 @@
   "footwear",
   "bag",
   "wrist_accessory",
-  "back_accessory"
+  "back_accessory",
+  "face_style"
  ],
  "categories": {
   "hair_accessory": [
@@ -80,6 +81,9 @@
   ],
   "back_accessory": [
    "back_accessory"
+  ],
+  "face": [
+   "face_style"
   ]
  },
  "rarities": [

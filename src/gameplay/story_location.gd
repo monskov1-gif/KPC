@@ -12,6 +12,22 @@ const VIEW := preload("res://art/shaders/loc_view.gdshader")
 const STATE_OF_TIME := {"day": "day", "evening": "evening", "night": "night", "storm": "evening"}
 const OUTLINE := preload("res://art/shaders/outline.gdshader")
 const WATER := preload("res://art/shaders/water.gdshader")
+const SKY := preload("res://art/shaders/sky_anime.gdshader")
+## Нарисованное небо по времени суток (art/shaders/sky_anime): градиент, облака, ночью — звёзды.
+const SKY_PRESETS := {
+	"day": {"zenith": Color("5c8fdc"), "upper": Color("9ec4ee"), "lilac": Color("dcd6f0"), "horizon": Color("fbe6da"),
+		"below": Color("d9c8c4"), "cloud_light": Color("ffffff"), "cloud_shadow": Color("e8d2e2"), "cloud_cover": 0.5,
+		"stars": 0.0, "sun_glow": 0.35},
+	"evening": {"zenith": Color("5a5fae"), "upper": Color("8a86c8"), "lilac": Color("e4a6c0"), "horizon": Color("ffbd8e"),
+		"below": Color("8a6c78"), "cloud_light": Color("ffe2c8"), "cloud_shadow": Color("e08a9a"), "cloud_cover": 0.54,
+		"stars": 0.0, "sun_glow": 0.6},
+	"night": {"zenith": Color("0f1638"), "upper": Color("1d2550"), "lilac": Color("343a76"), "horizon": Color("4a4f86"),
+		"below": Color("232744"), "cloud_light": Color("5a6496"), "cloud_shadow": Color("2a3060"), "cloud_cover": 0.6,
+		"stars": 1.0, "sun_glow": 0.1},
+	"storm": {"zenith": Color("4a5262"), "upper": Color("5b6474"), "lilac": Color("6e7684"), "horizon": Color("8f97a2"),
+		"below": Color("4a505a"), "cloud_light": Color("a2aab6"), "cloud_shadow": Color("5a6270"), "cloud_cover": 0.22,
+		"stars": 0.0, "sun_glow": 0.0},
+}
 
 ## Свет и небо по времени суток (мягкая «облачная» палитра; ночь — синяя, не чёрная).
 const TIME_PRESETS := {
@@ -35,7 +51,7 @@ var water: MeshInstance3D
 var _model: Node3D
 var _env: Environment
 var _sun: DirectionalLight3D
-var _sky: ProceduralSkyMaterial
+var _sky: ShaderMaterial
 var _lamps: Array[OmniLight3D] = []
 var _materials := {}
 var _glow: Array[ShaderMaterial] = []
@@ -49,7 +65,19 @@ var rain: CPUParticles3D
 
 
 func _ready() -> void:
-	_sky = ProceduralSkyMaterial.new()
+	_sky = ShaderMaterial.new()
+	_sky.shader = SKY
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.006
+	noise.fractal_octaves = 5
+	var nt := NoiseTexture2D.new()
+	nt.width = 512
+	nt.height = 512
+	nt.seamless = true
+	nt.generate_mipmaps = true
+	nt.noise = noise
+	_sky.set_shader_parameter("cloud_noise", nt)
 	var sky := Sky.new()
 	sky.sky_material = _sky
 	_env = Environment.new()
@@ -60,6 +88,14 @@ func _ready() -> void:
 	# Отражения неба выключены: на аниме-шейдере они «выбеливали» освещённые стороны.
 	_env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	_env.fog_enabled = true
+	# мягкое свечение фонарей и окон, чуть сочнее цвет (видео 2AM: блум и цветокоррекция как в ZZZ)
+	_env.glow_enabled = true
+	_env.glow_intensity = 0.45
+	_env.glow_bloom = 0.06
+	_env.glow_hdr_threshold = 1.0
+	_env.adjustment_enabled = true
+	_env.adjustment_saturation = 1.08
+	_env.adjustment_contrast = 1.03
 	var we := WorldEnvironment.new()
 	we.environment = _env
 	add_child(we)
@@ -136,6 +172,7 @@ func marker(marker_name: String) -> Transform3D:
 ## Время суток: мгновенно (seconds = 0) или плавным переходом.
 func apply_time(t: String, seconds := 0.0) -> void:
 	var p: Dictionary = TIME_PRESETS.get(t, TIME_PRESETS.day)
+	var sp: Dictionary = SKY_PRESETS.get(t, SKY_PRESETS.day)
 	time_of_day = t
 	if _tween:
 		_tween.kill()
@@ -158,10 +195,8 @@ func apply_time(t: String, seconds := 0.0) -> void:
 		_sun.light_color = p.sun
 		_sun.light_energy = p.energy
 		_sun.rotation = rot
-		_sky.sky_top_color = p.sky_top
-		_sky.sky_horizon_color = p.sky_horizon
-		_sky.ground_horizon_color = p.sky_horizon
-		_sky.ground_bottom_color = p.ground
+		for k in sp:
+			_sky.set_shader_parameter(k, sp[k])
 		_env.ambient_light_color = p.ambient
 		_env.ambient_light_energy = p.ambient_energy
 		_env.fog_light_color = p.fog
@@ -171,10 +206,8 @@ func apply_time(t: String, seconds := 0.0) -> void:
 	_tween.tween_property(_sun, "light_color", p.sun, seconds)
 	_tween.tween_property(_sun, "light_energy", p.energy, seconds)
 	_tween.tween_property(_sun, "rotation", rot, seconds)
-	_tween.tween_property(_sky, "sky_top_color", p.sky_top, seconds)
-	_tween.tween_property(_sky, "sky_horizon_color", p.sky_horizon, seconds)
-	_tween.tween_property(_sky, "ground_horizon_color", p.sky_horizon, seconds)
-	_tween.tween_property(_sky, "ground_bottom_color", p.ground, seconds)
+	for k in sp:
+		_tween.tween_property(_sky, "shader_parameter/" + k, sp[k], seconds)
 	_tween.tween_property(_env, "ambient_light_color", p.ambient, seconds)
 	_tween.tween_property(_env, "ambient_light_energy", p.ambient_energy, seconds)
 	_tween.tween_property(_env, "fog_light_color", p.fog, seconds)
